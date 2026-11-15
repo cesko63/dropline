@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { spring, stepSpring } from '../util/spring';
 import { MoveEvent, TUNING, clamp, eyeHeight, lenH, v3, type CollisionWorld, type PlayerState, type Vec3 } from '@dropline/shared';
 
 const damp = (current: number, target: number, rate: number, dt: number): number =>
@@ -11,12 +12,37 @@ export class CameraRig {
   readonly camera = new THREE.PerspectiveCamera(80, 1, 0.05, 1200);
   baseFov = 80;
   thirdPerson = false;
+  /** Recoil offset added to the view, radians. Set each frame from the weapon state. */
+  punchPitch = 0;
+  punchYaw = 0;
+  /** Field of view multiplier from aiming down sights (1 = none). */
+  zoom = 1;
+  /** Third person regardless of the toggle: used while dead. */
+  forceThird = false;
+  private readonly joltRoll = spring();
+  private readonly joltPitch = spring();
+  private fovKick = 0;
   private eye = TUNING.player.eyeStand;
   private roll = 0;
   private fov = 80;
-  private dip = 0;
-  private dipVel = 0;
+  private readonly dip = spring();
   private smoothY: number | null = null;
+
+  /** True when the camera is outside the pilot this frame. */
+  get outside(): boolean {
+    return this.thirdPerson || this.forceThird;
+  }
+
+  /** Knock the view when the pilot is hit; `side` is -1 (from the left) .. 1 (from the right). */
+  jolt(side: number, strength: number): void {
+    this.joltRoll.v += side * strength * 0.9;
+    this.joltPitch.v += strength * 0.5;
+  }
+
+  /** A brief widening of the view, for kills. */
+  kick(amount: number): void {
+    this.fovKick = Math.max(this.fovKick, amount);
+  }
 
   resize(aspect: number): void {
     this.camera.aspect = aspect;
@@ -32,9 +58,9 @@ export class CameraRig {
     else this.smoothY = clamp(damp(this.smoothY, pos.y, 30, dt), pos.y - 0.45, pos.y + 0.45);
 
     // Landing dip on a damped spring.
-    if (events & MoveEvent.Land && s.landSpeed > 4) this.dipVel -= Math.min(s.landSpeed, 22) * 0.085;
-    this.dipVel += (-this.dip * 190 - this.dipVel * 22) * dt;
-    this.dip = clamp(this.dip + this.dipVel * dt, -0.35, 0.1);
+    if (events & MoveEvent.Land && s.landSpeed > 4) this.dip.v -= Math.min(s.landSpeed, 22) * 0.085;
+    stepSpring(this.dip, 190, 22, dt);
+    this.dip.x = clamp(this.dip.x, -0.35, 0.1);
 
     // Lean away from the wall while wallrunning, and slightly into strafes.
     let rollTarget = -moveX * 1.3 * DEG;
@@ -42,19 +68,27 @@ export class CameraRig {
     else if (s.sliding) rollTarget = -3 * DEG;
     this.roll = damp(this.roll, rollTarget, 9, dt);
 
+    // Hit jolt on damped springs.
+    stepSpring(this.joltRoll, 260, 20, dt);
+    stepSpring(this.joltPitch, 260, 20, dt);
+    const joltRoll = clamp(this.joltRoll.x, -0.12, 0.12);
+    const joltPitch = clamp(this.joltPitch.x, -0.08, 0.08);
+    this.fovKick = damp(this.fovKick, 0, 7, dt);
+
     // Widen the view once the player is moving faster than a plain sprint.
-    const fovTarget = this.baseFov + clamp((lenH(s.vel) - TUNING.ground.sprintSpeed) / 9, 0, 1) * 12;
-    this.fov = damp(this.fov, fovTarget, 6, dt);
-    if (Math.abs(this.camera.fov - this.fov) > 0.01) {
-      this.camera.fov = this.fov;
+    const rush = clamp((lenH(s.vel) - TUNING.ground.sprintSpeed) / 9, 0, 1) * 12;
+    this.fov = damp(this.fov, this.baseFov + rush, 6, dt);
+    const fov = (this.fov + this.fovKick) * this.zoom;
+    if (Math.abs(this.camera.fov - fov) > 0.01) {
+      this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
     }
 
     const cam = this.camera;
-    cam.rotation.set(s.pitch, s.yaw, this.roll, 'YXZ');
-    const eyeY = this.smoothY + this.eye + this.dip;
+    cam.rotation.set(s.pitch + this.punchPitch + joltPitch, s.yaw + this.punchYaw, this.roll + joltRoll, 'YXZ');
+    const eyeY = this.smoothY + this.eye + this.dip.x;
 
-    if (!this.thirdPerson) {
+    if (!this.outside) {
       cam.position.set(pos.x, eyeY, pos.z);
       return;
     }

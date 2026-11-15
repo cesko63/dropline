@@ -5,7 +5,10 @@ import { Game } from './game';
 async function boot(): Promise<void> {
   const map = gym as MapData;
   const world = await CollisionWorld.create(map);
-  const game = new Game(document.getElementById('view') as HTMLCanvasElement, world, map);
+  // `?seed=123` replays a given match; `?qa=1` shows what every bot is thinking.
+  const params = new URLSearchParams(location.search);
+  const seed = Number(params.get('seed')) || (Date.now() & 0x7fffffff);
+  const game = new Game(document.getElementById('view') as HTMLCanvasElement, world, map, { seed, qa: params.has('qa') });
   game.start();
   // Handle for the browser console and automated checks during development.
   if (import.meta.env.DEV) (window as unknown as { dropline: Game }).dropline = game;

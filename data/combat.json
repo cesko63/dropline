@@ -1,0 +1,18 @@
+{
+  "health": 100,
+  "regenDelay": 5,
+  "regenRate": 30,
+  "respawnTime": 3,
+  "spawnProtect": 1.5,
+  "killY": -30,
+  "scoreLimit": 30,
+  "teamSize": 4,
+  "semiBuffer": 0.15,
+  "hitbox": { "bodyRadius": 0.33, "headRadius": 0.19, "headDrop": 0.15, "neck": 0.3 },
+  "playerLoadout": ["carbine", "scattergun", "longshot"],
+  "teams": [
+    { "name": "Vanguard", "bots": ["rifle", "rusher", "marksman", "rifle"] },
+    { "name": "Corsair", "bots": ["rifle", "rifle", "rusher", "marksman"] }
+  ],
+  "botNames": ["Vesper", "Kite", "Moth", "Rook", "Ash", "Dune", "Flint", "Sable", "Wren", "Onyx"]
+}

@@ -1,0 +1,85 @@
+{
+  "sightRange": 75,
+  "fovDeg": 120,
+  "closeRange": 5,
+  "hearRange": 45,
+  "thinkInterval": 0.1,
+  "tokensPerTarget": 2,
+  "loseSightTime": 0.6,
+  "searchTime": 6,
+  "chargeLock": 0.75,
+  "roles": {
+    "rifle": {
+      "weapon": "carbine",
+      "reaction": 0.4,
+      "turnRateDeg": 260,
+      "aimErrStartDeg": 7,
+      "aimErrMinDeg": 1.3,
+      "aimSettle": 0.9,
+      "speedErr": 0.5,
+      "aimHeight": 0.62,
+      "minRange": 9,
+      "maxRange": 26,
+      "fireRange": 60,
+      "burst": [
+        0.25,
+        0.55
+      ],
+      "burstPause": [
+        0.35,
+        0.7
+      ],
+      "chargeTime": 0,
+      "damageScale": 0.5,
+      "rush": false
+    },
+    "rusher": {
+      "weapon": "scattergun",
+      "reaction": 0.3,
+      "turnRateDeg": 320,
+      "aimErrStartDeg": 6,
+      "aimErrMinDeg": 2,
+      "aimSettle": 0.6,
+      "speedErr": 0.15,
+      "aimHeight": 0.6,
+      "minRange": 0,
+      "maxRange": 6,
+      "fireRange": 13,
+      "burst": [
+        3,
+        3
+      ],
+      "burstPause": [
+        0.2,
+        0.5
+      ],
+      "chargeTime": 0,
+      "damageScale": 0.55,
+      "rush": true
+    },
+    "marksman": {
+      "weapon": "longshot",
+      "reaction": 0.5,
+      "turnRateDeg": 200,
+      "aimErrStartDeg": 3,
+      "aimErrMinDeg": 0.35,
+      "aimSettle": 0.5,
+      "speedErr": 0.1,
+      "aimHeight": 0.72,
+      "minRange": 18,
+      "maxRange": 70,
+      "fireRange": 110,
+      "burst": [
+        0,
+        0
+      ],
+      "burstPause": [
+        1.3,
+        2.1
+      ],
+      "chargeTime": 0.9,
+      "damageScale": 1,
+      "rush": false
+    }
+  }
+}

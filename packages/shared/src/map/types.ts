@@ -17,6 +17,8 @@ export interface MapBox {
 export interface MapSpawn {
   pos: number[];
   yawDeg: number;
+  /** Team that spawns here; 0 when missing. */
+  team?: number;
 }
 
 export interface MapData {

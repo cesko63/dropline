@@ -1,6 +1,9 @@
 import type { InputCmd } from '@dropline/shared';
 
-/** Key bindings by KeyboardEvent.code. Ctrl is avoided: Ctrl+W closes the tab. */
+/**
+ * Bindings by KeyboardEvent.code, or `Mouse0`..`Mouse4` for mouse buttons.
+ * Ctrl is avoided: Ctrl+W closes the tab.
+ */
 export const BINDINGS = {
   forward: ['KeyW', 'ArrowUp'],
   back: ['KeyS', 'ArrowDown'],
@@ -9,8 +12,17 @@ export const BINDINGS = {
   jump: ['Space'],
   crouch: ['KeyC'],
   sprint: ['ShiftLeft', 'ShiftRight'],
+  fire: ['Mouse0'],
+  ads: ['Mouse2'],
+  reload: ['KeyR'],
+  weapon1: ['Digit1'],
+  weapon2: ['Digit2'],
+  weapon3: ['Digit3'],
+  nextWeapon: ['KeyQ'],
   toggleView: ['KeyV'],
-  respawn: ['KeyR'],
+  respawn: ['KeyK'],
+  mute: ['KeyM'],
+  confirm: ['Enter'],
 };
 
 const PITCH_LIMIT = Math.PI / 2 - 0.02;
@@ -20,6 +32,11 @@ export class Input {
   pitch = 0;
   /** Radians per pixel of mouse travel. */
   sensitivity = 0.0022;
+  /** Multiplies the sensitivity; lowered while zoomed in so aiming stays steady. */
+  sensScale = 1;
+  /** Loadout slot the player wants, or -1 for no change. */
+  weapon = -1;
+  private wheel = 0;
   locked = false;
   /** Mouse travel since the last `takeMouseDelta`, for viewmodel sway. */
   private dx = 0;
@@ -43,11 +60,27 @@ export class Input {
     window.addEventListener('blur', () => this.down.clear());
     document.addEventListener('mousemove', (e) => {
       if (!this.locked) return;
-      this.yaw -= e.movementX * this.sensitivity;
-      this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch - e.movementY * this.sensitivity));
+      const k = this.sensitivity * this.sensScale;
+      this.yaw -= e.movementX * k;
+      this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch - e.movementY * k));
       this.dx += e.movementX;
       this.dy += e.movementY;
     });
+    document.addEventListener('mousedown', (e) => {
+      if (!this.locked) return;
+      this.pressed.add(`Mouse${e.button}`);
+      this.down.add(`Mouse${e.button}`);
+      e.preventDefault();
+    });
+    document.addEventListener('mouseup', (e) => this.down.delete(`Mouse${e.button}`));
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener(
+      'wheel',
+      (e) => {
+        if (this.locked) this.wheel += Math.sign(e.deltaY);
+      },
+      { passive: true },
+    );
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.target;
       if (!this.locked) this.down.clear();
@@ -83,6 +116,13 @@ export class Input {
     return hit;
   }
 
+  /** Wheel notches since the last call; positive scrolls down. */
+  takeWheel(): number {
+    const w = this.wheel;
+    this.wheel = 0;
+    return w;
+  }
+
   takeMouseDelta(): { dx: number; dy: number } {
     const d = { dx: this.dx, dy: this.dy };
     this.dx = this.dy = 0;
@@ -98,6 +138,10 @@ export class Input {
       jump: this.held('jump'),
       crouch: this.held('crouch'),
       sprint: this.held('sprint'),
+      fire: this.held('fire'),
+      ads: this.held('ads'),
+      reload: this.held('reload'),
+      weapon: this.weapon,
     };
     if (this.override) {
       Object.assign(cmd, this.override);

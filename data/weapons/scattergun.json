@@ -1,0 +1,22 @@
+{
+  "id": "scattergun",
+  "name": "Brawler Scattergun",
+  "short": "SCATTERGUN",
+  "fireMode": "semi",
+  "rpm": 78,
+  "pellets": 9,
+  "damage": 12,
+  "headMult": 1.2,
+  "falloffStart": 7,
+  "falloffEnd": 18,
+  "falloffMin": 0.2,
+  "range": 45,
+  "magSize": 6,
+  "reloadTime": 2.4,
+  "equipTime": 0.45,
+  "spread": { "hipDeg": 4.4, "adsDeg": 3.4, "bloomDeg": 0.8, "bloomMaxDeg": 1.6, "bloomRecover": 4, "moveDeg": 0.3, "airDeg": 0.3 },
+  "recoil": { "pitchDeg": 3.2, "yawDeg": 0.9, "recover": 6 },
+  "adsZoom": 0.82,
+  "scope": false,
+  "adsTime": 0.2
+}

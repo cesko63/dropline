@@ -1,0 +1,22 @@
+{
+  "id": "carbine",
+  "name": "VK-7 Carbine",
+  "short": "CARBINE",
+  "fireMode": "auto",
+  "rpm": 660,
+  "pellets": 1,
+  "damage": 17,
+  "headMult": 1.6,
+  "falloffStart": 30,
+  "falloffEnd": 60,
+  "falloffMin": 0.6,
+  "range": 200,
+  "magSize": 28,
+  "reloadTime": 1.9,
+  "equipTime": 0.35,
+  "spread": { "hipDeg": 1.2, "adsDeg": 0.2, "bloomDeg": 0.16, "bloomMaxDeg": 1.6, "bloomRecover": 7, "moveDeg": 0.6, "airDeg": 0.5 },
+  "recoil": { "pitchDeg": 0.55, "yawDeg": 0.3, "recover": 5 },
+  "adsZoom": 0.72,
+  "scope": false,
+  "adsTime": 0.18
+}

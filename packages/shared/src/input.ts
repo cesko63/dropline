@@ -11,6 +11,13 @@ export interface InputCmd {
   jump: boolean;
   crouch: boolean;
   sprint: boolean;
+  /** Trigger held. */
+  fire: boolean;
+  /** Aim down sights held. */
+  ads: boolean;
+  reload: boolean;
+  /** Loadout slot to switch to, or -1 to keep the current weapon. */
+  weapon: number;
 }
 
 export const emptyInput = (): InputCmd => ({
@@ -21,4 +28,8 @@ export const emptyInput = (): InputCmd => ({
   jump: false,
   crouch: false,
   sprint: false,
+  fire: false,
+  ads: false,
+  reload: false,
+  weapon: -1,
 });

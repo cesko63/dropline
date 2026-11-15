@@ -3,18 +3,47 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DROPLINE — movement prototype</title>
+    <title>DROPLINE — gunplay prototype</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <canvas id="view"></canvas>
 
     <div id="hud" aria-hidden="true">
+      <div id="vignette"></div>
+      <div id="labels"></div>
+      <div id="scope"><i></i><i></i></div>
       <div id="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+      <div id="hitmarker"><i></i><i></i><i></i><i></i><b></b></div>
+      <div id="hurt-dirs"></div>
 
       <div id="status">
         <div id="state">GROUND</div>
         <div id="fps">-- fps</div>
+        <div id="view-mode">FIRST PERSON · V</div>
+        <div id="muted" hidden>SOUND OFF · M</div>
+      </div>
+
+      <div id="score">
+        <div class="side ally">
+          <span class="team" id="team-ally">ALLY</span>
+          <span class="num" id="score-ally">0</span>
+          <div class="track"><div id="bar-ally"></div></div>
+        </div>
+        <div class="goal">FIRST TO <span id="score-limit">30</span></div>
+        <div class="side enemy">
+          <span class="num" id="score-enemy">0</span>
+          <span class="team" id="team-enemy">ENEMY</span>
+          <div class="track"><div id="bar-enemy"></div></div>
+        </div>
+      </div>
+
+      <div id="feed"></div>
+      <div id="banner"></div>
+
+      <div id="vitals">
+        <div class="label"><span>HEALTH</span><span id="health-value">100</span></div>
+        <div class="bar"><div id="health"></div></div>
       </div>
 
       <div id="speed">
@@ -32,12 +61,29 @@
         <div class="bar thin"><div id="slide-fuel"></div></div>
       </div>
 
-      <div id="view-mode">FIRST PERSON · V</div>
+      <div id="weapon">
+        <div id="weapon-name">CARBINE</div>
+        <div class="ammo"><span id="ammo">28</span><span class="mag">/ <span id="ammo-mag">28</span></span></div>
+        <div class="bar thin"><div id="reload"></div></div>
+        <div id="slots"></div>
+      </div>
+
+      <div id="death">
+        <p class="cause">ELIMINATED BY <b id="death-by"></b></p>
+        <p class="wait">REDEPLOY IN <span id="death-wait">3.0</span></p>
+      </div>
+
+      <div id="end">
+        <p class="tag" id="end-score"></p>
+        <h2 id="end-title">VICTORY</h2>
+        <p id="end-stats"></p>
+        <p class="hint">ENTER · PLAY AGAIN</p>
+      </div>
     </div>
 
     <div id="overlay">
       <div class="panel">
-        <p class="tag">Movement prototype · working title</p>
+        <p class="tag">Gunplay prototype · working title</p>
         <h1>DROPLINE</h1>
         <button id="start" type="button">Click to deploy</button>
         <p id="lock-error" hidden>
@@ -51,9 +97,14 @@
           <div><dt>C</dt><dd>Crouch, or slide while sprinting</dd></div>
           <div><dt>Jump at a wall</dt><dd>Wallrun. Space leaps off: steer away to cross, steer into the wall to hop back on</dd></div>
           <div><dt>Forward at a ledge</dt><dd>Mantle up</dd></div>
+          <div><dt>Left mouse</dt><dd>Fire</dd></div>
+          <div><dt>Right mouse</dt><dd>Aim down sights</dd></div>
+          <div><dt>R</dt><dd>Reload</dd></div>
+          <div><dt>1 2 3 · Q · Wheel</dt><dd>Carbine, scattergun, marksman rifle</dd></div>
           <div><dt>V</dt><dd>First / third person</dd></div>
-          <div><dt>R</dt><dd>Respawn</dd></div>
-          <div><dt>Esc</dt><dd>Release the mouse</dd></div>
+          <div><dt>K</dt><dd>Redeploy at a spawn point</dd></div>
+          <div><dt>M</dt><dd>Sound on / off</dd></div>
+          <div><dt>Esc</dt><dd>Pause and release the mouse</dd></div>
         </dl>
       </div>
     </div>

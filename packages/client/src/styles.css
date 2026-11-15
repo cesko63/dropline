@@ -3,6 +3,8 @@
   --dim: rgba(233, 238, 245, 0.55);
   --accent: #ff7a2f;
   --cool: #58d6ff;
+  --danger: #ff5a3c;
+  --warn: #ffd23f;
   --panel: rgba(8, 13, 22, 0.78);
   font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI', system-ui, sans-serif;
 }
@@ -40,10 +42,17 @@ body {
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
 }
 
-#crosshair {
+#crosshair,
+#hitmarker,
+#hurt-dirs {
   position: absolute;
   left: 50%;
   top: 50%;
+}
+
+#crosshair {
+  /* Distance of the lines from the center, set from the weapon's current spread. */
+  --gap: 7px;
 }
 
 #crosshair i,
@@ -51,6 +60,7 @@ body {
   position: absolute;
   background: var(--ink);
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  transition: opacity 0.1s;
 }
 
 #crosshair b {
@@ -68,11 +78,11 @@ body {
 }
 
 #crosshair i:nth-child(1) {
-  left: -15px;
+  right: var(--gap);
 }
 
 #crosshair i:nth-child(2) {
-  left: 7px;
+  left: var(--gap);
 }
 
 #crosshair i:nth-child(3),
@@ -83,11 +93,157 @@ body {
 }
 
 #crosshair i:nth-child(3) {
-  top: -15px;
+  bottom: var(--gap);
 }
 
 #crosshair i:nth-child(4) {
-  top: 7px;
+  top: var(--gap);
+}
+
+/* Aimed down sights: only the center dot stays. */
+#crosshair.aimed i {
+  opacity: 0;
+}
+
+#crosshair.off {
+  display: none;
+}
+
+/* Hit marker: four diagonal ticks. A headshot adds a ring; a kill is heavier and red. */
+#hitmarker {
+  opacity: 0;
+}
+
+#hitmarker i {
+  position: absolute;
+  width: 10px;
+  height: 2px;
+  left: -5px;
+  top: -1px;
+  background: var(--ink);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+}
+
+#hitmarker i:nth-child(1) {
+  transform: rotate(45deg) translateX(13px);
+}
+
+#hitmarker i:nth-child(2) {
+  transform: rotate(135deg) translateX(13px);
+}
+
+#hitmarker i:nth-child(3) {
+  transform: rotate(225deg) translateX(13px);
+}
+
+#hitmarker i:nth-child(4) {
+  transform: rotate(315deg) translateX(13px);
+}
+
+#hitmarker b {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: -8px;
+  top: -8px;
+  border: 2px solid var(--warn);
+  border-radius: 50%;
+  display: none;
+}
+
+#hitmarker.head b {
+  display: block;
+}
+
+#hitmarker.kill i {
+  background: var(--danger);
+  height: 4px;
+  top: -2px;
+}
+
+/* Where damage came from: a wedge on a ring around the crosshair, pointing at the shooter. */
+#hurt-dirs i {
+  position: absolute;
+  left: -36px;
+  top: -128px;
+  width: 72px;
+  height: 14px;
+  transform-origin: 36px 128px;
+  background: var(--danger);
+  clip-path: polygon(0 100%, 50% 0, 100% 100%, 50% 60%);
+  opacity: 0;
+}
+
+#vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(190, 20, 10, 0.8) 130%);
+  opacity: 0;
+}
+
+/* Scope view of the marksman rifle: a round window with a fine cross. */
+#scope {
+  position: absolute;
+  inset: 0;
+  display: none;
+  background: radial-gradient(circle at center, transparent 0, transparent 37vh, rgba(120, 220, 255, 0.5) 37.2vh, rgba(2, 4, 8, 0.97) 37.9vh);
+}
+
+#scope.on {
+  display: block;
+}
+
+#scope i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(233, 238, 245, 0.85);
+}
+
+#scope i:nth-child(1) {
+  width: 74vh;
+  height: 1px;
+  margin-left: -37vh;
+}
+
+#scope i:nth-child(2) {
+  width: 1px;
+  height: 74vh;
+  margin-top: -37vh;
+}
+
+/* Text pinned to things in the world: ally names, damage numbers. */
+#labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+#labels span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+#labels .tag {
+  font-size: 10px;
+  color: var(--cool);
+}
+
+#labels .tag.enemy {
+  color: var(--danger);
+}
+
+#labels .dmg {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#labels .dmg.head {
+  font-size: 19px;
+  color: var(--warn);
 }
 
 #status {
@@ -115,9 +271,16 @@ body {
   color: var(--accent);
 }
 
-#fps {
+#fps,
+#view-mode,
+#muted {
   color: var(--dim);
   padding-left: 13px;
+  font-size: 11px;
+}
+
+#muted {
+  color: var(--accent);
 }
 
 #speed {
@@ -200,12 +363,331 @@ body {
   border-color: var(--cool);
 }
 
-#view-mode {
+/* ---------------------------------------------------------------- combat HUD */
+
+#score {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: 150px auto 150px;
+  align-items: start;
+  gap: 14px;
+  font-size: 11px;
+}
+
+#score .side {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+#score .enemy {
+  grid-template-columns: auto 1fr;
+}
+
+#score .enemy .team {
+  text-align: right;
+}
+
+#score .team {
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#score .num {
+  font-size: 26px;
+  line-height: 1;
+}
+
+#score .ally .num {
+  color: var(--cool);
+}
+
+#score .enemy .num {
+  color: var(--danger);
+}
+
+#score .track {
+  grid-column: 1 / -1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+#score .track div {
+  height: 100%;
+  width: 100%;
+  transform: scaleX(0);
+  transition: transform 0.3s;
+}
+
+#bar-ally {
+  background: var(--cool);
+  transform-origin: right;
+}
+
+#bar-enemy {
+  background: var(--danger);
+  transform-origin: left;
+}
+
+#score .goal {
+  padding-top: 8px;
+  color: var(--dim);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+#feed {
   position: absolute;
   right: 24px;
-  bottom: 24px;
-  font-size: 11px;
+  top: 20px;
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  font-size: 12px;
+}
+
+#feed div {
+  padding: 3px 10px;
+  background: var(--panel);
+  border-right: 3px solid transparent;
+  white-space: nowrap;
+}
+
+#feed div.mine {
+  border-color: var(--accent);
+}
+
+#feed .ally {
+  color: var(--cool);
+}
+
+#feed .enemy {
+  color: var(--danger);
+}
+
+#feed .how {
   color: var(--dim);
+  font-size: 10px;
+  margin: 0 8px;
+}
+
+#banner {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  transform: translateX(-50%);
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  white-space: nowrap;
+  opacity: 0;
+}
+
+#banner b {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+#vitals {
+  position: absolute;
+  left: 24px;
+  bottom: 84px;
+  width: 220px;
+  font-size: 11px;
+}
+
+#vitals .label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  color: var(--dim);
+}
+
+#health-value {
+  font-size: 18px;
+  color: var(--ink);
+}
+
+#vitals .bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  transform: skewX(-20deg);
+  overflow: hidden;
+}
+
+#health {
+  height: 100%;
+  width: 100%;
+  background: var(--ink);
+  transform-origin: left;
+  transition: background-color 0.2s;
+}
+
+#vitals.low #health {
+  background: var(--danger);
+}
+
+#vitals.low #health-value {
+  color: var(--danger);
+}
+
+#weapon {
+  position: absolute;
+  right: 24px;
+  bottom: 22px;
+  width: 240px;
+  text-align: right;
+  font-size: 11px;
+}
+
+#weapon-name {
+  color: var(--dim);
+}
+
+#weapon .ammo {
+  font-size: 44px;
+  line-height: 1.05;
+}
+
+#weapon .ammo .mag {
+  font-size: 13px;
+  color: var(--dim);
+  margin-left: 8px;
+}
+
+#weapon.empty #ammo {
+  color: var(--danger);
+}
+
+#weapon .bar {
+  height: 4px;
+  margin: 4px 0 8px;
+  background: rgba(255, 255, 255, 0.14);
+  transform: skewX(-20deg);
+  overflow: hidden;
+}
+
+#reload {
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+#slots {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  color: var(--dim);
+  font-size: 10px;
+}
+
+#slots span {
+  padding-bottom: 2px;
+  border-bottom: 2px solid transparent;
+}
+
+#slots span.on {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+#death,
+#end {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translateX(-50%);
+  padding: 16px 28px;
+  background: var(--panel);
+  border-top: 3px solid var(--danger);
+  text-align: center;
+  display: none;
+}
+
+#death.on,
+#end.on {
+  display: block;
+  animation: card-in 0.22s ease-out;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+}
+
+#death p,
+#end p {
+  margin: 0;
+  white-space: nowrap;
+}
+
+#death .cause {
+  font-size: 16px;
+}
+
+#death .cause b {
+  color: var(--danger);
+}
+
+#death .wait {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+#end {
+  top: 24%;
+  min-width: 340px;
+  border-color: var(--cool);
+}
+
+#end.lost {
+  border-color: var(--danger);
+}
+
+#end h2 {
+  margin: 4px 0 10px;
+  font-size: 44px;
+  letter-spacing: 0.16em;
+  line-height: 1;
+}
+
+#end #end-stats {
+  font-size: 13px;
+  color: var(--dim);
+}
+
+#end .hint {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* Small windows: drop what is not needed to fight. */
+@media (max-width: 900px), (max-height: 520px) {
+  #score {
+    grid-template-columns: 96px auto 96px;
+  }
+
+  #slots,
+  #view-mode {
+    display: none;
+  }
+
+  #feed {
+    top: 70px;
+  }
 }
 
 /* ---------------------------------------------------------------- start overlay */
@@ -226,7 +708,7 @@ body {
 }
 
 .panel {
-  width: min(520px, 100%);
+  width: min(540px, 100%);
   max-height: 100%;
   overflow: auto;
   padding: 28px 32px;
@@ -283,7 +765,7 @@ h1 {
 dl {
   margin: 0;
   display: grid;
-  gap: 7px;
+  gap: 6px;
   font-size: 13px;
 }
 
