@@ -1,0 +1,82 @@
+{
+  "player": {
+    "radius": 0.4,
+    "standHeight": 1.8,
+    "crouchHeight": 1.0,
+    "eyeStand": 1.62,
+    "eyeCrouch": 0.82,
+    "stepHeight": 0.35,
+    "minGroundNormalY": 0.7
+  },
+  "ground": {
+    "walkSpeed": 5.5,
+    "sprintSpeed": 9.0,
+    "crouchSpeed": 2.8,
+    "accel": 10,
+    "friction": 8,
+    "stopSpeed": 2.5,
+    "landingKeep": 0.5
+  },
+  "air": {
+    "gravity": 20,
+    "accel": 1.4,
+    "maxFallSpeed": 40,
+    "maxSpeed": 16
+  },
+  "jump": {
+    "velocity": 7.0,
+    "doubleVelocity": 7.4,
+    "doubleRedirect": 0.6,
+    "airJumps": 1,
+    "coyoteTime": 0.1,
+    "bufferTime": 0.12
+  },
+  "jetpack": {
+    "holdDelay": 0.15,
+    "thrust": 30,
+    "fallBrakeScale": 2.0,
+    "maxRiseSpeed": 2.3,
+    "duration": 1.4,
+    "rechargeDelay": 0.4,
+    "rechargeTime": 2.2,
+    "airAccelBonus": 1.5
+  },
+  "slide": {
+    "minSpeed": 7.5,
+    "endSpeed": 3.0,
+    "boost": 3.6,
+    "maxBoostedSpeed": 13.5,
+    "decel": 2.0,
+    "decelRamp": 5.0,
+    "duration": 1.3,
+    "slopeFactor": 1.0,
+    "steerAccel": 0.6
+  },
+  "wallrun": {
+    "speed": 11.5,
+    "accel": 14,
+    "brake": 12,
+    "minSpeed": 3.5,
+    "maxTime": 1.8,
+    "gravity": 9,
+    "entryLift": 2.0,
+    "verticalDamp": 3.0,
+    "probeDistance": 0.4,
+    "minHeight": 0.6,
+    "jumpPush": 5.0,
+    "hopPush": 1.5,
+    "jumpUp": 7.0,
+    "cooldown": 0.2,
+    "dropCooldown": 0.6,
+    "chainRise": 2.0,
+    "chainJumpScale": 0.45,
+    "cameraRollDeg": 12
+  },
+  "mantle": {
+    "maxHeight": 2.2,
+    "minHeight": 0.45,
+    "forwardProbe": 0.45,
+    "baseTime": 0.18,
+    "timePerMeter": 0.1
+  }
+}

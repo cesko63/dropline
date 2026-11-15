@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DROPLINE — movement prototype</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+
+    <div id="hud" aria-hidden="true">
+      <div id="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+
+      <div id="status">
+        <div id="state">GROUND</div>
+        <div id="fps">-- fps</div>
+      </div>
+
+      <div id="speed">
+        <span id="speed-value">0.0</span>
+        <span class="unit">m/s</span>
+      </div>
+
+      <div id="thrust">
+        <div class="label">
+          <span>THRUST</span>
+          <span id="air-jump" class="pip on" title="Double jump"></span>
+        </div>
+        <div class="bar"><div id="fuel"></div></div>
+        <div class="label second"><span>SLIDE</span></div>
+        <div class="bar thin"><div id="slide-fuel"></div></div>
+      </div>
+
+      <div id="view-mode">FIRST PERSON · V</div>
+    </div>
+
+    <div id="overlay">
+      <div class="panel">
+        <p class="tag">Movement prototype · working title</p>
+        <h1>DROPLINE</h1>
+        <button id="start" type="button">Click to deploy</button>
+        <p id="lock-error" hidden>
+          This window does not allow mouse capture. Open this address in Chrome, Edge or Firefox to play.
+        </p>
+        <dl>
+          <div><dt>W A S D</dt><dd>Move</dd></div>
+          <div><dt>Shift</dt><dd>Sprint</dd></div>
+          <div><dt>Space</dt><dd>Jump, again in the air to double jump</dd></div>
+          <div><dt>Hold Space</dt><dd>Jetpack thrust while airborne</dd></div>
+          <div><dt>C</dt><dd>Crouch, or slide while sprinting</dd></div>
+          <div><dt>Jump at a wall</dt><dd>Wallrun. Space leaps off: steer away to cross, steer into the wall to hop back on</dd></div>
+          <div><dt>Forward at a ledge</dt><dd>Mantle up</dd></div>
+          <div><dt>V</dt><dd>First / third person</dd></div>
+          <div><dt>R</dt><dd>Respawn</dd></div>
+          <div><dt>Esc</dt><dd>Release the mouse</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

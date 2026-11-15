@@ -1,0 +1,57 @@
+{
+  "name": "gym",
+  "units": "meters, Y up. pos = box center, size = full extents, rot = euler XYZ degrees",
+  "spawns": [{ "pos": [0, 0.1, 46], "yawDeg": 0 }],
+  "boxes": [
+    { "id": "floor", "pos": [0, -0.5, 0], "size": [140, 1, 140], "mat": "floor" },
+    { "id": "wall-n", "pos": [0, 7, -70.5], "size": [142, 14, 1], "mat": "wall" },
+    { "id": "wall-s", "pos": [0, 7, 70.5], "size": [142, 14, 1], "mat": "wall" },
+    { "id": "wall-e", "pos": [70.5, 7, 0], "size": [1, 14, 140], "mat": "wall" },
+    { "id": "wall-w", "pos": [-70.5, 7, 0], "size": [1, 14, 140], "mat": "wall" },
+
+    { "id": "starter-wall-a", "pos": [-12, 4, 30], "size": [1, 8, 24], "mat": "accent" },
+    { "id": "starter-wall-b", "pos": [-19, 4, 18], "size": [1, 8, 24], "mat": "accent" },
+
+    { "id": "lane-l1", "pos": [-36, 5, 28], "size": [1, 10, 16], "mat": "accent" },
+    { "id": "lane-r1", "pos": [-28, 5, 10], "size": [1, 10, 16], "mat": "accent" },
+    { "id": "lane-l2", "pos": [-36, 5, -8], "size": [1, 10, 16], "mat": "accent" },
+    { "id": "lane-r2", "pos": [-28, 5, -26], "size": [1, 10, 16], "mat": "accent" },
+    { "id": "lane-goal", "pos": [-32, 3.75, -42], "size": [10, 0.5, 8], "mat": "platform" },
+    { "id": "lane-goal-pillar", "pos": [-32, 1.75, -42], "size": [2, 3.5, 2], "mat": "block" },
+
+    { "id": "duct-roof", "pos": [0, 1.55, 26], "size": [5, 0.6, 8], "mat": "platform" },
+    { "id": "duct-left", "pos": [-2.75, 0.925, 26], "size": [0.5, 1.85, 8], "mat": "block" },
+    { "id": "duct-right", "pos": [2.75, 0.925, 26], "size": [0.5, 1.85, 8], "mat": "block" },
+
+    { "id": "tower-annex", "pos": [0, 1.5, -4], "size": [8, 3, 4], "mat": "block" },
+    { "id": "tower", "pos": [0, 4, -12], "size": [12, 8, 12], "mat": "block" },
+
+    { "id": "stair-1", "pos": [14.3, 0.15, 34], "size": [0.6, 0.3, 4], "mat": "block" },
+    { "id": "stair-2", "pos": [14.9, 0.3, 34], "size": [0.6, 0.6, 4], "mat": "block" },
+    { "id": "stair-3", "pos": [15.5, 0.45, 34], "size": [0.6, 0.9, 4], "mat": "block" },
+    { "id": "stair-4", "pos": [16.1, 0.6, 34], "size": [0.6, 1.2, 4], "mat": "block" },
+    { "id": "stair-5", "pos": [16.7, 0.75, 34], "size": [0.6, 1.5, 4], "mat": "block" },
+    { "id": "stair-6", "pos": [17.3, 0.9, 34], "size": [0.6, 1.8, 4], "mat": "block" },
+    { "id": "stair-top", "pos": [20.1, 0.9, 34], "size": [5, 1.8, 4], "mat": "platform" },
+
+    { "id": "mantle-1", "pos": [16, 0.5, 24], "size": [3, 1, 3], "mat": "block" },
+    { "id": "mantle-2", "pos": [21, 1, 24], "size": [3, 2, 3], "mat": "block" },
+    { "id": "mantle-3", "pos": [26, 1.6, 24], "size": [3, 3.2, 3], "mat": "block" },
+    { "id": "mantle-4", "pos": [32, 2.75, 24], "size": [5, 5.5, 5], "mat": "block" },
+
+    { "id": "ramp", "pos": [24, 1.765, -11.585], "size": [6, 0.5, 11.705], "rot": [19.98, 0, 0], "mat": "platform" },
+    { "id": "ramp-deck", "pos": [24, 3.75, -22], "size": [10, 0.5, 10], "mat": "platform" },
+    { "id": "ramp-deck-pillar", "pos": [24, 1.75, -22], "size": [2, 3.5, 2], "mat": "block" },
+    { "id": "high-deck-1", "pos": [24, 5.75, -40], "size": [8, 0.5, 8], "mat": "platform" },
+    { "id": "high-deck-1-pillar", "pos": [24, 2.75, -40], "size": [2, 5.5, 2], "mat": "block" },
+    { "id": "high-wall", "pos": [16, 8.5, -45.5], "size": [12, 7, 1], "mat": "accent" },
+    { "id": "high-deck-2", "pos": [6, 7.75, -44], "size": [8, 0.5, 8], "mat": "platform" },
+    { "id": "high-deck-2-pillar", "pos": [6, 3.75, -44], "size": [2, 7.5, 2], "mat": "block" },
+
+    { "id": "pad-1", "pos": [40, 2.25, 6], "size": [4, 0.5, 4], "mat": "platform" },
+    { "id": "pad-2", "pos": [49, 2.25, 6], "size": [4, 0.5, 4], "mat": "platform" },
+    { "id": "pad-3", "pos": [60, 3.25, 6], "size": [4, 0.5, 4], "mat": "platform" },
+    { "id": "pad-4", "pos": [60, 4.25, -6], "size": [4, 0.5, 4], "mat": "platform" },
+    { "id": "pad-5", "pos": [48, 5.25, -8], "size": [5, 0.5, 5], "mat": "platform" }
+  ]
+}

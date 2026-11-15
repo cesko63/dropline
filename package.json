@@ -1,0 +1,15 @@
+{
+  "name": "dropline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @dropline/client dev",
+    "build": "pnpm --filter @dropline/client build",
+    "dev:server": "pnpm --filter @dropline/server dev",
+    "test": "pnpm --filter @dropline/shared test",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

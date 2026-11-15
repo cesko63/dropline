@@ -1,0 +1,24 @@
+/** One tick of player intent. This is what gets sent to the server later. */
+export interface InputCmd {
+  /** Strafe, -1 (left) .. 1 (right). */
+  moveX: number;
+  /** Forward, -1 (back) .. 1 (forward). */
+  moveZ: number;
+  /** Radians. 0 looks down -Z, positive turns left. */
+  yaw: number;
+  /** Radians. Positive looks up. */
+  pitch: number;
+  jump: boolean;
+  crouch: boolean;
+  sprint: boolean;
+}
+
+export const emptyInput = (): InputCmd => ({
+  moveX: 0,
+  moveZ: 0,
+  yaw: 0,
+  pitch: 0,
+  jump: false,
+  crouch: false,
+  sprint: false,
+});
