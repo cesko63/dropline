@@ -37,7 +37,7 @@ import { Hud } from './ui/hud';
 
 /** Longest frame the simulation will try to catch up on, seconds. */
 const MAX_FRAME = 0.1;
-/** Seconds a pilot keeps the weapon shouldered after firing. */
+/** Seconds a pilot keeps the arm raised after firing. */
 const RAISE_HOLD = 1.6;
 const OWN_TRACER = '#ffe2b0';
 const IMPACT_SPARK = '#ffcf8a';
@@ -570,17 +570,34 @@ export class Game {
       case 'spawn':
         this.onSpawn(m.actors[e.actor]);
         break;
-      case 'reload':
-        if (e.actor === me.id) this.sfx.reloadOut();
+      case 'reload': {
+        // A pilot's weapons make their own rounds; what runs out is the coolant
+        // cell (or the pod's two rockets). The mech's cannon still loads a belt.
+        const a = m.actors[e.actor];
+        const mount = weaponOf(a).mount;
+        if (a === me) {
+          if (mount === 'arm') this.sfx.ventOut();
+          else if (mount === 'shoulder') this.sfx.podLoad(weaponOf(a).reloadTime);
+          else this.sfx.reloadOut();
+        }
+        // Seen from outside, the arm lets off a puff of steam.
+        if (mount === 'arm' && (a !== me || this.rig.outside) && a.alive && !a.inMech) {
+          const at = this.avatars[a.id].ventWorld(this.tmp);
+          this.fx.smoke(at, 3, 0.08, 0.32, 0.6, UP, 0.8);
+        }
         break;
+      }
       case 'reloaded':
-        if (e.actor === me.id) this.sfx.reloadIn();
+        if (e.actor !== me.id) break;
+        if (weaponOf(me).mount === 'arm') this.sfx.cellIn();
+        else if (weaponOf(me).mount === 'shoulder') this.sfx.podReady();
+        else this.sfx.reloadIn();
         break;
       case 'dry':
-        if (e.actor === me.id) this.sfx.dry();
+        if (e.actor === me.id) this.sfx.dry(weaponOf(me).mount === 'arm');
         break;
       case 'equip':
-        if (e.actor === me.id) this.sfx.equip();
+        if (e.actor === me.id) this.sfx.equip(weaponOf(me).mount ?? 'cannon');
         break;
       case 'notice': {
         const a = m.actors[e.actor];
@@ -763,8 +780,8 @@ export class Game {
           this.rocketAlias.set(e.id, this.ownRockets.shift()!);
           break;
         }
-        // Seen from outside it leaves the tube or the pod; from the player's own
-        // shoulder it leaves the launcher in their hands.
+        // It leaves the pod it was fired from: the mech's, or the one on the
+        // pilot's shoulder (the player's own is drawn by the viewmodel).
         let from: THREE.Vector3 | null = null;
         if (salvo) {
           if (!mine || this.rig.outside) from = this.mechAvatars[a.id].podWorld(this.tmp);

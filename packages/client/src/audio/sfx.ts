@@ -245,7 +245,48 @@ export class Sfx {
     this.burst(b, { type: 'lowpass', f0: 420, f1: 80, dur: 0.75, gain: 0.4 });
   }
 
-  /** Magazine out. */
+  /**
+   * A pilot's arm weapon is out of cooling: the spent cell is thrown out with a
+   * clunk and the housing vents for about a second.
+   */
+  ventOut(): void {
+    const b = this.bus(null, 0.6);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 900, q: 4, dur: 0.05, gain: 0.6 });
+    this.tone(b, { type: 'triangle', f0: 520, f1: 210, dur: 0.12, gain: 0.12, at: 0.02 });
+    this.burst(b, { type: 'highpass', f0: 5200, f1: 2600, dur: 0.95, gain: 0.3, at: 0.08 });
+    this.burst(b, { type: 'bandpass', f0: 2400, f1: 900, q: 1.2, dur: 0.7, gain: 0.16, at: 0.1 });
+  }
+
+  /** The fresh cell slides home and locks; the weapon hums back up. */
+  cellIn(): void {
+    const b = this.bus(null, 0.6);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 1500, q: 5, dur: 0.035, gain: 0.6 });
+    this.burst(b, { type: 'bandpass', f0: 2900, q: 6, dur: 0.03, gain: 0.45, at: 0.06 });
+    this.tone(b, { type: 'sine', f0: 380, f1: 920, dur: 0.16, gain: 0.1, at: 0.05 });
+  }
+
+  /** The shoulder pod tips back and takes two rockets, one after the other, within `duration`. */
+  podLoad(duration: number): void {
+    const b = this.bus(null, 0.6);
+    if (!b) return;
+    this.tone(b, { type: 'sawtooth', f0: 90, f1: 150, dur: 0.3, gain: 0.07 });
+    for (const share of [0.45, 0.8]) {
+      this.burst(b, { type: 'bandpass', f0: 420, q: 4, dur: 0.09, gain: 0.7, at: duration * share });
+      this.tone(b, { type: 'sine', f0: 130, f1: 70, dur: 0.12, gain: 0.4, at: duration * share });
+    }
+  }
+
+  /** The pod is level again and armed. */
+  podReady(): void {
+    const b = this.bus(null, 0.6);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 800, q: 4, dur: 0.05, gain: 0.5 });
+    this.tone(b, { type: 'triangle', f0: 990, dur: 0.09, gain: 0.14, at: 0.04 });
+  }
+
+  /** Magazine out (the mech's cannon). */
   reloadOut(): void {
     const b = this.bus(null, 0.6);
     if (!b) return;
@@ -253,7 +294,7 @@ export class Sfx {
     this.burst(b, { type: 'bandpass', f0: 700, q: 2, dur: 0.06, gain: 0.35, at: 0.09 });
   }
 
-  /** Magazine in and bolt forward. */
+  /** Magazine in and bolt forward (the mech's cannon). */
   reloadIn(): void {
     const b = this.bus(null, 0.6);
     if (!b) return;
@@ -261,15 +302,32 @@ export class Sfx {
     this.burst(b, { type: 'bandpass', f0: 2600, q: 5, dur: 0.03, gain: 0.45, at: 0.07 });
   }
 
-  /** Trigger pulled on an empty magazine. */
-  dry(): void {
+  /** Trigger pulled with nothing to fire. `overheat`: a pilot's arm with a full cell, which refuses with a buzz. */
+  dry(overheat = false): void {
     const b = this.bus(null, 0.5);
-    if (b) this.burst(b, { type: 'bandpass', f0: 4000, q: 4, dur: 0.02, gain: 0.5 });
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 4000, q: 4, dur: 0.02, gain: 0.5 });
+    if (overheat) this.tone(b, { type: 'square', f0: 210, f1: 150, dur: 0.09, gain: 0.1 });
   }
 
-  equip(): void {
+  /**
+   * Changing weapons. The arm draws one barrel in and runs the next out (a servo
+   * and two locks); the shoulder pod swings up on its hinge; a mech readies its cannon.
+   */
+  equip(mount: 'arm' | 'shoulder' | 'cannon'): void {
     const b = this.bus(null, 0.5);
-    if (b) this.burst(b, { type: 'bandpass', f0: 500, f1: 1900, q: 1.5, dur: 0.15, gain: 0.4 });
+    if (!b) return;
+    if (mount === 'arm') {
+      this.tone(b, { type: 'sawtooth', f0: 240, f1: 520, dur: 0.16, gain: 0.05 });
+      this.burst(b, { type: 'bandpass', f0: 2100, q: 6, dur: 0.025, gain: 0.5, at: 0.02 });
+      this.burst(b, { type: 'bandpass', f0: 1500, q: 6, dur: 0.03, gain: 0.55, at: 0.17 });
+    } else if (mount === 'shoulder') {
+      this.tone(b, { type: 'sawtooth', f0: 120, f1: 210, dur: 0.34, gain: 0.07 });
+      this.burst(b, { type: 'bandpass', f0: 520, q: 4, dur: 0.07, gain: 0.7, at: 0.3 });
+      this.tone(b, { type: 'sine', f0: 150, f1: 80, dur: 0.1, gain: 0.3, at: 0.3 });
+    } else {
+      this.burst(b, { type: 'bandpass', f0: 500, f1: 1900, q: 1.5, dur: 0.15, gain: 0.4 });
+    }
   }
 
   /** An enemy bot spotting the player. */

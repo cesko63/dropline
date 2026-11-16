@@ -11,6 +11,12 @@ export interface WeaponDef {
   name: string;
   /** Short label for the HUD and kill feed. */
   short: string;
+  /**
+   * Where a pilot's suit carries it: a barrel of the right arm, or the pod on
+   * the shoulder. Absent on a mech's weapons. Only how it looks and sounds
+   * depends on this; every mount fires along the pilot's line of sight.
+   */
+  mount?: 'arm' | 'shoulder';
   /** `auto` fires while the trigger is held; `semi` needs a press per shot. */
   fireMode: 'auto' | 'semi';
   rpm: number;

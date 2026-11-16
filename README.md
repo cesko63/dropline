@@ -5,7 +5,8 @@ mantle, jetpack thrust) and war mechs that pilots call down from the sky.
 Original game: its own name, designs and assets.
 
 Current state: **multiplayer prototype**. A 4-v-4 skirmish on the test map,
-first team to 50 points (1 for a pilot, 3 for a mech). Four pilot weapons,
+first team to 50 points (1 for a pilot, 3 for a mech). Four weapons built into
+the pilot's suit,
 health that regenerates, respawns, and a mech for every pilot who fills their
 meter. Play it online on a dedicated server, where up to eight players take the
 places of bots, or offline against bots alone.
@@ -59,9 +60,9 @@ time), `?name=Ada` sets the callsign, `?net=1` opens the connection details,
 | Jump at a wall | Wallrun. Space leaps off: steer away to cross, steer into the wall to hop back onto it |
 | Forward at a ledge | Mantle up |
 | Left mouse | Fire |
-| Right mouse | Aim down sights (the marksman rifle switches to a scope) |
-| R | Reload |
-| 1 2 3 4, Q, mouse wheel | Switch weapon |
+| Right mouse | Aim: raises the arm under the crosshair and zooms in (the marksman barrel switches to a scope) |
+| R | Vent the arm and swap its coolant cell; reload the shoulder pod |
+| 1 2 3 4, Q, mouse wheel | Switch weapon: 1 to 3 change the arm's barrel, 4 raises the shoulder pod |
 | F | Call your mech to the spot you look at (meter full) |
 | E | Climb into your mech when beside it; climb out again |
 | Space, in the mech | Dash (two charges) |
@@ -75,15 +76,46 @@ time), `?name=Ada` sets the callsign, `?net=1` opens the connection details,
 
 ## Weapons
 
-| Weapon | Role |
-|---|---|
-| VK-7 Carbine | Automatic, 28 rounds. Accurate in short bursts; spread blooms while the trigger is held |
-| Brawler Scattergun | Nine pellets a shot, 6 shells. Deadly inside 7 m, weak past 18 m |
-| Lancet Marksman Rifle | Semi-automatic, 6 rounds, scoped. A headshot kills; wild from the hip |
-| Pike Anti-Armor Launcher | Two rockets, then a long reload. The answer to a mech; the rocket takes time to arrive, so a pilot can step out of its way |
+A pilot does not carry guns. The suit's right forearm is a weapon housing with
+three barrels, and a launcher pod rides on the right shoulder.
+
+- **Changing weapons** draws one barrel back into the housing while the collar
+  turns, and runs the next one out. Choosing the launcher lowers the arm and
+  swings the pod up beside the head; rockets leave the pod, so the arm cannot
+  fire while it is up.
+- **No magazines.** The arm prints its own rounds. What limits it is heat: every
+  shot loads the coolant cell, and the number on the HUD is how many more shots
+  the cell can take. The heat bar and the arm's lights go from blue through
+  orange to red, and a full cell flickers.
+- **Reloading** (R, or on its own when the cell is full) throws out the hot
+  cell, vents the housing in a cloud of steam and seats a fresh cell. It takes
+  as long as a reload always did. The pod tips back and takes two new rockets.
+- **Aiming** raises the arm under the crosshair, so the view stays open while
+  wallrunning or sliding. Only the marksman barrel has a scope.
+
+| Weapon | Mount | Role |
+|---|---|---|
+| VK-7 Carbine | Arm | Automatic, 28 shots a cell. Accurate in short bursts; spread blooms while the trigger is held |
+| Brawler Scattergun | Arm | Nine pellets a shot, 6 shots a cell. Deadly inside 7 m, weak past 18 m |
+| Lancet Marksman Rifle | Arm | Semi-automatic, 6 shots a cell, scoped. A headshot kills; usable from the hip up close |
+| Pike Anti-Armor Launcher | Shoulder pod | Two rockets, then a long reload. The answer to a mech; the rocket takes time to arrive, so a pilot can step out of its way |
 
 Shooting works while sprinting, sliding, wallrunning and in the air, at a small
 cost in spread. Recoil kicks the view and settles back on its own.
+
+Hip fire is tight enough to fight without aiming, and aiming still wins at
+range. Share of shots that strike a standing pilot from the hip, after a pause
+between shots (and for the carbine with the trigger held):
+
+| From the hip | 8 m | 15 m | 25 m | 40 m |
+|---|---|---|---|---|
+| Carbine, single shots | 100% | 100% | 97% | 30% |
+| Carbine, trigger held | 100% | 55% | 30% | 8% |
+| Scattergun, pellets | 63% | 29% | 12% | 3% |
+| Marksman | 100% | 93% | 56% | 20% |
+
+Bots fire with the same numbers. Against four of them a pilot who stands in the
+open lasts 2.8 s (3.0 s before the change), and one who keeps moving lasts 5.0 s.
 
 ## The mech
 
@@ -251,8 +283,8 @@ packages/
 - **Sound:** every effect is synthesized from filtered noise and short tones
   (`client/src/audio/sfx.ts`). They carry timing and feedback until recorded
   audio replaces them.
-- **Models:** pilots, mechs, weapons and the cockpit are built from boxes with
-  procedural animation. Smoke and blasts are plain shapes.
+- **Models:** pilots, the suit's arm and pod, mechs and the cockpit are built
+  from boxes with procedural animation. Smoke, steam and blasts are plain shapes.
 - **Pilots do not collide with each other**, only with the map. A pilot can also
   walk through a mech; only mechs push each other apart.
 - **One mech frame.** Every pilot calls the same Halberd.
@@ -271,6 +303,15 @@ packages/
 1. Movement prototype (done)
 2. Gunplay and offline bots (done)
 3. Mech: call-in, embark, mech combat (done)
-4. Multiplayer: dedicated server, prediction, lag compensation (this)
-5. Content and polish
+4. Multiplayer: dedicated server, prediction, lag compensation (done)
+5. Content and polish (now)
+   1. Suit weapons: the arm and the shoulder pod, tighter hip fire (done)
+   2. Solid bodies: pilots collide with each other and with mechs
+   3. Settings and gamepad
+   4. A second map
+   5. Bots off the ground floor
+   6. Two more mech frames
+   7. Models and animation
+   8. Sound and music
+   9. Closing pass: teaching, performance, error cards, balance
 6. Deployment

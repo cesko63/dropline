@@ -100,9 +100,9 @@ body {
   top: var(--gap);
 }
 
-/* Aimed down sights: only the center dot stays. */
+/* Aimed: the raised arm sits under the crosshair, so the lines stay, a little fainter. */
 #crosshair.aimed i {
-  opacity: 0;
+  opacity: 0.7;
 }
 
 #crosshair.off {
@@ -653,12 +653,51 @@ body {
   color: var(--danger);
 }
 
+/* The heat of the arm's coolant cell, with what it is doing beside it. */
+#weapon .heat {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+#weapon-state {
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+#weapon.hot #weapon-state {
+  color: var(--danger);
+}
+
+#weapon.venting #weapon-state {
+  color: var(--cool);
+  animation: venting 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes venting {
+  to {
+    opacity: 0.45;
+  }
+}
+
 #weapon .bar {
+  flex: 0 0 200px;
   height: 4px;
-  margin: 4px 0 8px 60px;
   background: rgba(255, 255, 255, 0.14);
   transform: skewX(-20deg);
   overflow: hidden;
+}
+
+#weapon.hot #reload {
+  background: var(--danger);
+}
+
+#weapon.venting #reload {
+  background: var(--cool);
 }
 
 #reload {

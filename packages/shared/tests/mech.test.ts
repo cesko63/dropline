@@ -659,13 +659,19 @@ describe('whole matches with mechs, bots only', () => {
     JSON.stringify([m.score, m.actors.map((a) => [a.p.pos, a.health, a.meter, a.inMech, a.ammo]), m.mechs.map((k) => [k.state, k.pos, k.health, k.ammo]), m.projectiles]);
 
   it('replays exactly from the same seed, mechs and rockets included', () => {
+    let landings = 0;
     const play = (seed: number): MatchState => {
+      landings = 0;
       const m = createMatch(map, world, { seed, humans: 0, scoreLimit: 9999, startMeter: 0.7 });
-      for (let i = 0; i < 60 * 90; i++) stepMatch(m, world, [], TICK_DT);
+      for (let i = 0; i < 60 * 90; i++) {
+        stepMatch(m, world, [], TICK_DT);
+        landings += m.events.filter((e) => e.type === 'mechLand').length;
+      }
       return m;
     };
     const a = play(71);
-    expect(a.mechs.some((k) => k.state !== 'none')).toBe(true);
+    // Mechs came down during the run, so the replay covers them and their rockets.
+    expect(landings).toBeGreaterThan(0);
     expect(digest(a)).toBe(digest(play(71)));
     expect(digest(a)).not.toBe(digest(play(72)));
   });

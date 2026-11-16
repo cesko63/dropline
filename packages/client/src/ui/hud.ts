@@ -68,6 +68,7 @@ export class Hud {
   private readonly ammo = new Text(el('ammo'));
   private readonly ammoMag = new Text(el('ammo-mag'));
   private readonly reload = el('reload');
+  private readonly weaponState = new Text(el('weapon-state'));
   private readonly slots = el('slots');
   private readonly scoreAlly = new Text(el('score-ally'));
   private readonly scoreEnemy = new Text(el('score-enemy'));
@@ -219,9 +220,19 @@ export class Hud {
     this.weaponName.set(def.name);
     this.ammo.set(String(me.ammo[me.weapon]));
     this.ammoMag.set(String(def.magSize));
-    this.weapon.classList.toggle('empty', me.ammo[me.weapon] === 0);
-    const progress = me.reload > 0 ? 1 - me.reload / def.reloadTime : 0;
-    this.reload.style.transform = `scaleX(${progress.toFixed(3)})`;
+    const left = me.ammo[me.weapon];
+    this.weapon.classList.toggle('empty', left === 0);
+    // A pilot's arm makes its own rounds: the count is the shots its coolant cell
+    // can still take, and the bar is the heat in it, which drains while it vents.
+    // The shoulder pod and a mech's cannon are loaded, so their bar fills instead.
+    const arm = def.mount === 'arm';
+    const reloading = me.reload > 0;
+    const heat = 1 - left / def.magSize;
+    const fill = arm ? heat * (reloading ? me.reload / def.reloadTime : 1) : reloading ? 1 - me.reload / def.reloadTime : 0;
+    this.reload.style.transform = `scaleX(${fill.toFixed(3)})`;
+    this.weaponState.set(arm ? (reloading ? 'VENTING' : left === 0 ? 'OVERHEATED' : 'HEAT') : reloading ? 'LOADING' : 'READY');
+    this.weapon.classList.toggle('venting', arm && reloading);
+    this.weapon.classList.toggle('hot', arm && !reloading && heat >= 0.75);
     const slotKey = `${me.loadout.join()}:${me.weapon}`;
     if (slotKey !== this.lastSlots) {
       this.lastSlots = slotKey;
@@ -237,7 +248,8 @@ export class Hud {
 
     this.updateMech(m, me);
 
-    // The crosshair opens with the real spread, and gives way to the sights when aimed.
+    // The crosshair opens with the real spread. Aimed, the arm is raised under it
+    // and the lines close in to the aimed spread; only the scope replaces them.
     this.crosshair.classList.toggle('mech', inMech);
     const gap = Math.round(4 + (Math.tan(spreadDeg(me) * DEG) / Math.tan((camera.fov / 2) * DEG)) * (window.innerHeight / 2));
     if (gap !== this.lastGap) {

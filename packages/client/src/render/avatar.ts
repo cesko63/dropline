@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { lenH, type Actor, type Vec3 } from '@dropline/shared';
+import { WEAPONS, lenH, type Actor, type Vec3 } from '@dropline/shared';
 
 /** Per-team look. Allies also carry a chevron overhead, so teams never rest on colour alone. */
 export const TEAM_LOOK = [
@@ -24,13 +24,15 @@ const MUZZLE = new THREE.MeshBasicMaterial({
 const WHITE = new THREE.Color('#ffffff');
 const BLACK = new THREE.Color('#000000');
 
-/** Third-person weapon shape per weapon id: length, thickness. */
-const GUN_SHAPE: Record<string, [number, number]> = {
-  carbine: [0.55, 1],
-  scattergun: [0.5, 1.5],
-  longshot: [0.9, 0.9],
-  pike: [0.75, 2.1],
+/** The barrel the arm extends per weapon id: length (meters), thickness. Anything else draws it in. */
+const BARREL_SHAPE: Record<string, [number, number]> = {
+  carbine: [0.34, 1],
+  scattergun: [0.2, 2.1],
+  longshot: [0.62, 0.8],
 };
+const NO_BARREL: [number, number] = [0.02, 1];
+/** Where the barrel leaves the housing, along the arm (the arm hangs down its own -Y). */
+const BARREL_Y = -0.66;
 
 let noticeTexture: THREE.CanvasTexture | null = null;
 
@@ -69,6 +71,10 @@ const tmp = new THREE.Vector3();
 /**
  * Placeholder pilot built from boxes with procedural animation. It stands in
  * until real rigged models exist; the model faces -Z like the camera.
+ *
+ * The suit carries its weapons: a housing on the right forearm that extends
+ * one barrel at a time, and a launcher pod on the right shoulder that swings
+ * up while it is the weapon in use.
  */
 export class Avatar {
   readonly root = new THREE.Group();
@@ -83,8 +89,13 @@ export class Avatar {
   private readonly armL: THREE.Group;
   private readonly armR: THREE.Group;
   private readonly gun = new THREE.Group();
+  private readonly barrel: THREE.Mesh;
   private readonly muzzle = new THREE.Object3D();
   private readonly muzzleFlash: THREE.Mesh;
+  private readonly pod = new THREE.Group();
+  private readonly podMuzzle = new THREE.Object3D();
+  private readonly vent = new THREE.Object3D();
+  private readonly suitGlow: THREE.MeshStandardMaterial;
   private readonly flames: THREE.Mesh[] = [];
   private readonly mark: THREE.Sprite;
   private readonly laserMat: THREE.MeshBasicMaterial;
@@ -95,6 +106,10 @@ export class Avatar {
   private noticed = 0;
   private dead = -1;
   private weapon = '';
+  private shoulder = false;
+  private barrelLen = 0.02;
+  private barrelThick = 1;
+  private podUp = 0;
 
   constructor(team: number, ally: boolean) {
     const look = TEAM_LOOK[team];
@@ -120,15 +135,38 @@ export class Avatar {
     this.armL = limb(0.13, 0.62, 0.14, -0.34, 1.5);
     this.armR = limb(0.13, 0.62, 0.14, 0.34, 1.5);
 
-    // The weapon lies along the right arm, so raising the arm points it.
-    this.gun.position.set(-0.04, -0.56, 0);
-    this.gun.add(part(0.07, 1, 0.12, GUN, 0, -0.3, 0.02), part(0.045, 0.5, 0.045, GUN, 0, -0.95, -0.01));
-    this.muzzle.position.set(0, -1.22, -0.01);
+    // The weapon is part of the right forearm, so raising the arm points it: a
+    // housing around the wrist, and a barrel that reaches past the fist.
+    this.suitGlow = new THREE.MeshStandardMaterial({ color: '#0b1a22', emissive: look.visor, emissiveIntensity: 1.6 });
+    this.barrel = part(0.065, 1, 0.065, GUN);
+    const barrelRoot = new THREE.Group();
+    barrelRoot.position.set(0, BARREL_Y, -0.03);
+    barrelRoot.add(this.barrel);
+    this.gun.add(
+      part(0.2, 0.32, 0.21, GUN, 0, -0.5, -0.03),
+      part(0.21, 0.05, 0.22, this.plate, 0, -0.36, -0.03),
+      part(0.03, 0.22, 0.02, this.suitGlow, 0.05, -0.5, -0.14),
+      barrelRoot,
+    );
+    this.vent.position.set(-0.11, -0.5, -0.03);
+    this.muzzle.position.set(0, BARREL_Y, -0.03);
     this.muzzleFlash = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), MUZZLE.clone());
-    this.muzzleFlash.position.copy(this.muzzle.position);
     this.muzzleFlash.visible = false;
-    this.gun.add(this.muzzle, this.muzzleFlash);
+    this.gun.add(this.vent, this.muzzle);
     this.armR.add(this.gun);
+
+    // The launcher pod on the right shoulder. Folded, it points at the sky behind the head.
+    this.pod.position.set(0.33, 1.8, 0.1);
+    this.pod.add(
+      part(0.22, 0.18, 0.38, GUN),
+      part(0.23, 0.04, 0.22, this.plate, 0, 0.1, 0.02),
+      part(0.07, 0.07, 0.02, this.suitGlow, -0.055, 0, -0.195),
+      part(0.07, 0.07, 0.02, this.suitGlow, 0.055, 0, -0.195),
+      part(0.08, 0.22, 0.08, this.armor, 0, -0.16, 0.1),
+    );
+    this.podMuzzle.position.set(0, 0, -0.26);
+    this.pod.add(this.podMuzzle);
+    this.pod.rotation.x = 1.15;
 
     this.upper.add(
       part(0.52, 0.62, 0.3, this.armor, 0, 1.22, 0),
@@ -138,6 +176,7 @@ export class Avatar {
       part(0.34, 0.4, 0.16, this.armor, 0, 1.28, 0.22),
       this.armL,
       this.armR,
+      this.pod,
     );
     for (const x of [-0.1, 0.1]) {
       const flame = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.5, 8), FLAME);
@@ -149,6 +188,8 @@ export class Avatar {
     }
     this.body.add(this.upper, this.legL, this.legR);
     this.root.add(this.body);
+    // The flash moves between the barrel and the pod, so it hangs on neither.
+    this.root.add(this.muzzleFlash);
 
     if (ally) {
       const chevron = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 4), new THREE.MeshBasicMaterial({ color: look.visor }));
@@ -186,9 +227,14 @@ export class Avatar {
     this.noticed = 0.9;
   }
 
-  /** World position of the weapon's muzzle, as of the last update. */
+  /** World position of the muzzle in use (the arm's barrel or the shoulder pod), as of the last update. */
   muzzleWorld(out: THREE.Vector3): THREE.Vector3 {
-    return this.muzzle.getWorldPosition(out);
+    return (this.shoulder ? this.podMuzzle : this.muzzle).getWorldPosition(out);
+  }
+
+  /** Where the arm's housing lets off steam. */
+  ventWorld(out: THREE.Vector3): THREE.Vector3 {
+    return this.vent.getWorldPosition(out);
   }
 
   /**
@@ -210,16 +256,24 @@ export class Avatar {
   }
 
   /**
-   * `raise` (0..1) lifts the weapon to the shoulder; `show` hides the model in
+   * `raise` (0..1) lifts the arm to point its weapon; `show` hides the model in
    * first person while everything else keeps animating.
    */
   update(dt: number, a: Actor, pos: Vec3, show: boolean, raise: number): void {
     const s = a.p;
     if (a.loadout[a.weapon] !== this.weapon) {
       this.weapon = a.loadout[a.weapon];
-      const [len, thick] = GUN_SHAPE[this.weapon] ?? GUN_SHAPE.carbine;
-      this.gun.scale.set(thick, len, thick);
+      this.shoulder = WEAPONS[this.weapon]?.mount === 'shoulder';
     }
+    // The barrel changes over and the pod swings up or folds away in a moment, not in a frame.
+    const [len, thick] = BARREL_SHAPE[this.weapon] ?? NO_BARREL;
+    this.barrelLen = damp(this.barrelLen, len, 14, dt);
+    this.barrelThick = damp(this.barrelThick, thick, 14, dt);
+    this.barrel.scale.set(this.barrelThick, this.barrelLen, 1);
+    this.barrel.position.y = -this.barrelLen / 2;
+    this.barrel.visible = this.barrelLen > 0.05;
+    this.muzzle.position.y = BARREL_Y - this.barrelLen;
+    this.podUp = damp(this.podUp, this.shoulder && a.alive ? 1 : 0, 9, dt);
 
     // Death: fall backwards, lie there, then clear away.
     if (!a.alive) {
@@ -265,10 +319,13 @@ export class Avatar {
 
     let legL = swing;
     let legR = -swing;
-    // Weapon carried low while moving, shouldered (and pitched with the view) to shoot.
+    // The arm is carried low while moving and raised (pitched with the view) to shoot.
+    // With the pod in use it stays down: the pod does the pointing.
     const aimAngle = Math.PI / 2 + s.pitch + a.punchPitch;
-    let armR = 0.75 + (aimAngle - 0.75) * raise - swing * 0.15 * (1 - raise);
-    let armL = 0.9 + (aimAngle - 0.9) * raise + swing * 0.15 * (1 - raise);
+    const lift = this.shoulder ? 0 : raise;
+    let armR = 0.75 + (aimAngle - 0.75) * lift - swing * 0.15 * (1 - lift);
+    // The left arm is free: it swings with the run, and steadies the right forearm while that aims.
+    let armL = 0.2 + swing * 0.5 * (1 - lift) + (aimAngle * 0.6 - 0.2) * lift;
     let lean = 0;
     let pitch = running ? -0.12 * stride : 0;
     let drop = 0;
@@ -300,18 +357,21 @@ export class Avatar {
       armR -= 0.25;
       armL -= 0.25;
     }
-    // Reloading tips the weapon up toward the off hand.
-    if (a.reload > 0) {
-      armR = 1.0;
-      armL = 1.5;
-    }
+    // Swapping the coolant cell: the forearm comes up across the chest while it vents.
+    const venting = a.reload > 0 && !this.shoulder;
+    if (venting) armR = 1.25;
+    // The pod follows the view while it is up, and tips back to take new rockets.
+    const podAim = s.pitch + a.punchPitch + (a.reload > 0 && this.shoulder ? 0.45 : 0);
+    this.pod.rotation.x = damp(this.pod.rotation.x, 1.15 + (podAim - 1.15) * this.podUp, 16, dt);
+    this.pod.position.y = 1.8 + 0.06 * this.podUp;
 
     this.legL.rotation.x = damp(this.legL.rotation.x, legL, 20, dt);
     this.legR.rotation.x = damp(this.legR.rotation.x, legR, 20, dt);
     this.armL.rotation.x = damp(this.armL.rotation.x, armL, 20, dt);
     this.armR.rotation.x = damp(this.armR.rotation.x, armR, 22, dt);
-    // The off hand reaches across to the weapon.
-    this.armL.rotation.z = damp(this.armL.rotation.z, s.mantle.active ? 0 : -0.55, 14, dt);
+    // The off hand reaches across to brace the forearm while it aims.
+    this.armL.rotation.z = damp(this.armL.rotation.z, s.mantle.active ? 0 : 0.04 + 0.5 * lift, 14, dt);
+    this.armR.rotation.z = damp(this.armR.rotation.z, venting ? -0.5 : 0, 14, dt);
     this.body.rotation.z = damp(this.body.rotation.z, lean, 12, dt);
     this.body.rotation.x = damp(this.body.rotation.x, pitch, 12, dt);
     this.body.position.y = damp(this.body.position.y, drop, 16, dt);
@@ -324,7 +384,8 @@ export class Avatar {
     this.shot = Math.max(0, this.shot - dt * 16);
     this.muzzleFlash.visible = this.shot > 0;
     if (this.shot > 0) {
-      this.muzzleFlash.scale.setScalar(0.6 + this.shot * 0.9);
+      this.root.worldToLocal(this.muzzleWorld(this.muzzleFlash.position));
+      this.muzzleFlash.scale.setScalar((0.6 + this.shot * 0.9) * (this.shoulder ? 1.5 : 1));
       this.muzzleFlash.rotation.y = Math.random() * 6.28;
       (this.muzzleFlash.material as THREE.MeshBasicMaterial).opacity = this.shot;
     }
