@@ -37,7 +37,7 @@ seats with bots.
 | `pnpm host` | Start the game server on port 8787 (`PORT` and `SEED` change the port and the match) |
 | `pnpm dev:server` | The same, restarting when the code changes |
 | `pnpm lag` | Start the lag simulator on port 8788, in front of the server (see Multiplayer) |
-| `pnpm test` | Run the headless movement, combat, bot, mech and netcode tests |
+| `pnpm test` | Run the headless movement, combat, bot, mech, netcode and settings tests |
 | `pnpm typecheck` | Type-check all packages |
 | `pnpm build` | Production build of the client |
 
@@ -73,6 +73,63 @@ time), `?name=Ada` sets the callsign, `?net=1` opens the connection details,
 | N | Connection details, when online |
 | Enter | Play again after a match (offline; online the next match starts by itself) |
 | Esc | Release the mouse. Offline this pauses the match |
+
+Every key above can be rebound in **Settings** (on the start screen and the
+pause screen); these are the defaults. The start screen and every prompt in the
+HUD show the keys as bound.
+
+### Gamepad
+
+Any pad the browser maps to the standard layout works, with no mouse capture
+needed: press a button on the start screen, then A on a choice.
+
+| Pad | Action |
+|---|---|
+| Left stick | Move (analog: a light push walks slowly) |
+| Right stick | Look |
+| L3 | Sprint, until you stop running forward |
+| A | Jump, double jump, hold for thrust; dash in the mech |
+| B | Crouch, slide |
+| RT / LT | Fire / aim (in the mech: cannon / rocket salvo) |
+| X | Vent and swap the coolant cell, reload the pod |
+| Y | Next arm barrel |
+| RB | Raise the shoulder launcher |
+| LB | Climb into your mech, or out of it |
+| D-pad up | Call your mech |
+| D-pad down | Redeploy |
+| D-pad left | First / third person |
+| VIEW | Connection details, when online |
+| MENU | Pause; on the pause screen, resume |
+
+On the menus the D-pad or the left stick moves between controls (held, it
+repeats), left and right change a slider, A presses, B goes back, LB and RB
+change the settings tab. The pad rumbles on shots, hits, blasts, a mech's
+footfalls and a death. With aim slowdown on, the view turns at 55% speed while
+the crosshair rests on a visible enemy pilot; it never pulls the aim.
+
+## Settings
+
+Changes apply at once and are saved in the browser.
+
+- **Controls:** mouse sensitivity, sensitivity while aiming, invert up and down,
+  hold or toggle for aim, crouch and sprint; pad look speed, stick deadzone
+  (round, with the rest of the throw rescaled), aim slowdown, vibration.
+- **Bindings:** two keys or mouse buttons and one pad button per action. Press
+  the new key; Esc (MENU on a pad) cancels, Backspace clears. A key that
+  already belongs to another action swaps over: that action takes the old key,
+  and the screen says so. One button puts every binding back.
+- **Display:** field of view (80° to 120°, measured across a 16:9 screen; the
+  default 112° is the view the game always had), HUD size, frame counter,
+  fullscreen when play starts.
+- **Sound & comfort:** volume, sound off, screen shake strength, and reduce
+  motion (no widening of the view at speed or on a kill, no lean into strafes,
+  half the wallrun tilt).
+
+The settings are one versioned object with one migration function per version.
+Every field is checked on load. If the stored copy is broken, the last good copy
+comes back and the screen says so. If the browser refuses to store anything, the
+game plays on and says that settings last until the page closes. Menus make
+their own sounds while the match is paused.
 
 ## Weapons
 
@@ -281,11 +338,13 @@ packages/
   client/             Browser game (Three.js, Vite)
     src/game.ts           Fixed-tick loop, events to effects, frame rendering
     src/net/              The WebSocket around the client core: greeting, ping, reconnect
-    src/input/            Keyboard, mouse, pointer lock, bindings
+    src/input/            Binding table, keyboard and mouse, pointer lock, gamepad
+    src/settings/         The settings: defaults, checks, migrations, storage
     src/camera/           First / third person camera, recoil, zoom, shake
     src/render/           Scene, map, pilots, mechs, first-person weapons, cockpit, effects
     src/audio/            Sound effects
-    src/ui/               HUD and start screen
+    src/ui/               HUD, start screen, settings screen, pad menu navigation
+    tests/                Settings, bindings and stick tests
   server/             Dedicated game server (Node, WebSocket)
     src/index.ts          Sockets, the tick loop, /health
     src/rooms/room.ts     One match: seats, command queues, snapshots, reconnects
@@ -320,7 +379,7 @@ packages/
 - **One mech frame.** Every pilot calls the same Halberd.
 - **Bots stay on the ground floor.** They jump and slide but do not plan routes
   over ledges or walls.
-- No settings screen, gamepad or touch controls yet.
+- **No touch controls.** DROPLINE is played with keyboard and mouse or a pad.
 - **One match per server**, on one map, with no accounts: a callsign is all a
   player has. The dev client is served to `localhost` only; hosting for players
   elsewhere is step 6.
@@ -337,7 +396,7 @@ packages/
 5. Content and polish (now)
    1. Suit weapons: the arm and the shoulder pod, tighter hip fire (done)
    2. Solid bodies: pilots collide with each other and with mechs (done)
-   3. Settings and gamepad
+   3. Settings and gamepad (done)
    4. A second map
    5. Bots off the ground floor
    6. Two more mech frames

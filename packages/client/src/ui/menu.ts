@@ -1,4 +1,7 @@
 import { NET } from '@dropline/shared';
+import type { Action } from '../input/bindings';
+import type { Device } from '../input/input';
+import type { Settings } from '../settings/settings';
 
 /**
  * The start screen: pick a callsign, deploy online or practice offline, and
@@ -26,6 +29,7 @@ export class Menu {
   onOffline: () => void = () => {};
   onResume: () => void = () => {};
   onLeave: () => void = () => {};
+  onSettings: () => void = () => {};
 
   private readonly overlay = el('overlay');
   private readonly choose = el('menu');
@@ -34,6 +38,11 @@ export class Menu {
   private readonly online = el<HTMLButtonElement>('play-online');
   private readonly offline = el<HTMLButtonElement>('play-offline');
   private readonly status = el('menu-status');
+  private readonly controls = el('controls');
+  private readonly settingsBox = el('settings');
+  private readonly start = el<HTMLButtonElement>('start');
+  /** Which of the two first screens was up before the settings opened. */
+  private before: 'menu' | 'resume' = 'menu';
 
   constructor(name: string) {
     let stored = '';
@@ -52,6 +61,99 @@ export class Menu {
     });
     el('start').addEventListener('click', () => this.onResume());
     el('leave').addEventListener('click', () => this.onLeave());
+    el('settings-menu').addEventListener('click', () => this.onSettings());
+    el('settings-resume').addEventListener('click', () => this.onSettings());
+  }
+
+  /** True while a match can be resumed from this screen. */
+  get canResume(): boolean {
+    return this.before === 'resume' || !this.resume.hidden;
+  }
+
+  /** The settings take the place of the choices and the controls list. */
+  showSettings(): void {
+    this.before = this.resume.hidden ? 'menu' : 'resume';
+    this.choose.hidden = true;
+    this.resume.hidden = true;
+    this.controls.hidden = true;
+    this.panel().classList.add('wide');
+  }
+
+  /** Back from the settings to where the player was. */
+  hideSettings(): void {
+    this.settingsBox.hidden = true;
+    this.controls.hidden = false;
+    this.panel().classList.remove('wide');
+    if (this.before === 'menu') this.choose.hidden = false;
+    else this.resume.hidden = false;
+    const back = el(this.before === 'menu' ? 'settings-menu' : 'settings-resume');
+    back.focus();
+  }
+
+  private panel(): HTMLElement {
+    return this.overlay.querySelector('.panel') as HTMLElement;
+  }
+
+  /**
+   * The list of controls under the choices, in the keys the player has bound,
+   * or the pad's buttons while they use one.
+   */
+  renderControls(key: (a: Action) => string, device: Device, s: Settings): void {
+    const pad = device === 'pad';
+    const k = (a: Action): string => key(a) || '—';
+    const hold = (mode: string, a: Action): string => (mode === 'toggle' ? `${k(a)} (toggle)` : k(a));
+    const rows: [string, string][] = pad
+      ? [
+          ['Left stick', 'Move'],
+          ['Right stick', 'Look'],
+          [hold(s.sprintMode, 'sprint'), 'Sprint until you stop running forward'],
+          [k('jump'), 'Jump, again in the air to double jump; hold for jetpack thrust'],
+          [hold(s.crouchMode, 'crouch'), 'Crouch, or slide while sprinting'],
+          ['Jump at a wall', 'Wallrun. Jump again to leap off'],
+          [k('fire'), 'Fire'],
+          [hold(s.aimMode, 'ads'), 'Aim: raises the arm and zooms in'],
+          [k('reload'), 'Vent the arm and swap its coolant cell; reload the pod'],
+          [`${k('nextWeapon')} · ${k('weapon4')}`, 'Next arm barrel · raise the shoulder launcher'],
+          [k('call'), 'Call your mech where you look, once the meter is full'],
+          [k('use'), 'Climb into your mech, or out of it'],
+          ['In the mech', `${k('jump')} dashes, ${k('ads')} fires the rocket salvo`],
+          [k('toggleView'), 'First / third person'],
+          [k('respawn'), 'Redeploy at a spawn point'],
+          ['Menu', 'Pause and settings. Offline this pauses the match'],
+        ]
+      : [
+          [[k('forward'), k('left'), k('back'), k('right')].join(' '), 'Move'],
+          [hold(s.sprintMode, 'sprint'), 'Sprint'],
+          [k('jump'), 'Jump, again in the air to double jump'],
+          [`Hold ${k('jump')}`, 'Jetpack thrust while airborne'],
+          [hold(s.crouchMode, 'crouch'), 'Crouch, or slide while sprinting'],
+          ['Jump at a wall', `Wallrun. ${k('jump')} leaps off: steer away to cross, steer into the wall to hop back on`],
+          ['Forward at a ledge', 'Mantle up'],
+          [k('fire'), 'Fire'],
+          [hold(s.aimMode, 'ads'), 'Aim: raises the arm and zooms in (the marksman barrel has a scope)'],
+          [k('reload'), 'Vent the arm and swap its coolant cell; reload the shoulder pod'],
+          [`${k('weapon1')} ${k('weapon2')} ${k('weapon3')} ${k('weapon4')} · ${k('nextWeapon')} · Wheel`, 'Arm barrels: carbine, scattergun, marksman. The fourth is the shoulder launcher'],
+          [k('call'), 'Call your mech where you look, once the meter is full'],
+          [k('use'), 'Climb into your mech, or out of it'],
+          ['In the mech', `${k('jump')} dashes, ${k('ads')} fires the rocket salvo`],
+          [k('toggleView'), 'First / third person'],
+          [k('respawn'), 'Redeploy at a spawn point'],
+          [k('mute'), 'Sound on / off'],
+          [k('netDebug'), 'Connection details, when online'],
+          ['Esc', 'Release the mouse. Offline this pauses the match'],
+        ];
+    this.controls.replaceChildren(
+      ...rows.map(([keys, what]) => {
+        const div = document.createElement('div');
+        const dt = document.createElement('dt');
+        dt.textContent = keys;
+        const dd = document.createElement('dd');
+        dd.textContent = what;
+        div.append(dt, dd);
+        return div;
+      }),
+    );
+    this.start.textContent = pad ? 'Press A to resume' : 'Click to resume';
   }
 
   /** The callsign as typed, tidied and remembered for next time. */
@@ -68,7 +170,8 @@ export class Menu {
 
   /** Back to the first screen, optionally saying what went wrong. */
   showChoices(error = ''): void {
-    this.choose.hidden = false;
+    this.before = 'menu';
+    this.choose.hidden = this.settingsOpen;
     this.resume.hidden = true;
     this.busy(false);
     this.say(error, 'error');
@@ -83,10 +186,15 @@ export class Menu {
 
   /** A match is running: the screen now only resumes or leaves it. */
   showPlaying(): void {
+    this.before = 'resume';
     this.choose.hidden = true;
-    this.resume.hidden = false;
+    this.resume.hidden = this.settingsOpen;
     this.busy(false);
     this.say('', 'info');
+  }
+
+  private get settingsOpen(): boolean {
+    return !this.settingsBox.hidden;
   }
 
   /** Take the screen away without the mouse being captured (automated checks). */

@@ -25,7 +25,8 @@ import {
 } from '@dropline/shared';
 import { Sfx } from './audio/sfx';
 import { CameraRig } from './camera/cameraRig';
-import { Input } from './input/input';
+import { ACTIONS, codeLabel, type Action } from './input/bindings';
+import { Input, PAD_START } from './input/input';
 import type { Connection } from './net/connection';
 import { Avatar, TEAM_LOOK } from './render/avatar';
 import { Effects } from './render/effects';
@@ -33,6 +34,7 @@ import { buildMapMeshes } from './render/mapMesh';
 import { ALLY_ZONE, ENEMY_ZONE, MechAvatar } from './render/mechAvatar';
 import { createEnvironment, createRenderer, type Environment } from './render/scene';
 import { Viewmodel } from './render/viewmodel';
+import { verticalFov, type Settings, type SettingsStore } from './settings/settings';
 import { Hud } from './ui/hud';
 
 /** Longest frame the simulation will try to catch up on, seconds. */
@@ -70,7 +72,12 @@ export interface GameOptions {
   startMeter: number;
   /** Open the connection details as soon as a server is joined (`?net=1`). */
   netDebug: boolean;
+  settings: SettingsStore;
 }
+
+/** How far the aim slowdown reaches around an enemy's chest, meters, and how far away it still works. */
+const ASSIST_RADIUS = 0.9;
+const ASSIST_RANGE = 70;
 
 export class Game {
   readonly input: Input;
@@ -79,6 +86,15 @@ export class Game {
   match!: MatchState;
   /** Automated checks set this and call `frame` themselves, to step the game at will. */
   manual = false;
+  /** The player took control or let go of it (paused, opened the menu). */
+  onPlayingChange: (playing: boolean) => void = () => {};
+  /** Once a frame while the player is not in control: the start screen reads the pad here. */
+  onMenuFrame: (dt: number) => void = () => {};
+  /** The player switched between keyboard and pad, or rebound something: printed keys must follow. */
+  onKeysChange: () => void = () => {};
+  private readonly settings: SettingsStore;
+  /** Screen shake is scaled by this (the comfort setting). */
+  private shakeScale = 1;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly env: Environment;
@@ -132,10 +148,21 @@ export class Game {
     this.startMeter = options.startMeter;
     this.netDebug = options.netDebug;
 
-    this.input = new Input(canvas);
-    this.input.onLockChange = (locked) => this.hud.showOverlay(!locked);
+    this.settings = options.settings;
+    this.input = new Input(canvas, this.settings.value);
+    this.input.onPlayingChange = (playing) => {
+      this.hud.showOverlay(!playing);
+      if (!playing) this.input.resetToggles();
+      this.onPlayingChange(playing);
+    };
+    this.input.onDeviceChange = (device) => {
+      document.body.classList.toggle('pad', device === 'pad');
+      this.keysChanged();
+    };
     this.input.onLockError = () => this.hud.showLockError();
-    document.addEventListener('visibilitychange', () => this.sfx.setPaused(document.hidden || this.paused));
+    this.hud.keyOf = (a, fallback) => this.keyOf(a, fallback);
+    document.addEventListener('visibilitychange', () => this.sfx.setPaused(this.paused, document.hidden));
+    this.settings.listen((s) => this.apply(s));
 
     this.newMatch();
     window.addEventListener('resize', () => this.resize());
@@ -152,10 +179,65 @@ export class Game {
     return this.conn !== null;
   }
 
-  /** Take the mouse and start the sound: has to come from a click or a key press. */
+  /**
+   * Hand control to the player and start the sound. On a pad it starts at once;
+   * with a mouse it has to come from a click or a key press, which the browser
+   * needs to capture the mouse (and to go fullscreen, if that is set).
+   */
   resume(): void {
     this.sfx.unlock();
+    if (this.input.device === 'pad') {
+      this.input.setPadPlaying(true);
+      return;
+    }
+    if (this.settings.value.fullscreen && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    }
     void this.input.lock();
+  }
+
+  /** Let go of the controls: the start screen comes up (offline the match waits). */
+  pause(): void {
+    this.input.setPadPlaying(false);
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  /**
+   * The button or key for an action on the device in use: the pad's while one is
+   * used, else the keyboard's. An action with no pad button shows its key, unless
+   * `fallback` is false.
+   */
+  keyOf(a: Action, fallback = true): string {
+    const fixed = ACTIONS[a].fixed;
+    const s = this.settings.value;
+    const keys = fixed ? ACTIONS[a].keys : s.keys[a];
+    const pad = fixed ? ACTIONS[a].pad : s.pad[a];
+    const code = this.input.device === 'pad' ? (pad[0] ?? (fallback ? keys[0] : undefined)) : keys[0];
+    return code ? codeLabel(code) : '';
+  }
+
+  private keysChanged(): void {
+    this.hud.refreshKeys();
+    this.onKeysChange();
+  }
+
+  /** Settings changed (or were just loaded): everything they reach follows at once. */
+  private apply(s: Settings): void {
+    this.input.setSettings(s);
+    this.rig.baseFov = verticalFov(s.fov);
+    this.rig.calm = s.reduceMotion;
+    this.shakeScale = s.shake;
+    this.sfx.setVolume(s.volume, s.muted);
+    this.hud.setMuted(s.muted);
+    this.hud.setDisplay(s.showFps, s.hudScale);
+    this.keysChanged();
+  }
+
+  /** Shake the view by the comfort setting, and the pad by the same amount. */
+  private shake(amount: number): void {
+    if (amount <= 0) return;
+    this.rig.shake(amount * this.shakeScale);
+    this.input.rumble(amount, amount * 0.6, 120 + 260 * amount);
   }
 
   get state(): PlayerState {
@@ -168,7 +250,7 @@ export class Game {
    * in the world.
    */
   get paused(): boolean {
-    return !this.conn && !this.input.locked && !this.input.override;
+    return !this.conn && !this.input.playing && !this.input.override;
   }
 
   /** Start a fresh offline match; each one gets the next seed, so no two play out the same. */
@@ -215,7 +297,7 @@ export class Game {
     this.cmds.length = 0;
     this.ownRockets.length = 0;
     this.rocketAlias.clear();
-    this.hud.setEndHint('ENTER · PLAY AGAIN');
+    this.hud.setEndHint('{confirm} · PLAY AGAIN');
     this.hud.setOnline(this.conn !== null);
     const me = this.me;
     this.avatars = this.match.actors.map((a) => new Avatar(a.team, a.team === me.team && a !== me));
@@ -232,6 +314,7 @@ export class Game {
     this.input.yaw = me.p.yaw;
     this.input.pitch = 0;
     this.input.weapon = -1;
+    this.input.resetToggles();
     this.accumulator = 0;
   }
 
@@ -258,7 +341,7 @@ export class Game {
     const input = this.input;
     const me = this.me;
     if (input.consume('toggleView')) this.rig.thirdPerson = !this.rig.thirdPerson;
-    if (input.consume('mute')) this.hud.setMuted(this.sfx.toggleMute());
+    if (input.consume('mute')) this.settings.set({ muted: !this.settings.value.muted });
     if (input.consume('netDebug')) this.hud.toggleNet();
     // Online the server starts the next match by itself.
     if (this.match.over && !this.conn && input.consume('confirm')) this.newMatch();
@@ -276,13 +359,17 @@ export class Game {
 
   /** Advance the simulation in fixed ticks, then draw one interpolated frame. */
   frame(dt: number): void {
+    this.input.update(dt);
+    // MENU on the pad pauses; the start screen's own navigation resumes.
+    if (this.input.playing && this.input.pad.pressed[PAD_START]) this.pause();
+    else if (!this.input.playing) this.onMenuFrame(dt);
     this.handleKeys();
     const m = this.match;
     const me = this.me;
     const paused = this.paused;
-    this.sfx.setPaused(paused || document.hidden);
+    this.sfx.setPaused(paused, document.hidden);
 
-    let cmd = this.input.sample();
+    let cmd = this.input.sample(false);
     const conn = this.conn;
     if (conn) {
       cmd = this.frameOnline(conn, dt, cmd);
@@ -345,6 +432,7 @@ export class Game {
     const def = weaponOf(me);
     const zoom = 1 + (def.adsZoom - 1) * me.ads;
     this.input.sensScale = zoom;
+    this.input.assist = this.input.device === 'pad' && this.settings.value.aimSlowdown && me.alive ? this.aimAssist(me) : 0;
     const rig = this.rig;
     rig.punchPitch = me.alive ? me.punchPitch : 0;
     rig.punchYaw = me.alive ? me.punchYaw : 0;
@@ -439,6 +527,45 @@ export class Game {
     return cmd;
   }
 
+  /**
+   * 0..1: how close the crosshair is to an enemy pilot's chest, with a clear
+   * line to them, for the pad's aim slowdown. It only slows the turn; it never
+   * pulls the view.
+   */
+  private aimAssist(me: Actor): number {
+    const s = me.p;
+    const cp = Math.cos(s.pitch);
+    const fx = -Math.sin(s.yaw) * cp;
+    const fy = Math.sin(s.pitch);
+    const fz = -Math.cos(s.yaw) * cp;
+    const eye = this.eye;
+    eye.x = s.pos.x;
+    eye.y = s.pos.y + eyeOf(me);
+    eye.z = s.pos.z;
+    let best = 0;
+    for (const a of this.match.actors) {
+      if (a.team === me.team || !a.alive || a.inMech) continue;
+      const p = this.drawn[a.id];
+      const dx = p.x - eye.x;
+      const dy = p.y + 1.1 - eye.y;
+      const dz = p.z - eye.z;
+      const along = dx * fx + dy * fy + dz * fz;
+      if (along <= 1 || along > ASSIST_RANGE) continue;
+      const off = Math.hypot(dx - fx * along, dy - fy * along, dz - fz * along);
+      const k = 1 - off / ASSIST_RADIUS;
+      if (k <= best) continue;
+      const dist = Math.hypot(dx, dy, dz);
+      const dir = this.aim;
+      dir.x = dx / dist;
+      dir.y = dy / dist;
+      dir.z = dz / dist;
+      const wall = this.world.castRay(eye, dir, dist);
+      if (wall && wall.dist < dist - 0.5) continue;
+      best = k;
+    }
+    return best;
+  }
+
   /** Where a pilot's line of sight ends: the first surface, or far away. */
   private aimPoint(a: Actor): Vec3 {
     const s = a.p;
@@ -474,6 +601,7 @@ export class Game {
       this.input.pitch = 0;
     }
     this.hud.hideDeath();
+    this.input.resetToggles();
     this.sfx.spawn();
   }
 
@@ -522,7 +650,10 @@ export class Game {
         }
         this.fx.flash(muzzle, (mine ? 2.5 : 4) * (a.inMech ? 2 : 1));
         body.fireFlash();
-        if (mine) this.viewmodel.fire();
+        if (mine) {
+          this.viewmodel.fire();
+          if (source !== 'server') this.input.rumble(a.inMech ? 0.35 : 0, a.inMech ? 0.3 : (WEAPONS[e.weapon]?.pellets ?? 1) > 1 ? 0.45 : 0.18, a.inMech ? 70 : 45);
+        }
         this.sfx.fire(e.weapon, mine ? null : a.p.pos);
         if (struck) this.sfx.impact(struck);
         break;
@@ -542,6 +673,7 @@ export class Game {
           const dz = from.z - me.p.pos.z;
           const side = Math.sign(dx * Math.cos(me.p.yaw) - dz * Math.sin(me.p.yaw)) || 1;
           this.rig.jolt(side, Math.min(1, 0.25 + e.amount / 50));
+          this.input.rumble(Math.min(1, 0.25 + e.amount / 60), 0.5, 140);
           this.sfx.hurt();
         }
         break;
@@ -563,6 +695,8 @@ export class Game {
         }
         if (victim === me) {
           this.hud.showDeath(killer ? `${killer.name} · ${killLabel(e.weapon)}` : 'THE FALL');
+          this.input.resetToggles();
+          this.input.rumble(0.9, 0.7, 380);
           this.sfx.death();
         }
         break;
@@ -614,7 +748,7 @@ export class Game {
 
       case 'meterReady':
         if (e.actor !== me.id) break;
-        this.hud.showBanner('MECH READY · ', 'PRESS F', 'good');
+        this.hud.showBanner('MECH READY · ', `PRESS ${this.keyOf('call')}`, 'good');
         this.sfx.meterReady();
         break;
       case 'mechCall': {
@@ -644,7 +778,7 @@ export class Game {
         this.fx.burst(e.pos, UP, 34, IMPACT_SPARK, 13);
         this.fx.decal(e.pos, UP, 16);
         this.sfx.mechLand(e.pos);
-        this.rig.shake(this.near(e.pos, 45) * 0.95);
+        this.shake(this.near(e.pos, 45) * 0.95);
         break;
       }
       case 'embark': {
@@ -652,6 +786,8 @@ export class Game {
         this.snap(a);
         if (a !== me) break;
         this.rig.carry();
+        this.input.resetToggles();
+        this.input.rumble(0.4, 0.3, 160);
         this.sfx.embark();
         break;
       }
@@ -665,10 +801,11 @@ export class Game {
         this.snap(a);
         if (a !== me) break;
         this.rig.carry();
+        this.input.resetToggles();
         this.sfx.disembark(e.eject);
         if (e.eject) {
           this.hud.showBanner('MECH LOST · ', 'EJECTED', 'warn');
-          this.rig.shake(0.8);
+          this.shake(0.8);
         }
         break;
       }
@@ -686,9 +823,10 @@ export class Game {
         if (mine) {
           this.rig.thud(e.heavy ? 2.6 : 0.8);
           this.viewmodel.thud(e.heavy ? 1.3 : 0.45);
+          this.input.rumble(e.heavy ? 0.7 : 0.25, 0.1, e.heavy ? 220 : 90);
         } else {
           // A mech walking nearby is felt before it is seen.
-          this.rig.shake(this.near(k.pos, 20) * (e.heavy ? 0.5 : 0.2));
+          this.shake(this.near(k.pos, 20) * (e.heavy ? 0.5 : 0.2));
         }
         break;
       }
@@ -701,6 +839,7 @@ export class Game {
         if (mine) {
           this.rig.kick(6);
           this.viewmodel.thud(0.8);
+          this.input.rumble(0.5, 0.4, 200);
         }
         break;
       }
@@ -713,7 +852,7 @@ export class Game {
         this.sfx.ram(at);
         this.fx.burst(at, null, 20, IMPACT_SPARK, 10);
         if (e.mech === me.id || e.other === me.id) {
-          this.rig.shake(0.45);
+          this.shake(0.45);
           this.viewmodel.thud(1.2);
         }
         break;
@@ -737,6 +876,7 @@ export class Game {
           const side = Math.sign(dx * Math.cos(me.p.yaw) - dz * Math.sin(me.p.yaw)) || 1;
           this.rig.jolt(side, Math.min(1, 0.12 + e.amount / 400));
           this.viewmodel.thud(Math.min(1.5, e.amount / 160));
+          this.input.rumble(Math.min(1, 0.2 + e.amount / 300), 0.3, 150);
           this.sfx.hullHit(e.amount);
         }
         break;
@@ -756,7 +896,7 @@ export class Game {
         this.fx.ring(e.pos, 10, '#ffb066', 0.6);
         this.fx.decal(e.pos, UP, 20);
         this.sfx.mechDestroyed(e.pos);
-        this.rig.shake(this.near(e.pos, 55));
+        this.shake(this.near(e.pos, 55));
         if (killer) this.hud.addKill(killer, owner, killLabel(e.weapon), me, ` · ${MECH.short}`);
         if (killer === me) {
           this.hud.showBanner('MECH DESTROYED ', owner.name);
@@ -794,7 +934,10 @@ export class Game {
         if (salvo) {
           this.mechAvatars[a.id].podFlash();
           this.sfx.launch(mine ? null : e.pos);
-          if (mine) this.viewmodel.thud(0.35);
+          if (mine) {
+            this.viewmodel.thud(0.35);
+            this.input.rumble(0.45, 0.35, 160);
+          }
         }
         break;
       }
@@ -804,7 +947,7 @@ export class Game {
         this.rocketAlias.delete(e.id);
         this.fx.explosion(e.pos, e.normal, def.radius);
         this.sfx.explosion(e.pos);
-        this.rig.shake(this.near(e.pos, 24) * 0.6);
+        this.shake(this.near(e.pos, 24) * 0.6);
         break;
       }
 

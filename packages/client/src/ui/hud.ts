@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { COMBAT, MECH, TUNING, WEAPONS, lenH, spreadDeg, weaponOf, type Actor, type MatchState, type NetStats, type Vec3 } from '@dropline/shared';
+import type { Action } from '../input/bindings';
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -48,6 +49,8 @@ const v = new THREE.Vector3();
 export class Hud {
   /** Show every bot's state over its head (the `?qa=1` debug view). */
   debug = false;
+  /** The button or key the player presses for an action, on the device they are using. */
+  keyOf: (a: Action, fallback?: boolean) => string = () => '';
   private readonly state = el('state');
   private readonly fps = el('fps');
   private readonly speed = new Text(el('speed-value'));
@@ -101,6 +104,8 @@ export class Hud {
   private readonly link = el('link');
   private readonly linkText = new Text(el('link-text'));
   private readonly endHint = new Text(el('end-hint'));
+  /** The end hint as given, with `{action}` names still in it (see `fill`). */
+  private endHintRaw = '';
   private netDebugIn = 0;
   private wasLinked = true;
   private readonly mechTags: HTMLElement[] = [];
@@ -200,7 +205,7 @@ export class Hud {
     this.slideFuel.style.transform = `scaleX(${s.slideFuel.toFixed(3)})`;
     this.slideFuel.classList.toggle('burning', s.sliding);
     this.airJump.classList.toggle('on', s.airJumpsUsed < TUNING.jump.airJumps);
-    this.viewMode.set(thirdPerson ? 'THIRD PERSON · V' : 'FIRST PERSON · V');
+    this.viewMode.set(`${thirdPerson ? 'THIRD' : 'FIRST'} PERSON · ${this.keyOf('toggleView')}`);
 
     // Health (the mech's hull while in one) and the red edge of the screen: steady
     // when hurt badly, a pulse on each hit.
@@ -239,7 +244,8 @@ export class Hud {
       this.slots.replaceChildren(
         ...me.loadout.map((id, i) => {
           const span = document.createElement('span');
-          span.textContent = `${i + 1} ${WEAPONS[id].short}`;
+          const key = this.keyOf(`weapon${i + 1}` as Action, false);
+          span.textContent = key ? `${key} ${WEAPONS[id].short}` : WEAPONS[id].short;
           if (i === me.weapon) span.className = 'on';
           return span;
         }),
@@ -320,7 +326,7 @@ export class Hud {
     } else if (me.meter >= 1) {
       kind = 'ready';
       this.meterLabel.set('MECH READY');
-      this.meterValue.set('PRESS F');
+      this.meterValue.set(`PRESS ${this.keyOf('call')}`);
     } else {
       this.meterLabel.set('MECH');
       this.meterValue.set(`${Math.floor(me.meter * 100)}%`);
@@ -342,7 +348,7 @@ export class Hud {
     // "E" when the pilot stands where they can climb in.
     const dy = me.p.pos.y - k.pos.y;
     const canBoard = k.state === 'idle' && me.alive && !me.inMech && dist <= R.embark.range && dy > -2 && dy < MECH.body.height + 1.5;
-    this.promptText.set(canBoard ? 'E · EMBARK' : '');
+    this.promptText.set(canBoard ? `${this.keyOf('use')} · EMBARK` : '');
     this.prompt.classList.toggle('on', canBoard && !m.over);
 
     // Standing where an enemy mech is about to land.
@@ -573,8 +579,10 @@ export class Hud {
   }
 
   /** The line under the result: how the next match starts. */
+  /** The line under the end-of-match card; `{confirm}` and the like name keys. */
   setEndHint(text: string): void {
-    this.endHint.set(text);
+    this.endHintRaw = text;
+    this.endHint.set(this.fill(text));
   }
 
   /** Show or hide everything that only means something on a server. */
@@ -630,6 +638,27 @@ export class Hud {
 
   setMuted(muted: boolean): void {
     el('muted').hidden = !muted;
+  }
+
+  /** Replace `{action}` in a hint with that action's key or button. */
+  fill(text: string): string {
+    return text.replace(/\{(\w+)\}/g, (_, a: string) => this.keyOf(a as Action));
+  }
+
+  /**
+   * The keys changed (rebound, or the player picked up the pad or put it down):
+   * every printed key in the HUD follows.
+   */
+  refreshKeys(): void {
+    for (const node of document.querySelectorAll<HTMLElement>('[data-key]')) node.textContent = this.keyOf(node.dataset.key as Action);
+    this.lastSlots = '';
+    this.endHint.set(this.fill(this.endHintRaw));
+  }
+
+  /** The frame counter and the size of the HUD panels, from the settings. */
+  setDisplay(showFps: boolean, scale: number): void {
+    this.fps.hidden = !showFps;
+    this.root.style.setProperty('--hud-scale', scale.toFixed(2));
   }
 
   showOverlay(show: boolean): void {

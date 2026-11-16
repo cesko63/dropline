@@ -21,6 +21,8 @@ export class CameraRig {
   forceThird = false;
   /** The view is a mech's cockpit: higher, steadier, with a longer boom outside. */
   mech = false;
+  /** Reduce motion: no widening at speed or on kills, no lean into strafes, half the wallrun tilt. */
+  calm = false;
   private readonly joltRoll = spring();
   private readonly joltPitch = spring();
   private fovKick = 0;
@@ -50,6 +52,7 @@ export class CameraRig {
 
   /** A brief widening of the view, for kills. */
   kick(amount: number): void {
+    if (this.calm) return;
     this.fovKick = Math.max(this.fovKick, amount);
   }
 
@@ -93,8 +96,8 @@ export class CameraRig {
     this.dip.x = clamp(this.dip.x, -0.35, 0.1);
 
     // Lean away from the wall while wallrunning, and slightly into strafes.
-    let rollTarget = -moveX * (mech ? 0.5 : 1.3) * DEG;
-    if (s.wallrun.active) rollTarget = s.wallrun.side * TUNING.wallrun.cameraRollDeg * DEG;
+    let rollTarget = this.calm ? 0 : -moveX * (mech ? 0.5 : 1.3) * DEG;
+    if (s.wallrun.active) rollTarget = s.wallrun.side * TUNING.wallrun.cameraRollDeg * DEG * (this.calm ? 0.5 : 1);
     else if (s.sliding) rollTarget = -3 * DEG;
     this.roll = damp(this.roll, rollTarget, 9, dt);
 
@@ -116,7 +119,7 @@ export class CameraRig {
 
     // Widen the view once the player is moving faster than a plain sprint.
     const top = mech ? MECH.move.sprintSpeed : TUNING.ground.sprintSpeed;
-    const rush = clamp((lenH(s.vel) - top) / 9, 0, 1) * 12;
+    const rush = this.calm ? 0 : clamp((lenH(s.vel) - top) / 9, 0, 1) * 12;
     this.fov = damp(this.fov, this.baseFov + rush, 6, dt);
     const fov = (this.fov + this.fovKick) * this.zoom;
     if (Math.abs(this.camera.fov - fov) > 0.01) {

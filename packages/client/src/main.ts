@@ -1,8 +1,12 @@
 import { CollisionWorld, NET, type MapData } from '@dropline/shared';
 import gym from '../../../data/maps/gym.json';
 import { Game } from './game';
+import { readLayout } from './input/bindings';
 import { Connection, type CloseReason } from './net/connection';
+import { SettingsStore, browserStorage } from './settings/settings';
 import { Menu } from './ui/menu';
+import { PadNav } from './ui/padNav';
+import { SettingsScreen } from './ui/settingsScreen';
 
 /** What to tell the player when the server could not be joined or was lost. */
 const WHY: Record<CloseReason, string> = {
@@ -31,13 +35,39 @@ async function boot(): Promise<void> {
   // callsign; `?net=1` opens the connection details.
   const params = new URLSearchParams(location.search);
   const seed = Number(params.get('seed')) || (Date.now() & 0x7fffffff);
+  const settings = new SettingsStore(browserStorage());
   const game = new Game(document.getElementById('view') as HTMLCanvasElement, world, map, {
     seed,
     qa: params.has('qa'),
     startMeter: Math.max(0, Math.min(1, Number(params.get('meter')) || 0)),
     netDebug: params.has('net'),
+    settings,
   });
   const menu = new Menu(params.get('name') ?? '');
+  const screen = new SettingsScreen(document.getElementById('settings')!, settings, game.sfx);
+  const nav = new PadNav(document.querySelector('#overlay .panel') as HTMLElement, screen, game.sfx);
+
+  // The controls list and the resume button name the keys of the device in use.
+  const controls = (): void => menu.renderControls((a) => game.keyOf(a), game.input.device, settings.value);
+  game.onKeysChange = controls;
+  settings.listen(controls);
+  void readLayout().then(() => game.onKeysChange());
+
+  menu.onSettings = () => {
+    game.sfx.unlock();
+    game.sfx.uiSelect();
+    menu.showSettings();
+    screen.open();
+  };
+  screen.onClose = () => menu.hideSettings();
+  game.onMenuFrame = (dt) => nav.update(game.input.pad, dt);
+  // Paused on a pad: put the focus on the screen so the D-pad has somewhere to start.
+  game.onPlayingChange = (playing) => {
+    if (!playing && game.input.device === 'pad') nav.focusFirst();
+  };
+  nav.onStart = () => {
+    if (menu.canResume) game.resume();
+  };
   const url = serverUrl(params);
   const auto = params.has('online');
   let conn: Connection | null = null;

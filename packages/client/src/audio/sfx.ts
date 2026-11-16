@@ -34,8 +34,12 @@ interface ToneOpts {
 
 export class Sfx {
   muted = false;
+  /** 0..1, from the settings. */
+  volume = 0.8;
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  /** Everything of the match goes through here, so a pause silences it while menu sounds still play. */
+  private game: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private voices = 0;
   private readonly last = new Map<string, number>();
@@ -53,7 +57,10 @@ export class Sfx {
     try {
       const ctx = new AudioContext();
       const master = ctx.createGain();
-      master.gain.value = this.muted ? 0 : 0.5;
+      master.gain.value = this.level();
+      const game = ctx.createGain();
+      game.connect(master);
+      this.game = game;
       const limiter = ctx.createDynamicsCompressor();
       limiter.threshold.value = -10;
       limiter.ratio.value = 8;
@@ -69,17 +76,76 @@ export class Sfx {
     }
   }
 
-  /** Silence everything while the game is paused or the tab is hidden. */
-  setPaused(paused: boolean): void {
-    if (!this.ctx) return;
-    if (paused && this.ctx.state === 'running') void this.ctx.suspend();
-    else if (!paused && this.ctx.state === 'suspended') void this.ctx.resume();
+  /**
+   * The match falls silent while it is paused (menu sounds go on); everything
+   * stops while the tab is hidden.
+   */
+  setPaused(paused: boolean, hidden: boolean): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (hidden && ctx.state === 'running') void ctx.suspend();
+    else if (!hidden && ctx.state === 'suspended') void ctx.resume();
+    const want = paused ? 0 : 1;
+    if (this.game && this.game.gain.value !== want) this.game.gain.setTargetAtTime(want, ctx.currentTime, 0.03);
   }
 
-  toggleMute(): boolean {
-    this.muted = !this.muted;
-    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.5, this.ctx.currentTime, 0.02);
-    return this.muted;
+  setVolume(volume: number, muted: boolean): void {
+    this.volume = volume;
+    this.muted = muted;
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.level(), this.ctx.currentTime, 0.02);
+  }
+
+  private level(): number {
+    return this.muted ? 0 : 0.6 * this.volume;
+  }
+
+  // ---------------------------------------------------------------- menus
+
+  /** Straight to the master, past the match's pause. */
+  private ui(gain: number): AudioNode | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.master) return null;
+    const out = ctx.createGain();
+    out.gain.value = gain;
+    out.connect(this.master);
+    return out;
+  }
+
+  /** Focus moved to another control, or a slider stepped. */
+  uiMove(): void {
+    if (!this.allow('uiMove', 0.03)) return;
+    const d = this.ui(0.5);
+    if (d) this.tone(d, { type: 'triangle', f0: 1650, dur: 0.035, gain: 0.08 });
+  }
+
+  /** A button pressed, a switch flipped. */
+  uiSelect(): void {
+    const d = this.ui(0.6);
+    if (!d) return;
+    this.tone(d, { type: 'triangle', f0: 880, f1: 1320, dur: 0.07, gain: 0.12 });
+    this.burst(d, { dur: 0.03, type: 'highpass', f0: 4000, gain: 0.05 });
+  }
+
+  /** Back out of a screen, or a binding cancelled. */
+  uiBack(): void {
+    const d = this.ui(0.6);
+    if (d) this.tone(d, { type: 'triangle', f0: 990, f1: 620, dur: 0.08, gain: 0.11 });
+  }
+
+  /** Waiting for a key to bind. */
+  uiListen(): void {
+    const d = this.ui(0.5);
+    if (!d) return;
+    this.tone(d, { type: 'sine', f0: 660, dur: 0.06, gain: 0.1 });
+    this.tone(d, { type: 'sine', f0: 660, dur: 0.06, gain: 0.1, at: 0.09 });
+  }
+
+  /** A key bound; `swapped` when another action gave it up. */
+  uiBound(swapped: boolean): void {
+    const d = this.ui(0.6);
+    if (!d) return;
+    this.tone(d, { type: 'triangle', f0: 740, dur: 0.06, gain: 0.12 });
+    this.tone(d, { type: 'triangle', f0: swapped ? 830 : 1110, dur: 0.09, gain: 0.12, at: 0.06 });
   }
 
   setListener(x: number, y: number, z: number, yaw: number): void {
@@ -109,7 +175,7 @@ export class Sfx {
     const out = ctx.createGain();
     if (!pos) {
       out.gain.value = gain;
-      out.connect(this.master);
+      out.connect(this.game!);
       return out;
     }
     const dx = pos.x - this.lx;
@@ -125,7 +191,7 @@ export class Sfx {
     const pan = ctx.createStereoPanner();
     const flat = Math.hypot(dx, dz) || 1;
     pan.pan.value = Math.max(-1, Math.min(1, ((dx * Math.cos(this.lyaw) - dz * Math.sin(this.lyaw)) / flat) * 0.85));
-    out.connect(muffle).connect(pan).connect(this.master);
+    out.connect(muffle).connect(pan).connect(this.game!);
     return out;
   }
 
