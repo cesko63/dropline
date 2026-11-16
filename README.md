@@ -277,6 +277,37 @@ They see through a view cone with line of sight, hear gunfire, search where they
 last saw you, and only two of them may fire on the same target at once. Speed
 across their view is what makes them miss.
 
+### Every floor
+
+Bots go wherever pilots go, with the same keys:
+
+- **Stairs and ramps** up to the rail deck, the tower's floors and the jib.
+- **Climbing.** At a wall up to 5 m high they walk in slowly, jump and hold
+  jump: the jetpack lifts them until the mantle pulls them over the top. That
+  is how they get onto containers, the office roofs and the site cabins, and
+  how they hop over low cover when it saves time.
+- **Dropping** off a deck or a roof onto the floor below.
+- **Leaping** gaps up to 4 m, such as the alley between the Transit Hall and
+  the apartment roofs, with a run-up; when a jump falls short they double jump
+  and hold the jetpack.
+- **Perches.** On patrol a marksman (80% of the time) or a rifle (30%) heads
+  for a high spot nearby, holds it for 6 to 12 seconds and watches the enemy's
+  side. A fight ends the wait at once.
+- **Chasing.** A pilot who runs up to a roof is followed there; a rusher goes
+  up after a target on another floor instead of waiting underneath.
+- They never strafe off an edge by accident, and a bot only calls its mech
+  where the mech can walk out to the fight.
+
+Over three minutes of a bots-only match on Spire Nine they spend 12% to 20% of
+their time off the street, marksmen 22% to 40%.
+
+The map is cut into 1 m cells with one node per floor in each cell (street,
+deck, roof...). Links join them: walking (ramps and steps included), climbing,
+dropping, leaping. `packages/shared/tests/maps.test.ts` has a bot make every
+climb, drop and leap on every map with the real movement code, and checks that
+bots can reach each deck, roof and floor of Spire Nine. Reach and perch tuning
+is under `nav` and `perchHold` in `data/bots.json`, and `perchChance` per role.
+
 ## Maps
 
 ### Spire Nine
@@ -402,7 +433,7 @@ others are drawn and every correction.
 data/                 Engine-neutral game data (plain JSON)
   movement.json         All movement tuning values
   combat.json           Health, respawn, score limit, hitboxes, teams, mech meter and drop, bodies
-  bots.json             Bot senses and per-role behaviour
+  bots.json             Bot senses, per-role behaviour, how far bots climb, drop and leap
   net.json              Netcode: rates, waits, rewind cap, interpolation, limits
   weapons/*.json        One file per weapon
   projectiles.json      Rockets: speed, blast, damage to pilots and to mechs
@@ -426,7 +457,7 @@ packages/
     src/sim/rng.ts        Seeded random numbers for everything gameplay
     src/sim/world.ts      Collision queries against the map
     src/map/maps.ts       Every map by id, and the default
-    src/ai/nav.ts         Walkable grid and A* paths
+    src/ai/nav.ts         Every floor bots can stand on, the moves between them, A* paths
     src/ai/bot.ts         Bot senses, states, aim and movement
     src/net/protocol.ts   Messages, binary commands, protocol version
     src/net/snapshot.ts   What the server sends: own pilot exact, the rest packed
@@ -474,15 +505,15 @@ packages/
 - **Models:** pilots, the suit's arm and pod, mechs and the cockpit are built
   from boxes with procedural animation. Smoke, steam and blasts are plain shapes.
 - **One mech frame.** Every pilot calls the same Halberd.
-- **Bots stay on the ground floor.** They jump and slide but do not plan routes
-  over ledges or walls, so on Spire Nine they fight in the streets and the
-  ground floors; the decks, roofs and the tower's upper floors are for people
-  until step 5.5.
+- **Bots do not wallrun.** They climb, drop and leap, but never run along a
+  wall or chain jumps off one, and they do not cross the 8 m break in the rail
+  deck (they take the fallen carriage instead).
 - **Maps are built from boxes.** Spire Nine has its layout, light and dressing
   (concrete, steel, glass, blue conduits, black machine panels, crimson lights,
   a lit skyline), but no props, decals or models yet, and no ambient sound.
-- **Mechs can land on roofs.** A call-in only needs open sky, so a mech can come
-  down on the Transit Hall roof or the tower's open third floor.
+- **Mechs can land on roofs.** A call-in only needs open sky, so a player's mech
+  can come down on the Transit Hall roof or the tower's open third floor. Bots
+  only call theirs where it can walk out.
 - **No touch controls.** DROPLINE is played with keyboard and mouse or a pad.
 - **One match per server**, on one map, with no accounts: a callsign is all a
   player has. The dev client is served to `localhost` only; hosting for players
@@ -502,7 +533,7 @@ packages/
    2. Solid bodies: pilots collide with each other and with mechs (done)
    3. Settings and gamepad (done)
    4. The first real map: Spire Nine (done)
-   5. Bots off the ground floor
+   5. Bots off the ground floor (done)
    6. Two more mech frames
    7. Models and animation
    8. Sound and music

@@ -13,6 +13,18 @@
   "mechMinRange": 16,
   "mechMaxRange": 38,
   "mechAimHeight": 0.55,
+  "nav": {
+    "climbMax": 5,
+    "dropMax": 10,
+    "leapCells": 4,
+    "leapRise": 0.5,
+    "leapDrop": 3,
+    "perchHeight": 3.5
+  },
+  "perchHold": [
+    6,
+    12
+  ],
   "roles": {
     "rifle": {
       "weapon": "carbine",
@@ -36,7 +48,8 @@
       ],
       "chargeTime": 0,
       "damageScale": 0.5,
-      "rush": false
+      "rush": false,
+      "perchChance": 0.3
     },
     "rusher": {
       "weapon": "scattergun",
@@ -60,7 +73,8 @@
       ],
       "chargeTime": 0,
       "damageScale": 0.55,
-      "rush": true
+      "rush": true,
+      "perchChance": 0
     },
     "marksman": {
       "weapon": "longshot",
@@ -84,7 +98,8 @@
       ],
       "chargeTime": 0.9,
       "damageScale": 1,
-      "rush": false
+      "rush": false,
+      "perchChance": 0.8
     },
     "mech": {
       "weapon": "autocannon",
@@ -108,7 +123,8 @@
       ],
       "chargeTime": 0,
       "damageScale": 0.55,
-      "rush": false
+      "rush": false,
+      "perchChance": 0
     }
   }
 }

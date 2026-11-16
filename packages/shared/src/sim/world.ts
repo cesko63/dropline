@@ -103,6 +103,38 @@ export class CollisionWorld {
     };
   }
 
+  /** Distance along a ray to the first surface, or -1 when nothing is hit. Allocates nothing. */
+  rayDistance(origin: Vec3, dir: Vec3, maxDist: number): number {
+    this.ray.origin.x = origin.x;
+    this.ray.origin.y = origin.y;
+    this.ray.origin.z = origin.z;
+    this.ray.dir.x = dir.x;
+    this.ray.dir.y = dir.y;
+    this.ray.dir.z = dir.z;
+    const hit = this.world.castRay(this.ray, maxDist, true);
+    return hit ? hit.timeOfImpact : -1;
+  }
+
+  /**
+   * Every surface a straight downward ray from (x, top, z) passes into, the
+   * first face of each box it meets: heights and normals, highest first.
+   * `top` must be above every box.
+   */
+  surfacesBelow(x: number, z: number, top: number, maxDist: number): { y: number; normal: Vec3 }[] {
+    const out: { y: number; normal: Vec3 }[] = [];
+    this.ray.origin.x = x;
+    this.ray.origin.y = top;
+    this.ray.origin.z = z;
+    this.ray.dir.x = 0;
+    this.ray.dir.y = -1;
+    this.ray.dir.z = 0;
+    this.world.intersectionsWithRay(this.ray, maxDist, false, (hit) => {
+      out.push({ y: top - hit.timeOfImpact, normal: { x: hit.normal.x, y: hit.normal.y, z: hit.normal.z } });
+      return true;
+    });
+    return out.sort((a, b) => b.y - a.y);
+  }
+
   /** True if a capsule standing at `feet` would intersect the map. */
   overlapsCapsule(feet: Vec3, height: number, radius = TUNING.player.radius): boolean {
     const c = this.center;

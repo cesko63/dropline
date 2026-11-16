@@ -1,6 +1,6 @@
 import { BOTS, BOT_ROLES, botCmd, createBrain } from '../ai/bot';
 import { createBodies, liveBodies, pushApart, type Bodies } from './bodies';
-import { buildNav } from '../ai/nav';
+import { MECH_BODY, buildNav } from '../ai/nav';
 import { emptyInput, type InputCmd } from '../input';
 import type { MapData, MapSpawn } from '../map/types';
 import { lenH, v3 } from '../math/vec3';
@@ -74,7 +74,7 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
     events: [],
     spawns: map.spawns,
     nav: buildNav(map, world),
-    navMech: buildNav(map, world, MECH.body.radius, MECH.body.height),
+    navMech: buildNav(map, world, MECH_BODY),
     cmds: [],
     history: null,
     predict: false,

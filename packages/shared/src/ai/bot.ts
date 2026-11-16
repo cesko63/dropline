@@ -7,7 +7,7 @@ import { rand, randRange, randSigned } from '../sim/rng';
 import { TUNING } from '../sim/tuning';
 import { PROJECTILES, WEAPONS } from '../sim/weapons';
 import type { CollisionWorld } from '../sim/world';
-import { findPath, isWalkable, randomNavPoint, type NavGrid } from './nav';
+import { Link, PATH_STRIDE, findPath, randomNavPoint, walkableLine, type NavGrid } from './nav';
 
 /** Bot senses and per-role behaviour. Edit /data/bots.json, not this file. */
 export const BOTS = bots;
@@ -37,6 +37,8 @@ export interface BotRole {
   damageScale: number;
   /** Sprints and slides at the target instead of holding a distance. */
   rush: boolean;
+  /** Share of patrols that head for a perch high above the street, to hold it a while. */
+  perchChance: number;
 }
 
 export const BOT_ROLES = bots.roles as Record<string, BotRole>;
@@ -85,11 +87,18 @@ export interface BotBrain {
 
   hasGoal: boolean;
   goalX: number;
+  goalY: number;
   goalZ: number;
-  /** Waypoints as x, z pairs. */
+  /** Waypoints: x, y, z and how to get there (see PATH_STRIDE). */
   path: number[];
   pathI: number;
   repathIn: number;
+  /** How the bot gets to the waypoint it is heading for: walking, climbing... */
+  link: number;
+  /** The patrol goal is a perch; on arrival the bot holds it for `holdFor` seconds, looking toward `holdYaw`. */
+  perch: boolean;
+  holdFor: number;
+  holdYaw: number;
 
   aimYaw: number;
   aimPitch: number;
@@ -135,10 +144,15 @@ export function createBrain(role: string, id: number): BotBrain {
     alertFrom: -1,
     hasGoal: false,
     goalX: 0,
+    goalY: 0,
     goalZ: 0,
     path: [],
     pathI: 0,
     repathIn: 0,
+    link: Link.Walk,
+    perch: false,
+    holdFor: 0,
+    holdYaw: 0,
     aimYaw: 0,
     aimPitch: 0,
     errYaw: 0,
@@ -202,28 +216,68 @@ function tokensOn(m: MatchState, target: number): number {
   return n;
 }
 
-function setGoal(m: MatchState, a: Actor, x: number, z: number): boolean {
+function setGoal(m: MatchState, a: Actor, x: number, y: number, z: number): boolean {
   const b = a.brain!;
+  const pos = a.p.pos;
   b.goalX = x;
+  b.goalY = y;
   b.goalZ = z;
-  b.hasGoal = findPath(navOf(m, a), a.p.pos.x, a.p.pos.z, x, z, b.path);
-  b.pathI = b.path.length > 2 ? 1 : 0;
+  b.hasGoal = findPath(navOf(m, a), pos.x, pos.y, pos.z, x, y, z, b.path);
+  b.pathI = b.path.length > PATH_STRIDE ? 1 : 0;
+  b.link = Link.Walk;
   return b.hasGoal;
 }
 
-const point = { x: 0, z: 0 };
+const point = { x: 0, y: 0, z: 0 };
 
-/** Patrols mostly push toward the enemy's side of the map, sometimes wander. */
+/**
+ * Patrols mostly push toward the enemy's side of the map, sometimes wander.
+ * Some roles like to climb to a perch and hold it for a while.
+ */
 function pickPatrolGoal(m: MatchState, a: Actor): void {
+  const b = a.brain!;
+  const nav = navOf(m, a);
+  b.perch = false;
+  if (rand(m.rng) < roleOf(a).perchChance && nearbyPerch(m, a, nav) && setGoal(m, a, point.x, point.y, point.z)) {
+    b.perch = true;
+    return;
+  }
   if (rand(m.rng) < 0.6) {
     const theirs = m.spawns.filter((s) => (s.team ?? 0) !== a.team);
     if (theirs.length > 0) {
       const s = theirs[Math.floor(rand(m.rng) * theirs.length)];
-      if (setGoal(m, a, s.pos[0] + randSigned(m.rng) * 8, s.pos[2] + randSigned(m.rng) * 8)) return;
+      if (setGoal(m, a, s.pos[0] + randSigned(m.rng) * 8, s.pos[1], s.pos[2] + randSigned(m.rng) * 8)) return;
     }
   }
-  randomNavPoint(navOf(m, a), m.rng, point);
-  setGoal(m, a, point.x, point.z);
+  if (randomNavPoint(nav, m.rng, point)) setGoal(m, a, point.x, point.y, point.z);
+}
+
+/** A perch not far off: the closest of a few picked at random, written to `point`. */
+function nearbyPerch(m: MatchState, a: Actor, nav: NavGrid): boolean {
+  let bestX = 0, bestY = 0, bestZ = 0, bestD = Infinity;
+  for (let k = 0; k < 6 && randomNavPoint(nav, m.rng, point, nav.high); k++) {
+    const d = Math.hypot(point.x - a.p.pos.x, point.z - a.p.pos.z);
+    if (d < bestD) (bestD = d), (bestX = point.x), (bestY = point.y), (bestZ = point.z);
+  }
+  point.x = bestX;
+  point.y = bestY;
+  point.z = bestZ;
+  return bestD < Infinity;
+}
+
+/** Arrived on a perch: stay a while, looking toward the enemy's side. */
+function holdPerch(m: MatchState, a: Actor): void {
+  const b = a.brain!;
+  let x = 0, z = 0, k = 0;
+  for (const s of m.spawns) {
+    if ((s.team ?? 0) === a.team) continue;
+    x += s.pos[0];
+    z += s.pos[2];
+    k++;
+  }
+  b.perch = false;
+  b.holdFor = randRange(m.rng, BOTS.perchHold[0], BOTS.perchHold[1]);
+  b.holdYaw = k > 0 ? Math.atan2(-(x / k - a.p.pos.x), -(z / k - a.p.pos.z)) : a.p.yaw;
 }
 
 /** The only place bot states change. Runs the old state's exit, then the new state's enter. */
@@ -236,6 +290,8 @@ function enter(m: MatchState, a: Actor, next: BotStateName): void {
   }
   b.state = next;
   b.stateTime = 0;
+  b.holdFor = 0;
+  b.perch = false;
   switch (next) {
     case 'patrol':
       b.target = -1;
@@ -253,7 +309,7 @@ function enter(m: MatchState, a: Actor, next: BotStateName): void {
       break;
     case 'search':
       b.visible = false;
-      setGoal(m, a, b.lastSeen.x, b.lastSeen.z);
+      setGoal(m, a, b.lastSeen.x, b.lastSeen.y, b.lastSeen.z);
       break;
   }
 }
@@ -277,6 +333,11 @@ function think(m: MatchState, a: Actor, world: CollisionWorld): void {
   b.lastZ = pos.z;
   b.stuck = b.wantMove && moved < 0.1 ? b.stuck + T : Math.max(0, b.stuck - T * 2);
   if (b.stuck > 0.5 && b.jumpFor < -0.6) b.jumpFor = 0.12;
+  // Fell off the way (a missed leap, a shove off a deck): plan again from down here.
+  if (b.hasGoal && b.pathI > 0 && !a.inMech && a.p.grounded) {
+    const o = b.pathI * PATH_STRIDE;
+    if (pos.y < Math.min(b.path[o + 1], b.path[o + 1 - PATH_STRIDE]) - 1.5) setGoal(m, a, b.goalX, b.goalY, b.goalZ);
+  }
 
   let tgt: Actor | null = b.target >= 0 ? m.actors[b.target] : null;
   if (tgt && !tgt.alive) tgt = null;
@@ -320,18 +381,22 @@ function think(m: MatchState, a: Actor, world: CollisionWorld): void {
       // Its own mech standing empty comes before any patrol: go and get in.
       const mine = m.mechs[a.id];
       if (!a.inMech && mine.state === 'idle') {
-        if (!b.hasGoal || Math.hypot(b.goalX - mine.pos.x, b.goalZ - mine.pos.z) > 1 || b.stuck > 1.5) setGoal(m, a, mine.pos.x, mine.pos.z);
+        if (!b.hasGoal || Math.hypot(b.goalX - mine.pos.x, b.goalZ - mine.pos.z) > 1 || b.stuck > 1.5) setGoal(m, a, mine.pos.x, mine.pos.y, mine.pos.z);
         break;
       }
-      const arrived = !b.hasGoal || Math.hypot(pos.x - b.goalX, pos.z - b.goalZ) < 2.5;
+      if (b.holdFor > 0) break;
+      const there = Math.hypot(pos.x - b.goalX, pos.z - b.goalZ) < 2.5 && Math.abs(pos.y - b.goalY) < 1.5;
+      const arrived = !b.hasGoal || there;
       if (b.state === 'search') {
         if (arrived || b.stateTime > BOTS.searchTime) enter(m, a, 'patrol');
-        else if (b.stuck > 1.5) setGoal(m, a, b.goalX, b.goalZ);
+        else if (b.stuck > 1.5) setGoal(m, a, b.goalX, b.goalY, b.goalZ);
+      } else if (there && b.perch) {
+        holdPerch(m, a);
       } else if (arrived || b.stuck > 4) {
         pickPatrolGoal(m, a);
         b.stuck = 0;
       } else if (b.stuck > 1.5) {
-        setGoal(m, a, b.goalX, b.goalZ);
+        setGoal(m, a, b.goalX, b.goalY, b.goalZ);
       }
       break;
     }
@@ -393,24 +458,52 @@ const move = { x: 0, z: 0 };
 function follow(a: Actor): { x: number; z: number } | null {
   const b = a.brain!;
   if (!b.hasGoal) return null;
-  const n = b.path.length / 2;
+  const n = b.path.length / PATH_STRIDE;
   const pos = a.p.pos;
   // A mech turns wide, so it counts a waypoint as reached from further off.
   const reach = a.inMech ? 1.2 : 0;
   while (b.pathI < n) {
-    const dx = b.path[b.pathI * 2] - pos.x;
-    const dz = b.path[b.pathI * 2 + 1] - pos.z;
+    const o = b.pathI * PATH_STRIDE;
+    const dx = b.path[o] - pos.x;
+    const dz = b.path[o + 2] - pos.z;
     const d = Math.hypot(dx, dz);
-    if (d < (b.pathI === n - 1 ? 0.6 : 1.1) + reach) {
+    // A climb, drop or leap starts from its waypoint itself, lined up with it.
+    const next = b.pathI === n - 1 ? -1 : b.path[o + PATH_STRIDE + 3];
+    const near = next < 0 ? 0.6 : next === Link.Walk ? 1.1 : 0.45;
+    // Reached on its own floor: up on top after a climb, down below after a drop.
+    const kind = b.path[o + 3];
+    const dy = pos.y - b.path[o + 1];
+    if (d < near + reach && dy > (kind === Link.Climb ? -0.5 : -1.2) && dy < (kind === Link.Drop ? 0.5 : 1.2)) {
       b.pathI++;
       continue;
     }
-    move.x = dx / d;
-    move.z = dz / d;
+    b.link = kind;
+    move.x = d > 0.05 ? dx / d : 0;
+    move.z = d > 0.05 ? dz / d : 0;
     return move;
   }
   b.hasGoal = false;
+  b.link = Link.Walk;
   return null;
+}
+
+/**
+ * The jump button on a climb or a leap. On the ground it presses (again, after a
+ * failed try). Up a wall it holds for the jetpack until the feet are over the
+ * top; the mantle pulls the body over. No double jump there: its push into the
+ * wall would start a wallrun. Over a gap a running jump at walking pace is
+ * enough; only when it falls short does the bot double jump and hold the
+ * jetpack to carry the rest of the way.
+ */
+function jumpButton(a: Actor, link: number, x: number, y: number, z: number): boolean {
+  const p = a.p;
+  if (p.grounded) return !p.jumpHeld;
+  // Hold only, never a fresh press in the air: that would be a double jump over the top.
+  if (link === Link.Climb) return p.jumpHeld && p.pos.y < y + 0.1;
+  const dx = x - p.pos.x;
+  const dz = z - p.pos.z;
+  const short = p.vel.y < 0 && p.pos.y < y + 0.3 && Math.hypot(dx, dz) >= 1.2 && p.vel.x * dx + p.vel.z * dz > 0;
+  return short && !(p.airJumpsUsed === 0 && p.jumpHeld);
 }
 
 /** Walk to the bot's own empty mech, re-planning as it goes. */
@@ -419,7 +512,7 @@ function goToMech(m: MatchState, a: Actor, k: Mech, dt: number): { x: number; z:
   b.repathIn -= dt;
   if (b.repathIn <= 0 || !b.hasGoal) {
     b.repathIn = 0.5;
-    setGoal(m, a, k.pos.x, k.pos.z);
+    setGoal(m, a, k.pos.x, k.pos.y, k.pos.z);
   }
   return follow(a);
 }
@@ -437,14 +530,16 @@ function engageMove(m: MatchState, a: Actor, tgt: Actor, dist: number, dt: numbe
   // A marksman stands still while lining up a shot.
   if (b.charge > 0) return null;
 
-  if (!b.visible || dist > role.max) {
+  // Out of sight, out of range, or for a rusher on another floor: go after it.
+  if (!b.visible || dist > role.max || (role.rush && Math.abs(tgt.p.pos.y - pos.y) > 2)) {
     b.repathIn -= dt;
     if (b.repathIn <= 0 || !b.hasGoal) {
       b.repathIn = 0.5;
-      setGoal(m, a, b.lastSeen.x, b.lastSeen.z);
+      setGoal(m, a, b.lastSeen.x, b.lastSeen.y, b.lastSeen.z);
     }
     return follow(a);
   }
+  b.link = Link.Walk;
 
   const tx = (tgt.p.pos.x - pos.x) / (dist || 1);
   const tz = (tgt.p.pos.z - pos.z) / (dist || 1);
@@ -454,7 +549,8 @@ function engageMove(m: MatchState, a: Actor, tgt: Actor, dist: number, dt: numbe
     const x = -tz * b.strafe + tx * along;
     const z = tx * b.strafe + tz * along;
     const l = Math.hypot(x, z) || 1;
-    if (isWalkable(navOf(m, a), pos.x + (x / l) * ahead, pos.z + (z / l) * ahead)) {
+    // Strafe only where the floor goes on: nobody steps off a deck by accident.
+    if (walkableLine(navOf(m, a), pos.x, pos.y, pos.z, pos.x + (x / l) * ahead, pos.y, pos.z + (z / l) * ahead)) {
       move.x = x / l;
       move.z = z / l;
       return move;
@@ -478,6 +574,7 @@ export function botCmd(m: MatchState, a: Actor, world: CollisionWorld, dt: numbe
   b.jumpFor -= dt;
   b.crouchFor -= dt;
   b.slideIn -= dt;
+  b.holdFor -= dt;
   if (b.thinkIn <= 0) {
     think(m, a, world);
     b.thinkIn += BOTS.thinkInterval;
@@ -582,10 +679,30 @@ export function botCmd(m: MatchState, a: Actor, world: CollisionWorld, dt: numbe
       wantYaw = Math.atan2(-go.x, -go.z);
       const left = Math.hypot(pos.x - b.goalX, pos.z - b.goalZ);
       sprint = left > 5;
+    } else if (b.holdFor > 0) {
+      // Holding a perch: watch the enemy's side, turning the view slowly across it.
+      wantYaw = b.holdYaw + Math.sin(b.stateTime * 0.5) * 0.7;
     } else if (b.state === 'search') {
       // Arrived where the target was last seen: sweep the view around.
       wantYaw = p.yaw + b.strafe * 1.6 * dt;
     }
+  }
+
+  // Climbing a wall, dropping off an edge or leaping a gap: face the way, and
+  // work the jump button.
+  let jump = b.jumpFor > 0;
+  const parkour = go !== null && b.hasGoal && !a.inMech && b.link !== Link.Walk;
+  if (parkour) {
+    wantYaw = Math.atan2(-go!.x, -go!.z);
+    wantPitch = 0;
+    const o = b.pathI * PATH_STRIDE;
+    const left = Math.hypot(b.path[o] - pos.x, b.path[o + 2] - pos.z);
+    const leg = Math.hypot(b.path[o] - b.path[o - PATH_STRIDE], b.path[o + 2] - b.path[o - PATH_STRIDE + 2]);
+    // A climb starts at the foot of the wall, a leap just short of the edge.
+    const takeoff = b.link === Link.Climb ? left < leg + 0.1 : left < leg - 0.2;
+    if (b.link !== Link.Drop && (takeoff || !p.grounded)) jump = jumpButton(a, b.link, b.path[o], b.path[o + 1], b.path[o + 2]);
+    sprint = false;
+    fire = false;
   }
 
   const maxTurn = role.turnRateDeg * DEG * dt;
@@ -598,7 +715,7 @@ export function botCmd(m: MatchState, a: Actor, world: CollisionWorld, dt: numbe
     let z = go.z;
     // Keep a little room between teammates so they do not walk as one.
     for (const o of m.actors) {
-      if (o === a || !o.alive || o.team !== a.team) continue;
+      if (parkour || o === a || !o.alive || o.team !== a.team) continue;
       const ox = pos.x - o.p.pos.x;
       const oz = pos.z - o.p.pos.z;
       const d = Math.hypot(ox, oz);
@@ -610,11 +727,13 @@ export function botCmd(m: MatchState, a: Actor, world: CollisionWorld, dt: numbe
     const l = Math.hypot(x, z) || 1;
     const f = forwardFromYaw(cmd.yaw);
     const r = rightFromYaw(cmd.yaw);
-    cmd.moveZ = (x * f.x + z * f.z) / l;
-    cmd.moveX = (x * r.x + z * r.z) / l;
+    // Up to a wall or off an edge slowly, so the body does not sail past where it is going.
+    const pace = parkour && b.link !== Link.Leap ? 0.45 : 1;
+    cmd.moveZ = ((x * f.x + z * f.z) / l) * pace;
+    cmd.moveX = ((x * r.x + z * r.z) / l) * pace;
     cmd.sprint = sprint && cmd.moveZ > 0.7;
   }
-  cmd.jump = b.jumpFor > 0;
+  cmd.jump = jump;
   cmd.crouch = b.crouchFor > 0;
   cmd.ads = ads;
   if (!a.inMech) {

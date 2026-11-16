@@ -89,8 +89,9 @@ export function findDropPoint(m: MatchState, world: CollisionWorld, a: Actor): V
       const yaw = p.yaw + turn;
       const x = p.pos.x - Math.sin(yaw) * dist;
       const z = p.pos.z - Math.cos(yaw) * dist;
-      if (a.brain && !isWalkable(m.navMech, x, z)) continue;
-      if (dropSpotOk(m, world, x, p.pos.y, z, spot)) return spot;
+      if (!dropSpotOk(m, world, x, p.pos.y, z, spot)) continue;
+      // A bot's mech has to be able to walk out to the fight: not stuck on a roof.
+      if (!a.brain || isWalkable(m.navMech, spot.x, spot.y, spot.z)) return spot;
     }
   }
   return null;

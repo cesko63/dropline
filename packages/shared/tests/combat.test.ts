@@ -4,6 +4,7 @@ import {
   BOTS,
   BOT_ROLES,
   COMBAT,
+  Link,
   CollisionWorld,
   TICK_DT,
   WEAPONS,
@@ -11,6 +12,7 @@ import {
   createMatch,
   damageFalloff,
   emptyInput,
+  PATH_STRIDE,
   findPath,
   isWalkable,
   rayPilot,
@@ -269,23 +271,44 @@ describe('navigation', () => {
   it('finds a walkable path between the two sides of the map', () => {
     const m = createMatch(map, world, { seed: 1, humans: 0 });
     const path: number[] = [];
-    expect(findPath(m.nav, 0, 46, 0, -62, path)).toBe(true);
-    expect(path.length).toBeGreaterThanOrEqual(6);
-    for (let i = 0; i + 3 < path.length; i += 2) {
-      expect(walkableLine(m.nav, path[i], path[i + 1], path[i + 2], path[i + 3])).toBe(true);
+    expect(findPath(m.nav, 0, 0, 46, 0, 0, -62, path)).toBe(true);
+    expect(path.length).toBeGreaterThanOrEqual(PATH_STRIDE * 3);
+    const S = PATH_STRIDE;
+    for (let i = 0; i + S < path.length; i += S) {
+      expect(path[i + S + 3]).toBe(Link.Walk);
+      expect(walkableLine(m.nav, path[i], path[i + 1], path[i + 2], path[i + S], path[i + S + 1], path[i + S + 2])).toBe(true);
     }
     // The tower sits on the straight line, so the path has to go around it.
     let length = 0;
-    for (let i = 0; i + 3 < path.length; i += 2) length += Math.hypot(path[i + 2] - path[i], path[i + 3] - path[i + 1]);
+    for (let i = 0; i + S < path.length; i += S) length += Math.hypot(path[i + S] - path[i], path[i + S + 2] - path[i + 2]);
     expect(length).toBeGreaterThan(108);
     expect(length).toBeLessThan(125);
   });
 
-  it('marks solid boxes as blocked and open floor as free', () => {
+  it('marks solid boxes as blocked and open floor as free, on every floor', () => {
     const m = createMatch(map, world, { seed: 1, humans: 0 });
-    expect(isWalkable(m.nav, 0, -12)).toBe(false);
-    expect(isWalkable(m.nav, 0, 50)).toBe(true);
-    expect(isWalkable(m.nav, 200, 0)).toBe(false);
+    expect(isWalkable(m.nav, 0, 0, -12)).toBe(false);
+    expect(isWalkable(m.nav, 0, 0, 50)).toBe(true);
+    expect(isWalkable(m.nav, 200, 0, 0)).toBe(false);
+    // The deck on its pillar: free on top, blocked underneath.
+    expect(isWalkable(m.nav, 24, 4, -22)).toBe(true);
+    expect(isWalkable(m.nav, 24, 0, -22)).toBe(false);
+  });
+
+  it('plans up ramps, up walls and down from ledges', () => {
+    const m = createMatch(map, world, { seed: 1, humans: 0 });
+    const path: number[] = [];
+    const kinds = (): number[] => path.filter((_, i) => i % PATH_STRIDE === 3);
+    // Up onto a mantle block is a climb; the tallest one is out of reach.
+    expect(findPath(m.nav, 10, 0, 24, 26, 3.2, 24, path)).toBe(true);
+    expect(kinds()).toContain(Link.Climb);
+    expect(path[path.length - 3]).toBeCloseTo(3.2, 1);
+    expect(isWalkable(m.nav, 32, 5.5, 24)).toBe(false);
+    // The ramp walks up to its deck, and a way down from it is a drop.
+    expect(findPath(m.nav, 24, 0, 0, 24, 4, -22, path)).toBe(true);
+    expect(kinds().every((k) => k === Link.Walk)).toBe(true);
+    expect(findPath(m.nav, 24, 4, -22, 24, 0, -32, path)).toBe(true);
+    expect(kinds()).toContain(Link.Drop);
   });
 });
 
@@ -372,6 +395,18 @@ describe('bots', () => {
     expect(chargeAt).toBeGreaterThan(0);
     expect(shotAt - chargeAt).toBeGreaterThanOrEqual(BOT_ROLES.marksman.chargeTime - TICK_DT * 2);
     expect(shotAt - chargeAt).toBeLessThan(BOT_ROLES.marksman.chargeTime + 0.1);
+  });
+
+  it('goes up the ramp after a target standing on the deck above', () => {
+    const { m, me, bot } = withBot('rusher');
+    me.health = Infinity;
+    place(me, 24, -24, 0);
+    me.p.pos.y = 4.02;
+    place(bot, 24, 6, 0);
+    let t = 0;
+    for (; t < 10 && bot.p.pos.y < 3.5; t += TICK_DT) stepMatch(m, world, [{ ...emptyInput(), yaw: 0 }], TICK_DT);
+    expect(bot.brain!.target).toBe(me.id);
+    expect(bot.p.pos.y).toBeGreaterThan(3.5);
   });
 
   it('lets at most the allowed number of bots fire on one target', () => {
