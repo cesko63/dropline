@@ -5,11 +5,17 @@
   "respawnTime": 3,
   "spawnProtect": 1.5,
   "killY": -30,
-  "scoreLimit": 30,
+  "scoreLimit": 50,
   "teamSize": 4,
   "semiBuffer": 0.15,
   "hitbox": { "bodyRadius": 0.33, "headRadius": 0.19, "headDrop": 0.15, "neck": 0.3 },
-  "playerLoadout": ["carbine", "scattergun", "longshot"],
+  "playerLoadout": ["carbine", "scattergun", "longshot", "pike"],
+  "mech": {
+    "meter": { "passiveTime": 110, "perDamage": 0.0007, "perKill": 0.05, "perArmor": 0.00006 },
+    "drop": { "time": 2.4, "maxRange": 45, "clearHeight": 40, "crushRadius": 4.2, "crushDamage": 400, "crushArmor": 800 },
+    "embark": { "range": 4.5, "time": 1.0, "exitUp": 7.5, "exitForward": 3.5, "exitProtect": 0.3, "ejectUp": 15, "ejectProtect": 0.8 },
+    "destroyScore": 3
+  },
   "teams": [
     { "name": "Vanguard", "bots": ["rifle", "rusher", "marksman", "rifle"] },
     { "name": "Corsair", "bots": ["rifle", "rifle", "rusher", "marksman"] }

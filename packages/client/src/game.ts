@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import {
   BOTS,
+  COMBAT,
+  MECH,
+  PROJECTILES,
   TICK_DT,
   WEAPONS,
   createMatch,
-  eyeHeight,
+  eyeOf,
   lerp,
   spawnActor,
   stepMatch,
@@ -25,6 +28,7 @@ import { Input } from './input/input';
 import { Avatar, TEAM_LOOK } from './render/avatar';
 import { Effects } from './render/effects';
 import { buildMapMeshes } from './render/mapMesh';
+import { ALLY_ZONE, ENEMY_ZONE, MechAvatar } from './render/mechAvatar';
 import { createEnvironment, createRenderer, type Environment } from './render/scene';
 import { Viewmodel } from './render/viewmodel';
 import { Hud } from './ui/hud';
@@ -35,11 +39,24 @@ const MAX_FRAME = 0.1;
 const RAISE_HOLD = 1.6;
 const OWN_TRACER = '#ffe2b0';
 const IMPACT_SPARK = '#ffcf8a';
+const CRIT_SPARK = '#ffd23f';
+const UP = v3(0, 1, 0);
+
+/** What a kill is credited to in the feed: a weapon, a rocket, or the mech itself. */
+function killLabel(weapon: string): string {
+  if (weapon in WEAPONS) return WEAPONS[weapon].short;
+  if (weapon in PROJECTILES) return PROJECTILES[weapon].name;
+  if (weapon === 'crush') return 'MECH DROP';
+  if (weapon === 'ram') return 'RAMMED';
+  return 'FELL';
+}
 
 export interface GameOptions {
   seed: number;
   /** Debug view: bot states over their heads. */
   qa: boolean;
+  /** Mech meter everyone starts with, 0..1 (`?meter=1` to try the mech at once). */
+  startMeter: number;
 }
 
 export class Game {
@@ -56,17 +73,24 @@ export class Game {
   private readonly viewmodel = new Viewmodel();
   private readonly hud = new Hud();
   private avatars: Avatar[] = [];
+  private mechAvatars: MechAvatar[] = [];
   private prev: Vec3[] = [];
   private drawn: Vec3[] = [];
+  private mechPrev: Vec3[] = [];
+  private mechDrawn: Vec3[] = [];
   private raise: number[] = [];
   private readonly cmds: InputCmd[] = [];
   private accumulator = 0;
   private lastTime = 0;
   private pendingEvents = 0;
   private seed: number;
+  private readonly startMeter: number;
+  /** Seconds since damaged mechs last trailed smoke. */
+  private smokeT = 0;
   private readonly tmp = new THREE.Vector3();
   private readonly eye = v3();
   private readonly aim = v3();
+  private readonly at = v3();
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -80,6 +104,7 @@ export class Game {
     this.fx = new Effects(this.scene);
     this.hud.debug = options.qa;
     this.seed = options.seed;
+    this.startMeter = options.startMeter;
 
     this.input = new Input(canvas);
     this.input.onLockChange = (locked) => this.hud.showOverlay(!locked);
@@ -115,12 +140,20 @@ export class Game {
       this.scene.remove(avatar.root, avatar.laser);
       avatar.dispose();
     }
-    this.match = createMatch(this.map, this.world, { seed: this.seed++ });
+    for (const avatar of this.mechAvatars) {
+      this.scene.remove(avatar.root);
+      avatar.dispose();
+    }
+    this.match = createMatch(this.map, this.world, { seed: this.seed++, startMeter: this.startMeter });
     const me = this.me;
     this.avatars = this.match.actors.map((a) => new Avatar(a.team, a.team === me.team && a !== me));
     for (const avatar of this.avatars) this.scene.add(avatar.root, avatar.laser);
+    this.mechAvatars = this.match.mechs.map((k) => new MechAvatar(k.team, k.team === me.team));
+    for (const avatar of this.mechAvatars) this.scene.add(avatar.root);
     this.prev = this.match.actors.map((a) => ({ ...a.p.pos }));
     this.drawn = this.match.actors.map((a) => ({ ...a.p.pos }));
+    this.mechPrev = this.match.mechs.map((k) => ({ ...k.pos }));
+    this.mechDrawn = this.match.mechs.map((k) => ({ ...k.pos }));
     this.raise = this.match.actors.map(() => 0);
     this.fx.clear();
     this.hud.reset(this.match, me);
@@ -155,16 +188,20 @@ export class Game {
     if (input.consume('toggleView')) this.rig.thirdPerson = !this.rig.thirdPerson;
     if (input.consume('mute')) this.hud.setMuted(this.sfx.toggleMute());
     if (this.match.over && input.consume('confirm')) this.newMatch();
-    if (input.consume('respawn') && me.alive && !this.match.over) {
+    // No redeploying out of a cockpit: climb out first.
+    if (input.consume('respawn') && me.alive && !me.inMech && !this.match.over) {
       spawnActor(this.match, me);
       this.onSpawn(me);
     }
+    const keys = [input.consume('weapon1'), input.consume('weapon2'), input.consume('weapon3'), input.consume('weapon4')];
+    const step = (input.consume('nextWeapon') ? 1 : 0) + input.takeWheel();
+    // The mech has one weapon; the pilot's choice waits for them outside.
+    if (me.inMech) return;
     const slots = me.loadout.length;
     const wanted = input.weapon >= 0 ? input.weapon : me.weapon;
-    if (input.consume('weapon1')) input.weapon = 0;
-    if (input.consume('weapon2')) input.weapon = 1;
-    if (input.consume('weapon3')) input.weapon = 2;
-    const step = (input.consume('nextWeapon') ? 1 : 0) + input.takeWheel();
+    keys.forEach((pressed, slot) => {
+      if (pressed && slot < slots) input.weapon = slot;
+    });
     if (step !== 0) input.weapon = (((wanted + Math.sign(step)) % slots) + slots) % slots;
   }
 
@@ -186,6 +223,12 @@ export class Game {
           p.y = a.p.pos.y;
           p.z = a.p.pos.z;
         }
+        for (const k of m.mechs) {
+          const p = this.mechPrev[k.id];
+          p.x = k.pos.x;
+          p.y = k.pos.y;
+          p.z = k.pos.z;
+        }
         cmd = this.input.sample();
         this.cmds[me.id] = cmd;
         stepMatch(m, this.world, this.cmds, TICK_DT);
@@ -204,6 +247,13 @@ export class Game {
       p.y = lerp(from.y, to.y, alpha);
       p.z = lerp(from.z, to.z, alpha);
     }
+    for (const k of m.mechs) {
+      const from = this.mechPrev[k.id];
+      const p = this.mechDrawn[k.id];
+      p.x = lerp(from.x, k.pos.x, alpha);
+      p.y = lerp(from.y, k.pos.y, alpha);
+      p.z = lerp(from.z, k.pos.z, alpha);
+    }
 
     // The view follows the mouse every frame rather than waiting for the next tick.
     const s = me.p;
@@ -218,6 +268,7 @@ export class Game {
     rig.punchYaw = me.alive ? me.punchYaw : 0;
     rig.zoom = zoom;
     rig.forceThird = !me.alive;
+    rig.mech = me.inMech;
     rig.update(dt, s, p, cmd.moveX, this.pendingEvents, this.world);
     this.pendingEvents = 0;
     const cam = rig.camera;
@@ -228,19 +279,42 @@ export class Game {
       const b = a.brain;
       const shouldered = a.ads > 0.2 || m.time - a.lastShotTime < RAISE_HOLD || (b !== null && (b.state === 'engage' || b.state === 'notice'));
       this.raise[a.id] += ((shouldered ? 1 : 0) - this.raise[a.id]) * (1 - Math.exp(-14 * dt));
-      avatar.update(dt, a, this.drawn[a.id], a !== me || rig.outside, this.raise[a.id]);
+      // A pilot in a mech is out of sight inside it.
+      avatar.update(dt, a, this.drawn[a.id], (a !== me || rig.outside) && !a.inMech, this.raise[a.id]);
       // A marksman's laser runs from its muzzle along its view to whatever it meets.
-      if (b && b.charge > 0 && a.alive) avatar.setLaser(b.charge, b.charge >= BOTS.chargeLock, this.aimPoint(a));
+      if (b && b.charge > 0 && a.alive && !a.inMech) avatar.setLaser(b.charge, b.charge >= BOTS.chargeLock, this.aimPoint(a));
       else avatar.setLaser(0, false, null);
     }
 
+    this.smokeT += dt;
+    const puff = this.smokeT > 0.11;
+    if (puff) this.smokeT = 0;
+    for (const k of m.mechs) {
+      const avatar = this.mechAvatars[k.id];
+      const mine = k.id === me.id && me.inMech;
+      // The player's own mech turns with the mouse, like their view.
+      avatar.update(dt, k, this.mechDrawn[k.id], mine ? s.yaw : k.yaw, mine ? s.pitch : k.pitch, !mine || rig.outside);
+      if (!puff || k.state === 'none' || k.state === 'dropping') continue;
+      // Thruster wash under a dash, and smoke from a hull that is nearly gone.
+      if (k.dashTime > 0 && (!mine || rig.outside)) {
+        const at = this.at;
+        at.x = k.pos.x;
+        at.y = k.pos.y + 0.4;
+        at.z = k.pos.z;
+        this.fx.smoke(at, 2, 0.9, 1.3, 0.6, null, 0.55);
+      }
+      if (k.health < MECH.health * 0.25) this.fx.smoke(avatar.ventWorld(this.tmp), 1, 0.3, 1.1, 1.3, null, 0.16);
+    }
+    if (me.inMech && m.mechs[me.id].health < MECH.health * 0.25 && !paused) this.sfx.hullAlarm();
+
     const mouse = this.input.takeMouseDelta();
-    this.viewmodel.update(dt, me, mouse.dx, mouse.dy);
+    this.viewmodel.update(dt, me, mouse.dx, mouse.dy, me.inMech ? m.mechs[me.id] : null);
     this.fx.update(dt);
     this.env.follow(p.x, p.y, p.z);
     // Fully aimed, a scoped weapon swaps its model for the scope view.
     const scoped = def.scope && me.ads > 0.9 && me.alive && !rig.outside;
     this.hud.update(dt, m, me, rig.outside, scoped, cam, s.yaw);
+    if (this.hud.inDropZone && !paused) this.sfx.zoneWarn();
 
     this.renderer.clear();
     this.renderer.render(this.scene, cam);
@@ -260,7 +334,7 @@ export class Game {
     dir.z = -Math.cos(s.yaw) * cp;
     const eye = this.eye;
     eye.x = s.pos.x;
-    eye.y = s.pos.y + eyeHeight(s);
+    eye.y = s.pos.y + eyeOf(a);
     eye.z = s.pos.z;
     const hit = this.world.castRay(eye, dir, 150);
     const d = hit ? hit.dist : 150;
@@ -270,15 +344,25 @@ export class Game {
     return dir;
   }
 
+  /** The actor is somewhere else all at once (a spawn, a seat in a mech): no gliding there. */
+  private snap(a: Actor): void {
+    Object.assign(this.prev[a.id], a.p.pos);
+    Object.assign(this.drawn[a.id], a.p.pos);
+  }
+
   private onSpawn(a: Actor): void {
-    const pos = a.p.pos;
-    Object.assign(this.prev[a.id], pos);
-    Object.assign(this.drawn[a.id], pos);
+    this.snap(a);
     if (a !== this.me) return;
     this.input.yaw = a.p.yaw;
     this.input.pitch = 0;
     this.hud.hideDeath();
     this.sfx.spawn();
+  }
+
+  /** 1 beside the player's view, falling to 0 at `range` meters. */
+  private near(pos: Vec3, range: number): number {
+    const cam = this.rig.camera.position;
+    return Math.max(0, 1 - Math.hypot(pos.x - cam.x, pos.y - cam.y, pos.z - cam.z) / range);
   }
 
   /** Turn what happened in the simulation into effects, sound and HUD feedback. */
@@ -290,22 +374,27 @@ export class Game {
         const a = m.actors[e.actor];
         const mine = a === me;
         const firstPerson = mine && !this.rig.outside;
-        const muzzle = firstPerson ? this.viewmodel.muzzleWorld(this.rig.camera, this.tmp) : this.avatars[a.id].muzzleWorld(this.tmp);
+        const body = a.inMech ? this.mechAvatars[a.id] : this.avatars[a.id];
+        const muzzle = firstPerson ? this.viewmodel.muzzleWorld(this.rig.camera, this.tmp) : body.muzzleWorld(this.tmp);
         const color = mine ? OWN_TRACER : TEAM_LOOK[a.team].tracer;
+        // A cannon round is drawn thicker than a rifle's.
+        const width = (firstPerson ? 0.02 : 0.04) * (a.inMech ? 2.2 : 1);
         let struck: Vec3 | null = null;
         for (const t of e.traces) {
-          this.fx.tracer(muzzle, t.end, color, firstPerson ? 0.02 : 0.04);
+          this.fx.tracer(muzzle, t.end, color, width);
           if (t.normal) {
-            this.fx.burst(t.end, t.normal, 4, IMPACT_SPARK, 4);
-            this.fx.decal(t.end, t.normal);
+            this.fx.burst(t.end, t.normal, a.inMech ? 7 : 4, IMPACT_SPARK, a.inMech ? 6 : 4);
+            this.fx.decal(t.end, t.normal, a.inMech ? 1.8 : 1);
             struck = t.end;
           } else if (t.victim >= 0) {
             // Sparks in the victim's colours, more of them for a headshot.
             this.fx.burst(t.end, null, t.head ? 10 : 5, TEAM_LOOK[m.actors[t.victim].team].visor, 5);
+          } else if (t.mech >= 0) {
+            struck = t.end;
           }
         }
-        this.fx.flash(muzzle, mine ? 2.5 : 4);
-        this.avatars[a.id].fireFlash();
+        this.fx.flash(muzzle, (mine ? 2.5 : 4) * (a.inMech ? 2 : 1));
+        body.fireFlash();
         if (mine) this.viewmodel.fire();
         this.sfx.fire(e.weapon, mine ? null : a.p.pos);
         if (struck) this.sfx.impact(struck);
@@ -333,7 +422,7 @@ export class Game {
       case 'kill': {
         const victim = m.actors[e.victim];
         const killer = e.attacker >= 0 ? m.actors[e.attacker] : null;
-        const how = killer ? `${WEAPONS[e.weapon].short}${e.head ? ' · HEAD' : ''}` : 'FELL';
+        const how = killer ? `${killLabel(e.weapon)}${e.head ? ' · HEAD' : ''}` : 'FELL';
         this.hud.addKill(killer, victim, how, me);
         const chest = this.eye;
         chest.x = victim.p.pos.x;
@@ -346,7 +435,7 @@ export class Game {
           this.sfx.kill();
         }
         if (victim === me) {
-          this.hud.showDeath(killer ? `${killer.name} · ${WEAPONS[e.weapon].short}` : 'THE FALL');
+          this.hud.showDeath(killer ? `${killer.name} · ${killLabel(e.weapon)}` : 'THE FALL');
           this.sfx.death();
         }
         break;
@@ -378,6 +467,189 @@ export class Game {
         if (a.team !== me.team) this.sfx.charge(a.p.pos, e.duration, e.target === me.id);
         break;
       }
+
+      case 'meterReady':
+        if (e.actor !== me.id) break;
+        this.hud.showBanner('MECH READY · ', 'PRESS F', 'good');
+        this.sfx.meterReady();
+        break;
+      case 'mechCall': {
+        const a = m.actors[e.actor];
+        // The machine falls straight down onto this spot: nothing to glide from.
+        Object.assign(this.mechPrev[a.id], e.pos);
+        Object.assign(this.mechDrawn[a.id], e.pos);
+        this.sfx.dropWhistle(e.pos, e.duration, a.team !== me.team);
+        if (a === me) {
+          this.sfx.mechCall();
+          this.hud.showBanner(`${MECH.short} `, 'INBOUND', 'good');
+        }
+        break;
+      }
+      case 'callDenied':
+        if (e.actor !== me.id) break;
+        this.sfx.denied();
+        if (e.reason === 'meter') this.hud.showBanner('MECH NOT READY · ', `${Math.floor(me.meter * 100)}%`, 'warn');
+        else this.hud.showBanner('NO ROOM TO LAND ', 'HERE', 'warn');
+        break;
+      case 'mechLand': {
+        const k = m.mechs[e.mech];
+        const zone = k.team === me.team ? ALLY_ZONE : ENEMY_ZONE;
+        this.mechAvatars[k.id].land(40);
+        this.fx.ring(e.pos, COMBAT.mech.drop.crushRadius * 1.7, zone, 0.55);
+        this.fx.smoke(e.pos, 18, 2.6, 1.7, 1.5, null, 0.5);
+        this.fx.burst(e.pos, UP, 34, IMPACT_SPARK, 13);
+        this.fx.decal(e.pos, UP, 16);
+        this.sfx.mechLand(e.pos);
+        this.rig.shake(this.near(e.pos, 45) * 0.95);
+        break;
+      }
+      case 'embark': {
+        const a = m.actors[e.actor];
+        this.snap(a);
+        if (a !== me) break;
+        this.rig.carry();
+        this.sfx.embark();
+        break;
+      }
+      case 'mechOnline':
+        if (e.actor !== me.id) break;
+        this.sfx.mechOnline();
+        this.hud.showBanner(`${MECH.short} `, 'ONLINE', 'good');
+        break;
+      case 'disembark': {
+        const a = m.actors[e.actor];
+        this.snap(a);
+        if (a !== me) break;
+        this.rig.carry();
+        this.sfx.disembark(e.eject);
+        if (e.eject) {
+          this.hud.showBanner('MECH LOST · ', 'EJECTED', 'warn');
+          this.rig.shake(0.8);
+        }
+        break;
+      }
+      case 'mechStep': {
+        const k = m.mechs[e.mech];
+        const avatar = this.mechAvatars[k.id];
+        const mine = k.id === me.id && me.inMech;
+        if (e.heavy) avatar.land(k.landSpeed);
+        else avatar.step();
+        this.sfx.mechStep(mine ? null : k.pos, e.heavy);
+        // Dust at the feet, except under the player's own cockpit where it would only fog the view.
+        if (!mine || this.rig.outside) this.fx.smoke(k.pos, e.heavy ? 9 : 2, 0.9, e.heavy ? 1.7 : 0.9, 0.7, null, 0.5);
+        if (mine) {
+          this.rig.thud(e.heavy ? 2.6 : 0.8);
+          this.viewmodel.thud(e.heavy ? 1.3 : 0.45);
+        } else {
+          // A mech walking nearby is felt before it is seen.
+          this.rig.shake(this.near(k.pos, 20) * (e.heavy ? 0.5 : 0.2));
+        }
+        break;
+      }
+      case 'mechDash': {
+        const k = m.mechs[e.mech];
+        const mine = k.id === me.id && me.inMech;
+        this.sfx.mechDash(mine ? null : k.pos);
+        if (!mine || this.rig.outside) this.fx.smoke(k.pos, 6, 1, 1.4, 0.7, null, 0.55);
+        if (mine) {
+          this.rig.kick(6);
+          this.viewmodel.thud(0.8);
+        }
+        break;
+      }
+      case 'ram': {
+        const where = e.victim >= 0 ? m.actors[e.victim].p.pos : m.mechs[e.other].pos;
+        const at = this.at;
+        at.x = where.x;
+        at.y = where.y + (e.victim >= 0 ? 1 : 3);
+        at.z = where.z;
+        this.sfx.ram(at);
+        this.fx.burst(at, null, 20, IMPACT_SPARK, 10);
+        if (e.mech === me.id || e.other === me.id) {
+          this.rig.shake(0.45);
+          this.viewmodel.thud(1.2);
+        }
+        break;
+      }
+      case 'mechDamage': {
+        const k = m.mechs[e.mech];
+        this.mechAvatars[k.id].flash(e.crit);
+        this.fx.burst(e.pos, null, e.crit ? 12 : 4, e.crit ? CRIT_SPARK : IMPACT_SPARK, e.crit ? 8 : 5);
+        if (e.attacker === me.id) {
+          this.hud.hitmarker(e.crit, e.destroyed, true);
+          this.hud.damageNumber(k.id, e.pos, e.amount, e.crit, true);
+          this.hud.revealMech(k.id);
+          this.sfx.armorHit(e.crit);
+        }
+        // The player's own hull, felt from the seat. (When this hit destroyed it they are already out.)
+        if (k.id === me.id && (me.inMech || e.destroyed)) {
+          const from = m.actors[e.attacker].p.pos;
+          this.hud.damageFrom(from.x, from.z, e.amount / 8);
+          const dx = from.x - me.p.pos.x;
+          const dz = from.z - me.p.pos.z;
+          const side = Math.sign(dx * Math.cos(me.p.yaw) - dz * Math.sin(me.p.yaw)) || 1;
+          this.rig.jolt(side, Math.min(1, 0.12 + e.amount / 400));
+          this.viewmodel.thud(Math.min(1.5, e.amount / 160));
+          this.sfx.hullHit(e.amount);
+        }
+        break;
+      }
+      case 'mechDestroyed': {
+        const owner = m.actors[e.mech];
+        const killer = e.attacker >= 0 ? m.actors[e.attacker] : null;
+        this.mechAvatars[e.mech].destroy();
+        const core = this.at;
+        core.x = e.pos.x;
+        core.y = e.pos.y + 2.8;
+        core.z = e.pos.z;
+        this.fx.explosion(core, null, 8);
+        this.fx.fireball({ x: core.x, y: core.y + 1.6, z: core.z }, 3.4, 0.6);
+        this.fx.burst(core, null, 60, IMPACT_SPARK, 19);
+        this.fx.smoke(core, 22, 1.6, 2.8, 2.8, null, 0.2);
+        this.fx.ring(e.pos, 10, '#ffb066', 0.6);
+        this.fx.decal(e.pos, UP, 20);
+        this.sfx.mechDestroyed(e.pos);
+        this.rig.shake(this.near(e.pos, 55));
+        if (killer) this.hud.addKill(killer, owner, killLabel(e.weapon), me, ` · ${MECH.short}`);
+        if (killer === me) {
+          this.hud.showBanner('MECH DESTROYED ', owner.name);
+          this.rig.kick(6);
+          this.sfx.kill();
+        }
+        break;
+      }
+      case 'launch': {
+        const a = m.actors[e.actor];
+        const def = PROJECTILES[e.kind];
+        const mine = a === me;
+        const salvo = a.inMech;
+        // Seen from outside it leaves the tube or the pod; from the player's own
+        // shoulder it leaves the launcher in their hands.
+        let from: THREE.Vector3 | null = null;
+        if (salvo) {
+          if (!mine || this.rig.outside) from = this.mechAvatars[a.id].podWorld(this.tmp);
+        } else if (mine && !this.rig.outside) {
+          from = this.viewmodel.muzzleWorld(this.rig.camera, this.tmp);
+        } else {
+          from = this.avatars[a.id].muzzleWorld(this.tmp);
+        }
+        this.fx.rocket(e.id, e.pos, e.dir, def.speed, def.life + 0.2, from);
+        if (salvo) {
+          this.mechAvatars[a.id].podFlash();
+          this.sfx.launch(mine ? null : e.pos);
+          if (mine) this.viewmodel.thud(0.35);
+        }
+        break;
+      }
+      case 'explode': {
+        const def = PROJECTILES[e.kind];
+        this.fx.endRocket(e.id);
+        this.fx.explosion(e.pos, e.normal, def.radius);
+        this.sfx.explosion(e.pos);
+        this.rig.shake(this.near(e.pos, 24) * 0.6);
+        break;
+      }
+
       case 'matchEnd':
         this.hud.showEnd(e.winner === me.team, m, me);
         this.sfx.matchEnd(e.winner === me.team);

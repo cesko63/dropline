@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DROPLINE — gunplay prototype</title>
+    <title>DROPLINE — mech prototype</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
@@ -16,6 +16,9 @@
       <div id="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
       <div id="hitmarker"><i></i><i></i><i></i><i></i><b></b></div>
       <div id="hurt-dirs"></div>
+      <div id="mech-marker"><i></i><span id="mech-marker-text"></span></div>
+      <div id="warn">MECH INCOMING · MOVE</div>
+      <div id="prompt"></div>
 
       <div id="status">
         <div id="state">GROUND</div>
@@ -30,7 +33,7 @@
           <span class="num" id="score-ally">0</span>
           <div class="track"><div id="bar-ally"></div></div>
         </div>
-        <div class="goal">FIRST TO <span id="score-limit">30</span></div>
+        <div class="goal">FIRST TO <span id="score-limit">50</span></div>
         <div class="side enemy">
           <span class="num" id="score-enemy">0</span>
           <span class="team" id="team-enemy">ENEMY</span>
@@ -42,7 +45,7 @@
       <div id="banner"></div>
 
       <div id="vitals">
-        <div class="label"><span>HEALTH</span><span id="health-value">100</span></div>
+        <div class="label"><span id="vitals-label">HEALTH</span><span id="health-value">100</span></div>
         <div class="bar"><div id="health"></div></div>
       </div>
 
@@ -59,6 +62,22 @@
         <div class="bar"><div id="fuel"></div></div>
         <div class="label second"><span>SLIDE</span></div>
         <div class="bar thin"><div id="slide-fuel"></div></div>
+      </div>
+
+      <div id="mech" data-kind="charging">
+        <div class="label"><span id="mech-label">MECH</span><span id="mech-value">0%</span></div>
+        <div class="bar"><div id="meter"></div></div>
+      </div>
+
+      <div id="drive">
+        <div class="label">
+          <span>DASH · SPACE</span>
+          <span class="pips"><i id="dash-1" class="pip on"></i><i id="dash-2" class="pip on"></i></span>
+        </div>
+        <div class="bar"><div id="dash"></div></div>
+        <div class="label second"><span>ROCKETS · RIGHT MOUSE</span><span id="salvo-value">READY</span></div>
+        <div class="bar thin"><div id="salvo"></div></div>
+        <div class="hint">E · CLIMB OUT</div>
       </div>
 
       <div id="weapon">
@@ -83,7 +102,7 @@
 
     <div id="overlay">
       <div class="panel">
-        <p class="tag">Gunplay prototype · working title</p>
+        <p class="tag">Mech prototype · working title</p>
         <h1>DROPLINE</h1>
         <button id="start" type="button">Click to deploy</button>
         <p id="lock-error" hidden>
@@ -100,7 +119,10 @@
           <div><dt>Left mouse</dt><dd>Fire</dd></div>
           <div><dt>Right mouse</dt><dd>Aim down sights</dd></div>
           <div><dt>R</dt><dd>Reload</dd></div>
-          <div><dt>1 2 3 · Q · Wheel</dt><dd>Carbine, scattergun, marksman rifle</dd></div>
+          <div><dt>1 2 3 4 · Q · Wheel</dt><dd>Carbine, scattergun, marksman rifle, anti-armor launcher</dd></div>
+          <div><dt>F</dt><dd>Call your mech where you look, once the meter is full</dd></div>
+          <div><dt>E</dt><dd>Climb into your mech, or out of it</dd></div>
+          <div><dt>In the mech</dt><dd>Space dashes, right mouse fires the rocket salvo</dd></div>
           <div><dt>V</dt><dd>First / third person</dd></div>
           <div><dt>K</dt><dd>Redeploy at a spawn point</dd></div>
           <div><dt>M</dt><dd>Sound on / off</dd></div>

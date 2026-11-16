@@ -6,6 +6,7 @@
   "rpm": 100,
   "pellets": 1,
   "damage": 55,
+  "armor": 70,
   "headMult": 2.2,
   "falloffStart": 90,
   "falloffEnd": 160,

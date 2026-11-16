@@ -542,7 +542,7 @@ body {
   position: absolute;
   right: 24px;
   bottom: 22px;
-  width: 240px;
+  width: 300px;
   text-align: right;
   font-size: 11px;
 }
@@ -568,7 +568,7 @@ body {
 
 #weapon .bar {
   height: 4px;
-  margin: 4px 0 8px;
+  margin: 4px 0 8px 60px;
   background: rgba(255, 255, 255, 0.14);
   transform: skewX(-20deg);
   overflow: hidden;
@@ -591,6 +591,7 @@ body {
 }
 
 #slots span {
+  white-space: nowrap;
   padding-bottom: 2px;
   border-bottom: 2px solid transparent;
 }
@@ -674,8 +675,289 @@ body {
   color: var(--accent);
 }
 
+/* ---------------------------------------------------------------- mech HUD */
+
+/* The meter that earns a mech sits above the thrust panel; in the cockpit the
+   dash and rocket readouts take the thrust panel's place. */
+#mech,
+#drive {
+  position: absolute;
+  left: 50%;
+  width: 240px;
+  transform: translateX(-50%);
+  font-size: 11px;
+}
+
+#mech {
+  bottom: 112px;
+}
+
+#drive {
+  bottom: 30px;
+  display: none;
+}
+
+#hud.in-mech #drive {
+  display: block;
+}
+
+#hud.in-mech #thrust,
+#hud.in-mech #mech {
+  display: none;
+}
+
+#mech .label,
+#drive .label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+#mech .bar,
+#drive .bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.14);
+  transform: skewX(-20deg);
+  overflow: hidden;
+}
+
+#drive .bar.thin {
+  height: 4px;
+}
+
+#drive .label.second {
+  margin-top: 9px;
+}
+
+#meter,
+#dash,
+#salvo {
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+  background: var(--ink);
+}
+
+#mech[data-kind='ready'] #meter {
+  background: var(--accent);
+}
+
+#mech[data-kind='ready'] .label {
+  color: var(--accent);
+  animation: ready-pulse 1s ease-in-out infinite;
+}
+
+@keyframes ready-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+#mech[data-kind='inbound'] #meter {
+  background: var(--warn);
+}
+
+#mech[data-kind='inbound'] .label {
+  color: var(--warn);
+}
+
+#mech[data-kind='waiting'] #meter {
+  background: var(--cool);
+}
+
+#mech[data-kind='waiting'] .label {
+  color: var(--cool);
+}
+
+#dash {
+  background: var(--cool);
+}
+
+#salvo {
+  background: var(--dim);
+}
+
+#salvo.ready {
+  background: var(--accent);
+}
+
+#drive .pips {
+  display: flex;
+  gap: 9px;
+  padding-right: 3px;
+}
+
+#drive .hint {
+  margin-top: 9px;
+  text-align: center;
+  color: var(--dim);
+  font-size: 10px;
+}
+
+#hud.in-mech #vitals .bar {
+  height: 12px;
+}
+
+#state[data-kind='mech'] {
+  border-color: var(--cool);
+}
+
+/* The cockpit's crosshair is heavier than a pilot's. */
+#crosshair.mech i:nth-child(1),
+#crosshair.mech i:nth-child(2) {
+  width: 14px;
+}
+
+#crosshair.mech i:nth-child(3),
+#crosshair.mech i:nth-child(4) {
+  height: 14px;
+}
+
+#crosshair.mech b {
+  width: 4px;
+  height: 4px;
+  left: -2px;
+  top: -2px;
+}
+
+/* Rounds on a mech's hull: orange ticks, and the ring for a hit on the vent. */
+#hitmarker.armor i {
+  background: var(--accent);
+  height: 3px;
+}
+
+#hitmarker.armor.kill i {
+  background: var(--danger);
+}
+
+#labels .tag.mech {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+#labels .dmg.armor {
+  color: var(--accent);
+}
+
+#labels .dmg.armor.head {
+  color: var(--warn);
+}
+
+/* Where the player's own mech is: text over a diamond that points at it. */
+#mech-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--cool);
+  white-space: nowrap;
+  will-change: transform;
+}
+
+#mech-marker i {
+  order: 2;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--cool);
+  background: rgba(88, 214, 255, 0.25);
+  transform: rotate(45deg);
+}
+
+#mech-marker.edge i {
+  background: var(--cool);
+}
+
+#mech-marker.inbound {
+  color: var(--warn);
+}
+
+#mech-marker.inbound i {
+  border-color: var(--warn);
+  background: rgba(255, 210, 63, 0.3);
+}
+
+#prompt {
+  position: absolute;
+  left: 50%;
+  top: 69%;
+  transform: translateX(-50%);
+  padding: 5px 14px;
+  background: var(--panel);
+  border-left: 3px solid var(--cool);
+  font-size: 13px;
+  white-space: nowrap;
+  display: none;
+}
+
+#prompt.on {
+  display: block;
+}
+
+#warn {
+  position: absolute;
+  left: 50%;
+  top: 21%;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  background: rgba(120, 12, 6, 0.88);
+  border: 2px solid var(--danger);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  white-space: nowrap;
+  display: none;
+}
+
+#warn.on {
+  display: block;
+  animation: warn-pulse 0.4s ease-in-out infinite;
+}
+
+@keyframes warn-pulse {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+#banner.good b {
+  color: var(--cool);
+}
+
+#banner.warn b {
+  color: var(--warn);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #warn.on,
+  #mech[data-kind='ready'] .label {
+    animation: none;
+  }
+}
+
 /* Small windows: drop what is not needed to fight. */
 @media (max-width: 900px), (max-height: 520px) {
+  #drive .hint {
+    display: none;
+  }
+
+  #mech,
+  #drive,
+  #thrust {
+    width: 200px;
+  }
+
+  #vitals {
+    width: 180px;
+  }
+
   #score {
     grid-template-columns: 96px auto 96px;
   }

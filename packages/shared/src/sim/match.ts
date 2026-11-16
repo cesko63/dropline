@@ -1,21 +1,25 @@
-import { BOT_ROLES, botCmd, createBrain } from '../ai/bot';
+import { BOTS, BOT_ROLES, botCmd, createBrain } from '../ai/bot';
 import { buildNav } from '../ai/nav';
 import { emptyInput, type InputCmd } from '../input';
 import type { MapData, MapSpawn } from '../map/types';
-import { lenH, v3, type Vec3 } from '../math/vec3';
+import { lenH, v3 } from '../math/vec3';
 import { COMBAT, type Actor, type MatchState, type ShotTrace } from './combat';
 import { rayPilot } from './hitscan';
-import { createPlayerState, eyeHeight, playerHeight, stepPlayer } from './movement';
+import { MECH, createMech, eyeOf, mechActive, rayMech, type Mech } from './mech';
+import { stepMechs, stepSalvo } from './mechMatch';
+import { createPlayerState, playerHeight, stepPlayer } from './movement';
+import { spawnProjectile, stepProjectiles } from './projectiles';
 import { createRng, rand, randSigned } from './rng';
+import { damageActor, damageMech, killActor } from './rules';
 import { TUNING } from './tuning';
 import { WEAPONS, damageFalloff, type WeaponDef } from './weapons';
 import type { CollisionWorld } from './world';
 
 /**
- * A team skirmish: pilots, weapons, damage, respawns and score. `stepMatch`
- * advances everything by one fixed tick from the players' input commands; bots
- * produce their own commands. Like movement, it depends only on its arguments
- * and a seeded generator, so the server can run it as the authority.
+ * A team skirmish: pilots, mechs, weapons, damage, respawns and score.
+ * `stepMatch` advances everything by one fixed tick from the players' input
+ * commands; bots produce their own commands. Like movement, it depends only on
+ * its arguments and a seeded generator, so the server can run it as the authority.
  */
 
 const DEG = Math.PI / 180;
@@ -27,6 +31,8 @@ export interface MatchOptions {
   humans?: number;
   teamSize?: number;
   scoreLimit?: number;
+  /** Mech meter everyone starts with, 0..1. Default 0. */
+  startMeter?: number;
 }
 
 export const weaponOf = (a: Actor): WeaponDef => WEAPONS[a.loadout[a.weapon]];
@@ -40,6 +46,9 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
     time: 0,
     rng: createRng(opts.seed),
     actors: [],
+    mechs: [],
+    projectiles: [],
+    nextProjectile: 0,
     score: [0, 0],
     scoreLimit: opts.scoreLimit ?? COMBAT.scoreLimit,
     over: false,
@@ -47,6 +56,7 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
     events: [],
     spawns: map.spawns,
     nav: buildNav(map, world),
+    navMech: buildNav(map, world, MECH.body.radius, MECH.body.height),
     cmds: [],
   };
 
@@ -58,7 +68,8 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
       const human = team === 0 && slot < humans;
       const roles = COMBAT.teams[team].bots;
       const role = human ? '' : roles[botSlot++ % roles.length];
-      const loadout = human ? [...COMBAT.playerLoadout] : [BOT_ROLES[role].weapon];
+      // Bots carry their role's weapon and a launcher for when a mech shows up.
+      const loadout = human ? [...COMBAT.playerLoadout] : [BOT_ROLES[role].weapon, BOTS.antiArmor];
       const a: Actor = {
         id,
         name: human ? (humans > 1 ? `Pilot ${slot + 1}` : 'You') : COMBAT.botNames[botName++ % COMBAT.botNames.length],
@@ -83,12 +94,19 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
         fireBuffer: 0,
         lastShotTime: -10,
         damageScale: human ? 1 : BOT_ROLES[role].damageScale,
+        meter: opts.startMeter ?? 0,
+        inMech: false,
+        kit: null,
+        useHeld: false,
+        callHeld: false,
         kills: 0,
         deaths: 0,
+        mechKills: 0,
         lastAttacker: -1,
         brain: human ? null : createBrain(role, id),
       };
       m.actors.push(a);
+      m.mechs.push(createMech(id, team));
       spawnActor(m, a);
     }
   }
@@ -121,6 +139,18 @@ function pickSpawn(m: MatchState, a: Actor): MapSpawn {
 
 /** Put an actor (back) into play at one of its team's spawn points. */
 export function spawnActor(m: MatchState, a: Actor): void {
+  if (a.inMech && a.kit) {
+    // Redeployed out of the cockpit: the mech stays where it stands.
+    a.loadout = a.kit.loadout;
+    a.ammo = a.kit.ammo;
+    a.weapon = a.kit.weapon;
+    a.kit = null;
+    a.inMech = false;
+    if (a.brain) a.damageScale = BOT_ROLES[a.brain.role].damageScale;
+    const k = m.mechs[a.id];
+    k.state = 'idle';
+    k.stateTime = 0;
+  }
   const s = pickSpawn(m, a);
   a.p = createPlayerState(v3(s.pos[0], s.pos[1], s.pos[2]), s.yawDeg * DEG);
   a.health = COMBAT.health;
@@ -136,41 +166,13 @@ export function spawnActor(m: MatchState, a: Actor): void {
   m.events.push({ type: 'spawn', actor: a.id });
 }
 
-function killActor(m: MatchState, victim: Actor, attacker: Actor | null, weapon: string, head: boolean): void {
-  victim.alive = false;
-  victim.health = 0;
-  victim.respawnIn = COMBAT.respawnTime;
-  victim.deaths++;
-  victim.reload = 0;
-  victim.ads = 0;
-  m.events.push({ type: 'kill', victim: victim.id, attacker: attacker ? attacker.id : -1, weapon, head });
-  if (!attacker) return;
-  attacker.kills++;
-  m.score[attacker.team]++;
-  if (m.score[attacker.team] >= m.scoreLimit && !m.over) {
-    m.over = true;
-    m.winner = attacker.team;
-    m.events.push({ type: 'matchEnd', winner: attacker.team });
-  }
-}
-
-function damageActor(m: MatchState, victim: Actor, attacker: Actor, amount: number, head: boolean, pos: Vec3, weapon: string): void {
-  if (!victim.alive || victim.protect > 0 || amount <= 0) return;
-  victim.health -= amount;
-  victim.sinceDamage = 0;
-  victim.lastAttacker = attacker.id;
-  if (victim.brain) victim.brain.alertFrom = attacker.id;
-  const killed = victim.health <= 0;
-  m.events.push({ type: 'damage', victim: victim.id, attacker: attacker.id, amount, head, killed, pos });
-  if (killed) killActor(m, victim, attacker, weapon, head);
-}
-
 /** Total spread right now, degrees: stance, bloom from firing, movement and being airborne. */
 export function spreadDeg(a: Actor): number {
   const S = weaponOf(a).spread;
   const base = S.hipDeg + (S.adsDeg - S.hipDeg) * a.ads;
   const steady = 1 - 0.5 * a.ads;
-  const moving = Math.min(1, lenH(a.p.vel) / TUNING.ground.sprintSpeed) * S.moveDeg;
+  const topSpeed = a.inMech ? MECH.move.sprintSpeed : TUNING.ground.sprintSpeed;
+  const moving = Math.min(1, lenH(a.p.vel) / topSpeed) * S.moveDeg;
   const air = a.p.grounded || a.p.wallrun.active ? 0 : S.airDeg;
   // Aiming steadies everything: bloom and the movement penalties shrink with it.
   return base + a.bloom * (1 - 0.6 * a.ads) + (moving + air) * steady;
@@ -197,7 +199,7 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
   up.y = right.z * fwd.x - right.x * fwd.z;
   up.z = right.x * fwd.y - right.y * fwd.x;
   origin.x = p.pos.x;
-  origin.y = p.pos.y + eyeHeight(p);
+  origin.y = p.pos.y + eyeOf(a);
   origin.z = p.pos.z;
 
   const cone = Math.tan(spreadDeg(a) * DEG);
@@ -218,21 +220,41 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
     dir.y /= l;
     dir.z /= l;
 
+    // A launcher sends a rocket on its way instead of a ray.
+    if (def.projectile) {
+      spawnProjectile(m, a, def.projectile, origin, dir);
+      continue;
+    }
+
     const wall = world.castRay(origin, dir, def.range);
     let t = wall ? wall.dist : def.range;
     let victim: Actor | null = null;
+    let struck: Mech | null = null;
     let head = false;
     for (const o of m.actors) {
-      if (o === a || !o.alive || o.team === a.team) continue;
+      if (o === a || !o.alive || o.inMech || o.team === a.team) continue;
       const hit = rayPilot(origin, dir, o.p.pos, playerHeight(o.p), t);
       if (!hit) continue;
       t = hit.t;
       head = hit.head;
       victim = o;
     }
+    for (const k of m.mechs) {
+      if (k.team === a.team || !mechActive(k)) continue;
+      const hit = rayMech(origin, dir, k, t);
+      if (!hit) continue;
+      t = hit.t;
+      head = hit.head;
+      struck = k;
+      victim = null;
+    }
     const end = v3(origin.x + dir.x * t, origin.y + dir.y * t, origin.z + dir.z * t);
-    traces.push({ end, normal: victim || !wall ? null : wall.normal, victim: victim ? victim.id : -1, head: victim !== null && head });
-    if (victim) {
+    const hitSomeone = victim !== null || struck !== null;
+    traces.push({ end, normal: hitSomeone || !wall ? null : wall.normal, victim: victim ? victim.id : -1, mech: struck ? struck.id : -1, head: hitSomeone && head });
+    if (struck) {
+      const amount = def.armor * damageFalloff(def, t) * (head ? MECH.vent.mult : 1) * a.damageScale;
+      damageMech(m, struck, a, amount, head, end, def.id);
+    } else if (victim) {
       const amount = def.damage * damageFalloff(def, t) * (head ? def.headMult : 1) * a.damageScale;
       damageActor(m, victim, a, amount, head, end, def.id);
     }
@@ -327,20 +349,34 @@ export function stepMatch(m: MatchState, world: CollisionWorld, cmds: readonly (
     let cmd = a.brain ? botCmd(m, a, world, dt) : (cmds[a.id] ?? IDLE);
     // Aiming down sights rules out sprinting.
     if (cmd.sprint && a.ads > 0.5) cmd = { ...cmd, sprint: false };
-    stepPlayer(a.p, cmd, world, dt);
     m.cmds[a.id] = cmd;
+    // A pilot in a mech is moved by the mech, below.
+    if (a.inMech) continue;
+    stepPlayer(a.p, cmd, world, dt);
     if (a.p.pos.y < COMBAT.killY) killActor(m, a, null, '', false);
   }
+  stepMechs(m, world, dt);
+  if (m.over) return;
 
   for (const a of m.actors) {
     const cmd = m.cmds[a.id];
     if (!cmd || !a.alive) continue;
-    stepWeapon(m, a, cmd, world, dt);
+    if (a.inMech) {
+      // In the cockpit the aim button launches rockets, and nothing fires until the mech is up.
+      const k = m.mechs[a.id];
+      if (k.state === 'piloted') {
+        stepWeapon(m, a, { ...cmd, ads: false, weapon: -1 }, world, dt);
+        if (a.inMech) stepSalvo(m, a, k, cmd.ads, world, dt);
+      }
+    } else {
+      stepWeapon(m, a, cmd, world, dt);
+    }
     a.protect = Math.max(0, a.protect - dt);
     a.sinceDamage += dt;
     if (a.sinceDamage >= COMBAT.regenDelay && a.health < COMBAT.health) {
       a.health = Math.min(COMBAT.health, a.health + COMBAT.regenRate * dt);
     }
-    if (m.over) break;
+    if (m.over) return;
   }
+  stepProjectiles(m, world, dt);
 }

@@ -18,7 +18,16 @@ export interface InputCmd {
   reload: boolean;
   /** Loadout slot to switch to, or -1 to keep the current weapon. */
   weapon: number;
+  /** Get into or out of the mech. Acts once per press. */
+  use: boolean;
+  /** Call the mech down. Acts once per press. */
+  call: boolean;
 }
+
+/*
+ * In a mech the same command drives the machine: `jump` is the dash and `ads`
+ * launches the rocket salvo; `crouch` and `weapon` do nothing.
+ */
 
 export const emptyInput = (): InputCmd => ({
   moveX: 0,
@@ -32,4 +41,6 @@ export const emptyInput = (): InputCmd => ({
   ads: false,
   reload: false,
   weapon: -1,
+  use: false,
+  call: false,
 });

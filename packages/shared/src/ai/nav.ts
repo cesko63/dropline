@@ -35,10 +35,14 @@ export interface NavGrid {
 
 const CELL = 1;
 const DOWN = v3(0, -1, 0);
-const cache = new WeakMap<CollisionWorld, NavGrid>();
+const cache = new WeakMap<CollisionWorld, Map<number, NavGrid>>();
 
-export function buildNav(map: MapData, world: CollisionWorld): NavGrid {
-  const cached = cache.get(world);
+/** The grid for a body of the given size: a pilot by default, a mech when its size is passed. */
+export function buildNav(map: MapData, world: CollisionWorld, radius = TUNING.player.radius, height = TUNING.player.standHeight): NavGrid {
+  let grids = cache.get(world);
+  if (!grids) cache.set(world, (grids = new Map()));
+  const key = radius * 1000 + height;
+  const cached = grids.get(key);
   if (cached) return cached;
 
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -62,7 +66,7 @@ export function buildNav(map: MapData, world: CollisionWorld): NavGrid {
       feet.z = probe.z = minZ + (j + 0.5) * CELL;
       feet.y = 0.05;
       probe.y = 0.6;
-      if (world.overlapsCapsule(feet, TUNING.player.standHeight)) continue;
+      if (world.overlapsCapsule(feet, height, radius)) continue;
       if (!world.castRay(probe, DOWN, 1.2)) continue;
       walk[j * w + i] = 1;
     }
@@ -104,7 +108,7 @@ export function buildNav(map: MapData, world: CollisionWorld): NavGrid {
     search: 0,
     heap: new Int32Array(n * 2),
   };
-  cache.set(world, nav);
+  grids.set(key, nav);
   return nav;
 }
 

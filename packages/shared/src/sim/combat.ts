@@ -4,11 +4,20 @@ import type { NavGrid } from '../ai/nav';
 import type { InputCmd } from '../input';
 import type { MapSpawn } from '../map/types';
 import type { Vec3 } from '../math/vec3';
+import type { Mech } from './mech';
 import type { PlayerState } from './movement';
+import type { Projectile } from './projectiles';
 import type { Rng } from './rng';
 
-/** Health, respawn and match rules. Edit /data/combat.json, not this file. */
+/** Health, respawn, match and mech rules. Edit /data/combat.json, not this file. */
 export const COMBAT = combat;
+
+/** A pilot's weapons, set aside while the pilot sits in a mech. */
+export interface Kit {
+  loadout: string[];
+  ammo: number[];
+  weapon: number;
+}
 
 /** A pilot in a match: a human or a bot. Both are driven by an `InputCmd` per tick. */
 export interface Actor {
@@ -52,8 +61,22 @@ export interface Actor {
   /** Damage dealt is multiplied by this (bots hit softer than their weapon's numbers). */
   damageScale: number;
 
+  /** Charge toward calling a mech, 0..1. Fills over time and from damage dealt. */
+  meter: number;
+  /**
+   * True while sitting in the mech (`MatchState.mechs[id]`). The pilot cannot be
+   * hurt, `p` follows the mech, and `loadout` and `ammo` are the mech's.
+   */
+  inMech: boolean;
+  /** The pilot's own weapons while `inMech`, else null. */
+  kit: Kit | null;
+  useHeld: boolean;
+  callHeld: boolean;
+
   kills: number;
   deaths: number;
+  /** Enemy mechs destroyed. */
+  mechKills: number;
   /** Actor id that last dealt damage, or -1. */
   lastAttacker: number;
 
@@ -68,6 +91,9 @@ export interface ShotTrace {
   normal: Vec3 | null;
   /** Actor id that was hit, or -1. */
   victim: number;
+  /** Mech id that was hit, or -1. */
+  mech: number;
+  /** A headshot, or on a mech a hit on the rear vent. */
   head: boolean;
 }
 
@@ -75,6 +101,7 @@ export interface ShotTrace {
 export type MatchEvent =
   | { type: 'shot'; actor: number; weapon: string; origin: Vec3; traces: ShotTrace[] }
   | { type: 'damage'; victim: number; attacker: number; amount: number; head: boolean; killed: boolean; pos: Vec3 }
+  /** `weapon` is a weapon id, a projectile kind, 'crush' (a mech landing) or 'ram' (a mech's dash). */
   | { type: 'kill'; victim: number; attacker: number; weapon: string; head: boolean }
   | { type: 'spawn'; actor: number }
   | { type: 'reload'; actor: number }
@@ -85,6 +112,28 @@ export type MatchEvent =
   | { type: 'notice'; actor: number; target: number }
   /** A marksman bot started lining up a shot on `target`. */
   | { type: 'charge'; actor: number; target: number; duration: number }
+  /** The mech meter filled: the pilot may call a mech. */
+  | { type: 'meterReady'; actor: number }
+  /** A mech is on its way and lands at `pos` after `duration` seconds. */
+  | { type: 'mechCall'; actor: number; pos: Vec3; duration: number }
+  /** A call that did nothing: the meter is not full, or no place to land was found. */
+  | { type: 'callDenied'; actor: number; reason: 'meter' | 'zone' }
+  | { type: 'mechLand'; mech: number; pos: Vec3 }
+  /** The pilot climbed in; the mech starts up for `duration` seconds. */
+  | { type: 'embark'; actor: number; duration: number }
+  | { type: 'mechOnline'; actor: number }
+  /** The pilot left the mech: climbed out, or was thrown clear when it blew up (`eject`). */
+  | { type: 'disembark'; actor: number; eject: boolean }
+  /** A footfall. `heavy` when the mech came down from a height. */
+  | { type: 'mechStep'; mech: number; heavy: boolean }
+  | { type: 'mechDash'; mech: number }
+  /** A dash that ran into a pilot (`victim`) or a mech (`other`); the unused one is -1. */
+  | { type: 'ram'; mech: number; victim: number; other: number }
+  | { type: 'mechDamage'; mech: number; attacker: number; amount: number; crit: boolean; destroyed: boolean; pos: Vec3 }
+  | { type: 'mechDestroyed'; mech: number; attacker: number; weapon: string; pos: Vec3 }
+  /** A rocket left its launcher. */
+  | { type: 'launch'; id: number; actor: number; kind: string; pos: Vec3; dir: Vec3 }
+  | { type: 'explode'; id: number; actor: number; kind: string; pos: Vec3; normal: Vec3 | null }
   | { type: 'matchEnd'; winner: number };
 
 export interface MatchState {
@@ -93,7 +142,12 @@ export interface MatchState {
   time: number;
   rng: Rng;
   actors: Actor[];
-  /** Kills per team. */
+  /** One slot per actor, same index: the mech that pilot has called, if any. */
+  mechs: Mech[];
+  /** Rockets in flight. */
+  projectiles: Projectile[];
+  nextProjectile: number;
+  /** Points per team: one per pilot killed, more for a mech destroyed. */
   score: number[];
   scoreLimit: number;
   over: boolean;
@@ -102,6 +156,8 @@ export interface MatchState {
   events: MatchEvent[];
   spawns: MapSpawn[];
   nav: NavGrid;
+  /** Where a mech fits: the same floor for a wider and taller body. */
+  navMech: NavGrid;
   /** The command each actor used in the latest tick (scratch). */
   cmds: (InputCmd | null)[];
 }

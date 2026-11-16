@@ -10,9 +10,9 @@ import type { CastHit, CollisionWorld } from './world';
  */
 
 /** Gap kept between the capsule and any surface so casts never start touching. */
-const SKIN = 0.012;
+export const SKIN = 0.012;
 const MAX_BUMPS = 4;
-const GROUND_PROBE = 0.06;
+export const GROUND_PROBE = 0.06;
 const UP = v3(0, 1, 0);
 const DOWN = v3(0, -1, 0);
 
@@ -26,6 +26,14 @@ export const MoveEvent = {
   SlideStart: 32,
   MantleStart: 64,
 } as const;
+
+/** What collision needs from anything that moves through the map: a pilot or a mech. */
+export interface Body {
+  /** Feet position. */
+  pos: Vec3;
+  vel: Vec3;
+  groundNormal: Vec3;
+}
 
 export interface PlayerState {
   /** Feet position. */
@@ -262,13 +270,16 @@ function surfaceNormal(w: CollisionWorld, hit: CastHit): Vec3 {
   return face && face.dist > 1e-4 ? face.normal : n;
 }
 
-/** Walkable ground within `maxDist` below the player, with its true surface normal. */
-function findGround(s: PlayerState, w: CollisionWorld, maxDist: number): CastHit | null {
-  const hit = w.castCapsule(s.pos, playerHeight(s), DOWN, maxDist);
+/** Walkable ground within `maxDist` below a capsule, with its true surface normal. */
+export function findGroundAt(pos: Vec3, radius: number, height: number, w: CollisionWorld, maxDist: number): CastHit | null {
+  const hit = w.castCapsule(pos, height, DOWN, maxDist, radius);
   if (!hit) return null;
   hit.normal = surfaceNormal(w, hit);
   return hit.normal.y >= T.player.minGroundNormalY ? hit : null;
 }
+
+const findGround = (s: PlayerState, w: CollisionWorld, maxDist: number): CastHit | null =>
+  findGroundAt(s.pos, T.player.radius, playerHeight(s), w, maxDist);
 
 function categorizeGround(s: PlayerState, w: CollisionWorld): void {
   const hit = findGround(s, w, GROUND_PROBE);
@@ -684,14 +695,19 @@ function clipVelocity(v: Vec3, n: Vec3, out: Vec3): void {
   out.z = v.z - n.z * backoff;
 }
 
+const slideMove = (s: PlayerState, w: CollisionWorld, dt: number, onGround: boolean): boolean =>
+  slideBody(s, T.player.radius, playerHeight(s), w, dt, onGround);
+
+const moveWithSteps = (s: PlayerState, w: CollisionWorld, dt: number, wasGrounded: boolean): void =>
+  stepBody(s, T.player.radius, playerHeight(s), T.player.stepHeight, w, dt, wasGrounded);
+
 /**
- * Move by velocity * dt, sliding along whatever is hit (after Quake 3).
+ * Move a capsule by velocity * dt, sliding along whatever is hit (after Quake 3).
  * Returns true if a wall-like surface got in the way.
  */
-function slideMove(s: PlayerState, w: CollisionWorld, dt: number, onGround: boolean): boolean {
+export function slideBody(s: Body, radius: number, h: number, w: CollisionWorld, dt: number, onGround: boolean): boolean {
   const pos = s.pos;
   const vel = s.vel;
-  const h = playerHeight(s);
   const minY = T.player.minGroundNormalY;
   const primal = { ...vel };
   const planes: Vec3[] = [];
@@ -708,7 +724,7 @@ function slideMove(s: PlayerState, w: CollisionWorld, dt: number, onGround: bool
     if (speed < 1e-5) break;
     const dir = v3(vel.x / speed, vel.y / speed, vel.z / speed);
     const dist = speed * timeLeft;
-    const hit = w.castCapsule(pos, h, dir, dist + SKIN * 4);
+    const hit = w.castCapsule(pos, h, dir, dist + SKIN * 4, radius);
     if (!hit) {
       addScaled(pos, dir, dist);
       break;
@@ -776,28 +792,27 @@ function slideMove(s: PlayerState, w: CollisionWorld, dt: number, onGround: bool
   return blocked;
 }
 
-/** slideMove plus stepping up onto low ledges such as stairs. */
-function moveWithSteps(s: PlayerState, w: CollisionWorld, dt: number, wasGrounded: boolean): void {
+/** slideBody plus stepping up onto low ledges such as stairs. */
+export function stepBody(s: Body, radius: number, h: number, stepHeight: number, w: CollisionWorld, dt: number, wasGrounded: boolean): void {
   const startPos = { ...s.pos };
   const startVel = { ...s.vel };
-  const blocked = slideMove(s, w, dt, wasGrounded);
+  const blocked = slideBody(s, radius, h, w, dt, wasGrounded);
   if (!blocked) return;
   if (!wasGrounded && startVel.y > 0.01) return;
 
-  const h = playerHeight(s);
   const flatPos = { ...s.pos };
   const flatVel = { ...s.vel };
 
   copyV(s.pos, startPos);
   copyV(s.vel, startVel);
   s.vel.y = 0;
-  const up = w.castCapsule(s.pos, h, UP, T.player.stepHeight);
-  const upDist = up ? Math.max(0, up.dist - SKIN) : T.player.stepHeight;
+  const up = w.castCapsule(s.pos, h, UP, stepHeight, radius);
+  const upDist = up ? Math.max(0, up.dist - SKIN) : stepHeight;
   let stepped = false;
   if (upDist > 0.02) {
     s.pos.y += upDist;
-    slideMove(s, w, dt, false);
-    const down = findGround(s, w, upDist + SKIN);
+    slideBody(s, radius, h, w, dt, false);
+    const down = findGroundAt(s.pos, radius, h, w, upDist + SKIN);
     if (down) {
       s.pos.y -= Math.max(0, down.dist - SKIN);
       const flat = (flatPos.x - startPos.x) ** 2 + (flatPos.z - startPos.z) ** 2;

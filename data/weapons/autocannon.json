@@ -1,0 +1,23 @@
+{
+  "id": "autocannon",
+  "name": "HX-40 Autocannon",
+  "short": "AUTOCANNON",
+  "fireMode": "auto",
+  "rpm": 330,
+  "pellets": 1,
+  "damage": 30,
+  "armor": 32,
+  "headMult": 1.25,
+  "falloffStart": 50,
+  "falloffEnd": 110,
+  "falloffMin": 0.6,
+  "range": 260,
+  "magSize": 48,
+  "reloadTime": 2.8,
+  "equipTime": 0.5,
+  "spread": { "hipDeg": 0.7, "adsDeg": 0.7, "bloomDeg": 0.12, "bloomMaxDeg": 1.5, "bloomRecover": 4, "moveDeg": 0.5, "airDeg": 0.8 },
+  "recoil": { "pitchDeg": 0.22, "yawDeg": 0.18, "recover": 6 },
+  "adsZoom": 1,
+  "scope": false,
+  "adsTime": 0.2
+}

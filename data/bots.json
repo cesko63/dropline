@@ -8,6 +8,11 @@
   "loseSightTime": 0.6,
   "searchTime": 6,
   "chargeLock": 0.75,
+  "antiArmor": "pike",
+  "antiArmorRange": 70,
+  "mechMinRange": 16,
+  "mechMaxRange": 38,
+  "mechAimHeight": 0.55,
   "roles": {
     "rifle": {
       "weapon": "carbine",
@@ -79,6 +84,30 @@
       ],
       "chargeTime": 0.9,
       "damageScale": 1,
+      "rush": false
+    },
+    "mech": {
+      "weapon": "autocannon",
+      "reaction": 0.45,
+      "turnRateDeg": 110,
+      "aimErrStartDeg": 6,
+      "aimErrMinDeg": 1.6,
+      "aimSettle": 1,
+      "speedErr": 0.35,
+      "aimHeight": 0.6,
+      "minRange": 10,
+      "maxRange": 34,
+      "fireRange": 80,
+      "burst": [
+        0.5,
+        1.1
+      ],
+      "burstPause": [
+        0.4,
+        0.8
+      ],
+      "chargeTime": 0,
+      "damageScale": 0.55,
       "rush": false
     }
   }

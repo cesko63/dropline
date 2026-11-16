@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMBAT, TUNING, WEAPONS, lenH, spreadDeg, weaponOf, type Actor, type MatchState, type Vec3 } from '@dropline/shared';
+import { COMBAT, MECH, TUNING, WEAPONS, lenH, spreadDeg, weaponOf, type Actor, type MatchState, type Vec3 } from '@dropline/shared';
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -7,6 +7,10 @@ const DEG = Math.PI / 180;
 const HURT_WEDGES = 4;
 const DAMAGE_NUMBERS = 8;
 const FEED_LINES = 5;
+/** Damage numbers on a mech are kept apart from those on its pilot by this offset. */
+const MECH_KEY = 100;
+/** Seconds an enemy mech's hull stays shown after the player hurt it. */
+const REVEAL_TIME = 4;
 
 interface HurtWedge {
   el: HTMLElement;
@@ -75,6 +79,25 @@ export class Hud {
   private readonly deathWait = new Text(el('death-wait'));
   private readonly end = el('end');
   private readonly labels = el('labels');
+  private readonly root = el('hud');
+  private readonly vitalsLabel = new Text(el('vitals-label'));
+  private readonly meterBox = el('mech');
+  private readonly meter = el('meter');
+  private readonly meterLabel = new Text(el('mech-label'));
+  private readonly meterValue = new Text(el('mech-value'));
+  private readonly dash = el('dash');
+  private readonly dashPips = [el('dash-1'), el('dash-2')];
+  private readonly salvo = el('salvo');
+  private readonly salvoValue = new Text(el('salvo-value'));
+  private readonly marker = el('mech-marker');
+  private readonly markerText = new Text(el('mech-marker-text'));
+  private readonly prompt = el('prompt');
+  private readonly promptText = new Text(el('prompt'));
+  private readonly warn = el('warn');
+  private readonly mechTags: HTMLElement[] = [];
+  private readonly mechTagText: Text[] = [];
+  private reveal: number[] = [];
+  private lastMeterKind = '';
   private readonly wedges: HurtWedge[] = [];
   private readonly numbers: DamageNumber[] = [];
   private readonly tags: HTMLElement[] = [];
@@ -120,6 +143,18 @@ export class Hud {
       this.tags.push(tag);
       this.tagText.push(new Text(tag));
     }
+    for (const tag of this.mechTags) tag.remove();
+    this.mechTags.length = this.mechTagText.length = 0;
+    for (const k of m.mechs) {
+      const tag = document.createElement('span');
+      tag.className = k.team === me.team ? 'tag mech' : 'tag mech enemy';
+      tag.style.opacity = '0';
+      this.labels.append(tag);
+      this.mechTags.push(tag);
+      this.mechTagText.push(new Text(tag));
+    }
+    this.reveal = m.mechs.map(() => 0);
+    this.warn.classList.remove('on');
     this.hurt = 0;
     this.death.classList.remove('on');
     this.end.classList.remove('on');
@@ -134,7 +169,12 @@ export class Hud {
 
     let label = 'GROUND';
     let kind = 'ground';
+    const mech = m.mechs[me.id];
+    const inMech = me.inMech;
     if (!me.alive) [label, kind] = ['DOWN', 'special'];
+    else if (inMech && mech.state === 'boot') [label, kind] = ['START-UP', 'special'];
+    else if (inMech && mech.dashTime > 0) [label, kind] = ['DASH', 'special'];
+    else if (inMech) [label, kind] = [MECH.short, 'air'];
     else if (s.mantle.active) [label, kind] = ['MANTLE', 'special'];
     else if (s.wallrun.active) [label, kind] = ['WALLRUN', 'special'];
     else if (s.sliding) [label, kind] = ['SLIDE', 'special'];
@@ -153,13 +193,17 @@ export class Hud {
     this.airJump.classList.toggle('on', s.airJumpsUsed < TUNING.jump.airJumps);
     this.viewMode.set(thirdPerson ? 'THIRD PERSON · V' : 'FIRST PERSON · V');
 
-    // Health and the red edge of the screen: steady when hurt badly, a pulse on each hit.
-    const hp = Math.max(0, me.health) / COMBAT.health;
+    // Health (the mech's hull while in one) and the red edge of the screen: steady
+    // when hurt badly, a pulse on each hit.
+    this.root.classList.toggle('in-mech', inMech);
+    const points = inMech ? mech.health : me.health;
+    const hp = Math.max(0, points) / (inMech ? MECH.health : COMBAT.health);
     this.health.style.transform = `scaleX(${hp.toFixed(3)})`;
-    this.healthValue.set(String(Math.ceil(Math.max(0, me.health))));
-    this.vitals.classList.toggle('low', hp < 0.35);
+    this.healthValue.set(String(Math.ceil(Math.max(0, points))));
+    this.vitalsLabel.set(inMech ? 'HULL' : 'HEALTH');
+    this.vitals.classList.toggle('low', hp < (inMech ? 0.25 : 0.35));
     this.hurt = Math.max(0, this.hurt - dt * 2.2);
-    const low = me.alive ? Math.max(0, 0.55 - hp) * 1.1 : 0.5;
+    const low = me.alive ? Math.max(0, (inMech ? 0.3 : 0.55) - hp) * (inMech ? 1.6 : 1.1) : 0.5;
     this.vignette.style.opacity = Math.min(0.9, low + this.hurt).toFixed(3);
 
     // Weapon panel.
@@ -183,7 +227,10 @@ export class Hud {
       );
     }
 
+    this.updateMech(m, me);
+
     // The crosshair opens with the real spread, and gives way to the sights when aimed.
+    this.crosshair.classList.toggle('mech', inMech);
     const gap = Math.round(4 + (Math.tan(spreadDeg(me) * DEG) / Math.tan((camera.fov / 2) * DEG)) * (window.innerHeight / 2));
     if (gap !== this.lastGap) {
       this.lastGap = gap;
@@ -232,6 +279,72 @@ export class Hud {
     }
   }
 
+  /** The mech meter, the cockpit's dash and rocket readouts, and the prompts around them. */
+  private updateMech(m: MatchState, me: Actor): void {
+    const k = m.mechs[me.id];
+    const R = COMBAT.mech;
+    const dist = Math.hypot(k.pos.x - me.p.pos.x, k.pos.z - me.p.pos.z);
+
+    let kind = 'charging';
+    let fill = me.meter;
+    if (k.state === 'dropping') {
+      kind = 'inbound';
+      fill = k.stateTime / R.drop.time;
+      this.meterLabel.set('MECH INBOUND');
+      this.meterValue.set(Math.max(0, R.drop.time - k.stateTime).toFixed(1));
+    } else if (k.state === 'idle') {
+      kind = 'waiting';
+      fill = k.health / MECH.health;
+      this.meterLabel.set(`${MECH.short} STANDING BY`);
+      this.meterValue.set(`${Math.round(dist)} M`);
+    } else if (me.meter >= 1) {
+      kind = 'ready';
+      this.meterLabel.set('MECH READY');
+      this.meterValue.set('PRESS F');
+    } else {
+      this.meterLabel.set('MECH');
+      this.meterValue.set(`${Math.floor(me.meter * 100)}%`);
+    }
+    this.meter.style.transform = `scaleX(${Math.max(0, Math.min(1, fill)).toFixed(3)})`;
+    if (kind !== this.lastMeterKind) this.meterBox.dataset.kind = this.lastMeterKind = kind;
+
+    // Cockpit: dash charges and the rocket salvo.
+    if (me.inMech) {
+      const D = MECH.dash;
+      this.dash.style.transform = `scaleX(${(k.dashCharges / D.charges).toFixed(3)})`;
+      this.dashPips.forEach((pip, i) => pip.classList.toggle('on', k.dashCharges >= i + 1));
+      const left = k.salvoCooldown;
+      this.salvo.style.transform = `scaleX(${(1 - left / MECH.salvo.cooldown).toFixed(3)})`;
+      this.salvo.classList.toggle('ready', left <= 0);
+      this.salvoValue.set(left <= 0 ? 'READY' : left.toFixed(1));
+    }
+
+    // "E" when the pilot stands where they can climb in.
+    const dy = me.p.pos.y - k.pos.y;
+    const canBoard = k.state === 'idle' && me.alive && !me.inMech && dist <= R.embark.range && dy > -2 && dy < MECH.body.height + 1.5;
+    this.promptText.set(canBoard ? 'E · EMBARK' : '');
+    this.prompt.classList.toggle('on', canBoard && !m.over);
+
+    // Standing where an enemy mech is about to land.
+    let danger = false;
+    if (me.alive && !me.inMech) {
+      for (const o of m.mechs) {
+        if (o.team === me.team || o.state !== 'dropping') continue;
+        if (Math.hypot(o.pos.x - me.p.pos.x, o.pos.z - me.p.pos.z) < R.drop.crushRadius + 1) danger = true;
+      }
+    }
+    this.inDropZone = danger;
+    this.warn.classList.toggle('on', danger && !m.over);
+  }
+
+  /** True while the player stands in an enemy mech's landing zone. */
+  inDropZone = false;
+
+  /** The player hurt this mech: show its hull for a while. */
+  revealMech(id: number): void {
+    this.reveal[id] = REVEAL_TIME;
+  }
+
   /** Place the labels that are pinned to the world: names over pilots and damage numbers. */
   private project(dt: number, m: MatchState, me: Actor, camera: THREE.PerspectiveCamera): void {
     const w = window.innerWidth;
@@ -250,7 +363,7 @@ export class Hud {
       const tag = this.tags[a.id];
       if (!tag) continue;
       const ally = a.team === me.team;
-      if (a === me || !a.alive || (!ally && !this.debug)) {
+      if (a === me || !a.alive || a.inMech || (!ally && !this.debug)) {
         tag.style.opacity = '0';
         continue;
       }
@@ -258,6 +371,52 @@ export class Hud {
       this.tagText[a.id].set(this.debug && b ? `${a.name} · ${b.role} · ${b.state}${b.token ? ' · T' : ''}` : a.name);
       const d = Math.hypot(a.p.pos.x - me.p.pos.x, a.p.pos.z - me.p.pos.z);
       place(tag, a.p.pos.x, a.p.pos.y + 2.5, a.p.pos.z, this.debug ? 1 : Math.max(0, Math.min(0.9, (70 - d) / 20)));
+    }
+
+    // Mechs: allies always, enemies while the player is fighting them.
+    for (const k of m.mechs) {
+      const tag = this.mechTags[k.id];
+      if (!tag) continue;
+      this.reveal[k.id] = Math.max(0, this.reveal[k.id] - dt);
+      const ally = k.team === me.team;
+      const standing = k.state === 'idle' || k.state === 'boot' || k.state === 'piloted';
+      if (!standing || k.id === me.id || (!ally && !this.debug && this.reveal[k.id] <= 0)) {
+        tag.style.opacity = '0';
+        continue;
+      }
+      const hull = Math.max(1, Math.round((k.health / MECH.health) * 100));
+      const owner = m.actors[k.id];
+      this.mechTagText[k.id].set(`${owner.name} · ${MECH.short} ${hull}%`);
+      const d = Math.hypot(k.pos.x - me.p.pos.x, k.pos.z - me.p.pos.z);
+      const fade = ally ? Math.max(0, Math.min(0.9, (90 - d) / 20)) : Math.min(1, this.reveal[k.id] * 2);
+      // Staggered in height by slot, so the tags of mechs standing together do not sit on each other.
+      place(tag, k.pos.x, k.pos.y + MECH.body.height + (k.state === 'idle' ? 0.4 : 1.4) + (k.id % 4) * 0.55, k.pos.z, this.debug ? 1 : fade);
+    }
+
+    // The player's own mech, while they are not in it: a marker that stays on
+    // screen, sliding to the edge when the mech is out of view.
+    const mine = m.mechs[me.id];
+    if ((mine.state === 'dropping' || mine.state === 'idle') && !m.over) {
+      v.set(mine.pos.x, mine.pos.y + MECH.body.height + 1.2, mine.pos.z).project(camera);
+      const behind = v.z > 1;
+      let sx = behind ? -v.x : v.x;
+      let sy = behind ? -v.y : v.y;
+      if (behind) {
+        const l = Math.hypot(sx, sy) || 1;
+        sx = (sx / l) * 2;
+        sy = (sy / l) * 2;
+      }
+      const over = Math.max(Math.abs(sx) / 0.9, Math.abs(sy) / 0.78, 1);
+      sx /= over;
+      sy /= over;
+      this.marker.classList.toggle('edge', over > 1);
+      this.marker.classList.toggle('inbound', mine.state === 'dropping');
+      const dist = Math.hypot(mine.pos.x - me.p.pos.x, mine.pos.z - me.p.pos.z);
+      this.markerText.set(mine.state === 'dropping' ? Math.max(0, COMBAT.mech.drop.time - mine.stateTime).toFixed(1) : `${Math.round(dist)} M`);
+      this.marker.style.opacity = '1';
+      this.marker.style.transform = `translate(${((sx * 0.5 + 0.5) * w).toFixed(1)}px, ${((0.5 - sy * 0.5) * h).toFixed(1)}px) translate(-50%, -100%)`;
+    } else {
+      this.marker.style.opacity = '0';
     }
 
     for (const n of this.numbers) {
@@ -272,9 +431,9 @@ export class Hud {
     }
   }
 
-  /** The player's round landed. */
-  hitmarker(head: boolean, kill: boolean): void {
-    this.hitmark.className = `${head ? 'head' : ''} ${kill ? 'kill' : ''}`;
+  /** The player's round landed: on a pilot, or (`armor`) on a mech's hull. */
+  hitmarker(head: boolean, kill: boolean, armor = false): void {
+    this.hitmark.className = `${head ? 'head' : ''} ${kill ? 'kill' : ''} ${armor ? 'armor' : ''}`;
     const size = kill ? 1.5 : head ? 1.25 : 1;
     this.hitmark.animate(
       [
@@ -286,19 +445,23 @@ export class Hud {
     );
   }
 
-  /** Damage dealt, floating up from where it landed. Pellets of one blast add up. */
-  damageNumber(victim: number, pos: Vec3, amount: number, head: boolean): void {
-    let n = this.numbers.find((x) => x.life > 0.45 && x.victim === victim);
+  /**
+   * Damage dealt, floating up from where it landed. Pellets of one blast add up.
+   * `armor` marks damage to a mech's hull (`victim` is then the mech's id).
+   */
+  damageNumber(victim: number, pos: Vec3, amount: number, head: boolean, armor = false): void {
+    const key = armor ? victim + MECH_KEY : victim;
+    let n = this.numbers.find((x) => x.life > 0.45 && x.victim === key);
     if (!n) {
       n = this.numbers[this.nextNumber++ % this.numbers.length];
       n.amount = 0;
-      n.victim = victim;
+      n.victim = key;
       n.pos.set(pos.x, pos.y + 0.25, pos.z);
-      n.el.className = 'dmg';
+      n.el.className = armor ? 'dmg armor' : 'dmg';
     }
     n.amount += amount;
     n.life = 0.7;
-    if (head) n.el.className = 'dmg head';
+    if (head) n.el.className = armor ? 'dmg armor head' : 'dmg head';
     n.el.textContent = String(Math.round(n.amount));
   }
 
@@ -312,19 +475,20 @@ export class Hud {
     this.hurt = Math.min(0.7, this.hurt + 0.15 + amount / 120);
   }
 
-  addKill(killer: Actor | null, victim: Actor, how: string, me: Actor): void {
+  /** A line in the kill feed. `victimNote` follows the victim's name ("· HALBERD" for a mech). */
+  addKill(killer: Actor | null, victim: Actor, how: string, me: Actor, victimNote = ''): void {
     const line = document.createElement('div');
-    const name = (a: Actor): HTMLSpanElement => {
+    const name = (a: Actor, note = ''): HTMLSpanElement => {
       const span = document.createElement('span');
       span.className = a.team === me.team ? 'ally' : 'enemy';
-      span.textContent = a.name;
+      span.textContent = a.name + note;
       return span;
     };
     const mid = document.createElement('span');
     mid.className = 'how';
     mid.textContent = how;
     if (killer) line.append(name(killer));
-    line.append(mid, name(victim));
+    line.append(mid, name(victim, victimNote));
     if (killer === me || victim === me) line.className = 'mine';
     this.feedBox.append(line);
     line.animate([{ opacity: 0, transform: 'translateX(16px)' }, { opacity: 1, transform: 'none' }], { duration: 160, easing: 'ease-out' });
@@ -332,8 +496,12 @@ export class Hud {
     if (this.feed.length > FEED_LINES) this.feed.shift()!.el.remove();
   }
 
-  /** A short line under the crosshair, for the player's own kills. */
-  showBanner(text: string, name: string): void {
+  /**
+   * A short line under the crosshair: the player's own kills, and news about
+   * their mech. `kind` colours the emphasised part: '' (red), 'good' or 'warn'.
+   */
+  showBanner(text: string, name: string, kind = ''): void {
+    this.banner.className = kind;
     this.banner.replaceChildren(text, Object.assign(document.createElement('b'), { textContent: name }));
     this.banner.animate(
       [
@@ -359,7 +527,9 @@ export class Hud {
     this.death.classList.remove('on');
     el('end-title').textContent = won ? 'VICTORY' : 'DEFEAT';
     el('end-score').textContent = `${COMBAT.teams[me.team].name} ${m.score[me.team]} · ${m.score[1 - me.team]} ${COMBAT.teams[1 - me.team].name}`;
-    el('end-stats').textContent = `${me.kills} eliminations · ${me.deaths} deaths`;
+    el('end-stats').textContent = `${me.kills} eliminations · ${me.mechKills} mechs destroyed · ${me.deaths} deaths`;
+    this.warn.classList.remove('on');
+    this.prompt.classList.remove('on');
     this.end.classList.toggle('lost', !won);
     this.end.classList.add('on');
   }

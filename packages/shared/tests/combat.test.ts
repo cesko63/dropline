@@ -431,12 +431,13 @@ describe('whole matches, bots only', () => {
           expect(Number.isFinite(a.p.pos.x + a.p.pos.y + a.p.pos.z + a.health)).toBe(true);
         }
       }
-      const kills = m.score[0] + m.score[1];
+      // Pilot kills only: the score also counts three points for every mech brought down.
+      const kills = m.actors.reduce((s, a) => s + a.kills, 0);
       // A fight should break out every few seconds: between 5 and 25 kills a minute for 8 bots.
       expect(kills).toBeGreaterThan(5 * minutes);
       expect(kills).toBeLessThan(25 * minutes);
       // Both sides score; nobody is farmed at their spawn.
-      expect(Math.min(m.score[0], m.score[1])).toBeGreaterThan(kills * 0.2);
+      expect(Math.min(m.score[0], m.score[1])).toBeGreaterThan((m.score[0] + m.score[1]) * 0.2);
       // A living bot never stays inside a 3 m circle for long (marksmen hold a spot the longest).
       expect(worstStill).toBeLessThan(25);
       // Every bot gets into fights.

@@ -18,6 +18,9 @@ export const BINDINGS = {
   weapon1: ['Digit1'],
   weapon2: ['Digit2'],
   weapon3: ['Digit3'],
+  weapon4: ['Digit4'],
+  use: ['KeyE'],
+  call: ['KeyF'],
   nextWeapon: ['KeyQ'],
   toggleView: ['KeyV'],
   respawn: ['KeyK'],
@@ -141,6 +144,8 @@ export class Input {
       fire: this.held('fire'),
       ads: this.held('ads'),
       reload: this.held('reload'),
+      use: this.held('use'),
+      call: this.held('call'),
       weapon: this.weapon,
     };
     if (this.override) {

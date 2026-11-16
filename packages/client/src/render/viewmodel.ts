@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WEAPONS, clamp, lenH, type Actor } from '@dropline/shared';
+import { COMBAT, MECH, WEAPONS, clamp, lenH, type Actor, type Mech } from '@dropline/shared';
 import { spring, stepSpring } from '../util/spring';
 
 const REST = new THREE.Vector3(0.2, -0.19, -0.52);
@@ -14,9 +14,13 @@ interface Model {
   port: THREE.Object3D;
   /** Where the weapon sits when aimed: sights on the screen center. */
   aim: THREE.Vector3;
+  /** Where it sits at the hip. */
+  rest: THREE.Vector3;
   /** Kick per shot: backwards (meters) and muzzle climb (radians). */
   kickBack: number;
   kickUp: number;
+  /** Throws a spent casing with each shot. */
+  casing: boolean;
 }
 
 interface Casing {
@@ -27,7 +31,7 @@ interface Casing {
 }
 
 /**
- * First-person weapons (box stand-ins). Drawn in their own scene after the
+ * First-person weapons and the mech's cockpit (box stand-ins). Drawn in their own scene after the
  * world with the depth buffer cleared, so they never poke through walls and
  * keep their own field of view while the world camera zooms.
  */
@@ -48,6 +52,12 @@ export class Viewmodel {
   private readonly back = spring();
   private readonly climb = spring();
   private flashT = 0;
+  /** The mech's cockpit: a frame around the view, lit when the machine is running. */
+  private readonly cockpit = new THREE.Group();
+  private readonly pillars: THREE.Mesh[] = [];
+  private readonly panelGlow: THREE.MeshStandardMaterial;
+  private readonly rattle = spring();
+  private seated = 0;
 
   constructor() {
     const metal = new THREE.MeshStandardMaterial({ color: '#565f6d', roughness: 0.5, metalness: 0.25 });
@@ -70,7 +80,16 @@ export class Viewmodel {
       box(0.08, 0.07, 0.12, glove, -0.02, -0.08, foreZ, 0, 0),
       box(0.07, 0.07, 0.44, sleeve, -0.12, -0.19, foreZ + 0.2, 0.45, -0.55),
     ];
-    const model = (id: string, parts: THREE.Mesh[], muzzleZ: number, aimY: number, kickBack: number, kickUp: number): void => {
+    const model = (
+      id: string,
+      parts: THREE.Mesh[],
+      muzzleZ: number,
+      aimY: number,
+      kickBack: number,
+      kickUp: number,
+      casing = true,
+      rest: THREE.Vector3 | null = null,
+    ): void => {
       const group = new THREE.Group();
       group.add(...parts);
       const muzzle = new THREE.Object3D();
@@ -81,7 +100,9 @@ export class Viewmodel {
       group.scale.setScalar(0.8);
       group.visible = false;
       this.rig.add(group);
-      this.models[id] = { group, muzzle, port, aim: new THREE.Vector3(0, aimY, -0.4), kickBack, kickUp };
+      // A weapon with its own resting place (the mech's arm) is not brought to the eye.
+      const aim = rest ? rest.clone() : new THREE.Vector3(0, aimY, -0.4);
+      this.models[id] = { group, muzzle, port, aim, rest: rest ?? REST, kickBack, kickUp, casing };
     };
 
     model(
@@ -139,6 +160,63 @@ export class Viewmodel {
       0.11,
     );
 
+    // The launcher rides on the shoulder: a fat tube with a blast cone behind.
+    model(
+      'pike',
+      [
+        box(0.1, 0.1, 0.78, dark, 0, 0.02, -0.05),
+        box(0.135, 0.135, 0.14, metal, 0, 0.02, -0.46),
+        box(0.12, 0.12, 0.1, metal, 0, 0.02, 0.37),
+        box(0.03, 0.02, 0.3, dark, 0, 0.08, -0.1),
+        box(0.014, 0.05, 0.02, glow, 0, 0.105, -0.22),
+        box(0.104, 0.022, 0.1, glow, 0, 0.02, -0.3),
+        box(0.05, 0.13, 0.07, dark, 0, -0.1, 0.02),
+        ...arms(0.1, -0.25),
+      ],
+      -0.56,
+      -0.105,
+      0.11,
+      0.2,
+      false,
+    );
+    // The mech's cannon: its right arm, seen from the cockpit.
+    model(
+      'autocannon',
+      [
+        box(0.22, 0.22, 0.62, dark, 0, 0, 0.12),
+        box(0.02, 0.012, 0.14, glow, 0, 0.078, -0.3),
+        box(0.075, 0.075, 0.72, metal, 0, 0.035, -0.52),
+        box(0.05, 0.05, 0.56, dark, 0, -0.06, -0.44),
+        box(0.11, 0.11, 0.09, dark, 0, 0.035, -0.9),
+        box(0.17, 0.17, 0.8, sleeve, 0.1, -0.12, 0.7, 0.2, -0.25),
+      ],
+      -0.96,
+      0,
+      0.05,
+      0.018,
+      true,
+      new THREE.Vector3(0.5, -0.37, -0.8),
+    );
+
+    // Cockpit frame: a dashboard below, a bar above and a pillar at each side.
+    const frame = new THREE.MeshStandardMaterial({ color: '#1b1f26', roughness: 0.8, metalness: 0.3 });
+    this.panelGlow = new THREE.MeshStandardMaterial({ color: '#0a1820', emissive: '#58d6ff', emissiveIntensity: 0 });
+    this.cockpit.add(
+      box(2.6, 0.2, 0.3, frame, 0, -0.42, -0.62, -0.5),
+      box(2.6, 0.08, 0.12, frame, 0, 0.345, -0.6),
+      box(0.5, 0.012, 0.03, this.panelGlow, -0.42, -0.325, -0.6),
+      box(0.5, 0.012, 0.03, this.panelGlow, 0.42, -0.325, -0.6),
+      box(0.05, 0.03, 0.03, glow, 0, -0.325, -0.6),
+    );
+    for (const side of [-1, 1]) {
+      const pillar = box(0.045, 1.1, 0.05, frame, side, 0, -0.6);
+      pillar.rotation.z = side * 0.1;
+      this.pillars.push(pillar);
+      this.cockpit.add(pillar);
+    }
+    this.cockpit.visible = false;
+    this.scene.add(this.cockpit);
+
     this.flash = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.035, 0),
       new THREE.MeshBasicMaterial({ color: '#ffe0a8', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
@@ -166,6 +244,15 @@ export class Viewmodel {
   resize(aspect: number): void {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
+    // The pillars stand just inside the left and right edges, whatever the window's shape.
+    const edge = Math.tan((this.camera.fov / 2) * (Math.PI / 180)) * 0.6 * aspect;
+    this.pillars[0].position.x = -edge + 0.035;
+    this.pillars[1].position.x = edge - 0.035;
+  }
+
+  /** Shake the cockpit: a footfall, a hit on the hull. */
+  thud(amount: number): void {
+    this.rattle.v -= amount;
   }
 
   /** Kick, flash and a spent casing for one shot. */
@@ -175,6 +262,7 @@ export class Viewmodel {
     this.back.v += m.kickBack * 60;
     this.climb.v += m.kickUp * 60;
     this.flashT = 1;
+    if (!m.casing) return;
     const c = this.casings[this.nextCasing++ % this.casings.length];
     m.port.getWorldPosition(c.mesh.position);
     c.vel.set(0.9 + Math.random() * 0.5, 0.9 + Math.random() * 0.5, 0.15 - Math.random() * 0.3);
@@ -197,8 +285,22 @@ export class Viewmodel {
     return out;
   }
 
-  update(dt: number, a: Actor, mouseDx: number, mouseDy: number): void {
+  /** `mech` is the machine the pilot sits in, or null on foot. */
+  update(dt: number, a: Actor, mouseDx: number, mouseDy: number, mech: Mech | null): void {
     const s = a.p;
+
+    // The cockpit rises around the pilot as they sit down, and lights up as it starts.
+    this.seated = damp(this.seated, mech ? 1 : 0, 10, dt);
+    this.cockpit.visible = this.seated > 0.02;
+    stepSpring(this.rattle, 150, 13, dt);
+    if (this.cockpit.visible) {
+      const online = mech && mech.state === 'boot' ? clamp(mech.stateTime / COMBAT.mech.embark.time, 0, 1) : mech ? 1 : 0;
+      this.panelGlow.emissiveIntensity = online * (mech && mech.health < MECH.health * 0.25 ? 0.6 + 0.6 * Math.sin(performance.now() * 0.012) : 1.2);
+      this.panelGlow.emissive.set(mech && mech.health < MECH.health * 0.25 ? '#ff5a3c' : '#58d6ff');
+      this.cockpit.position.y = -0.5 * (1 - this.seated) + clamp(this.rattle.x, -0.05, 0.03);
+      this.cockpit.rotation.z = clamp(this.rattle.x, -0.05, 0.05) * 0.2;
+    }
+
     const id = a.loadout[a.weapon];
     if (id !== this.currentId) {
       if (this.current) this.current.group.visible = false;
@@ -211,8 +313,9 @@ export class Viewmodel {
 
     const speed = lenH(s.vel);
     const calm = 1 - 0.85 * a.ads;
-    const moving = (s.grounded && !s.sliding ? Math.min(1, speed / 8) : 0) * calm;
-    this.bob += speed * dt * 1.35;
+    const moving = (s.grounded && !s.sliding ? Math.min(1, speed / (mech ? 4 : 8)) : 0) * calm;
+    // A mech's slow, heavy step, in time with its stride.
+    this.bob = mech ? (mech.stride / MECH.move.strideLength) * Math.PI : this.bob + speed * dt * 1.35;
 
     // The weapon trails behind fast mouse turns and settles back.
     this.swayX = damp(this.swayX, clamp(-mouseDx * 0.0018, -0.07, 0.07) * calm, 10, dt);
@@ -223,9 +326,11 @@ export class Viewmodel {
     stepSpring(this.climb, 380, 26, dt);
 
     const k = a.ads * a.ads * (3 - 2 * a.ads);
-    let x = REST.x + (model.aim.x - REST.x) * k + Math.sin(this.bob) * 0.012 * moving + this.swayX;
-    let y = REST.y + (model.aim.y - REST.y) * k - Math.abs(Math.cos(this.bob)) * 0.014 * moving + this.swayY;
-    const z = REST.z + (model.aim.z - REST.z) * k + this.back.x;
+    const rest = model.rest;
+    let x = rest.x + (model.aim.x - rest.x) * k + Math.sin(this.bob) * 0.012 * moving + this.swayX;
+    let y = rest.y + (model.aim.y - rest.y) * k - Math.abs(Math.cos(this.bob)) * 0.014 * moving + this.swayY;
+    const z = rest.z + (model.aim.z - rest.z) * k + this.back.x;
+    if (mech) y += clamp(this.rattle.x, -0.05, 0.03) - 0.35 * (1 - this.seated);
     let roll = 0;
     const turn = this.swayX * 2;
     let tip = -this.swayY * 2 + this.climb.x;
@@ -244,9 +349,10 @@ export class Viewmodel {
     // Reload: the weapon dips and rolls toward the off hand, then comes back up.
     if (a.reload > 0) {
       const dip = Math.sin(Math.PI * clamp(1 - a.reload / def.reloadTime, 0, 1));
-      y -= 0.13 * dip;
-      roll += 0.75 * dip;
-      tip += 0.35 * dip;
+      // A mech's arm only lowers while its loader cycles; a pilot rolls the weapon to the off hand.
+      y -= (mech ? 0.2 : 0.13) * dip;
+      roll += (mech ? 0.12 : 0.75) * dip;
+      tip += (mech ? -0.25 : 0.35) * dip;
     }
     // Draw: rises into view from below.
     if (a.equip > 0) {

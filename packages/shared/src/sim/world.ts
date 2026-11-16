@@ -52,23 +52,27 @@ export class CollisionWorld {
     return new CollisionWorld(map);
   }
 
-  private capsule(cache: Map<number, RAPIER.Capsule>, height: number, shrink: number): RAPIER.Capsule {
-    let shape = cache.get(height);
+  private capsule(cache: Map<number, RAPIER.Capsule>, height: number, radius: number, shrink: number): RAPIER.Capsule {
+    // One shape per size, to the millimeter.
+    const key = Math.round(radius * 1000) * 100000 + Math.round(height * 1000);
+    let shape = cache.get(key);
     if (!shape) {
-      const r = TUNING.player.radius - shrink;
-      shape = new RAPIER.Capsule(Math.max(0.001, height / 2 - TUNING.player.radius), r);
-      cache.set(height, shape);
+      shape = new RAPIER.Capsule(Math.max(0.001, height / 2 - radius), radius - shrink);
+      cache.set(key, shape);
     }
     return shape;
   }
 
-  /** Sweep the player capsule (given by feet position and height) along a unit direction. */
-  castCapsule(feet: Vec3, height: number, dir: Vec3, maxDist: number): CastHit | null {
+  /**
+   * Sweep an upright capsule (given by feet position and height) along a unit
+   * direction. The radius defaults to a pilot's; mechs pass their own.
+   */
+  castCapsule(feet: Vec3, height: number, dir: Vec3, maxDist: number, radius = TUNING.player.radius): CastHit | null {
     const c = this.center;
     c.x = feet.x;
     c.y = feet.y + height / 2;
     c.z = feet.z;
-    const hit = this.world.castShape(c, IDENTITY, dir, this.capsule(this.castShapes, height, 0), 0, maxDist, false);
+    const hit = this.world.castShape(c, IDENTITY, dir, this.capsule(this.castShapes, height, radius, 0), 0, maxDist, false);
     if (!hit) return null;
     const n = hit.normal1;
     const p = hit.witness1;
@@ -99,13 +103,13 @@ export class CollisionWorld {
     };
   }
 
-  /** True if a player capsule standing at `feet` would intersect the map. */
-  overlapsCapsule(feet: Vec3, height: number): boolean {
+  /** True if a capsule standing at `feet` would intersect the map. */
+  overlapsCapsule(feet: Vec3, height: number, radius = TUNING.player.radius): boolean {
     const c = this.center;
     c.x = feet.x;
     c.y = feet.y + height / 2;
     c.z = feet.z;
-    const shape = this.capsule(this.overlapShapes, height, OVERLAP_SHRINK);
+    const shape = this.capsule(this.overlapShapes, height, radius, OVERLAP_SHRINK);
     return this.world.intersectionWithShape(c, IDENTITY, shape) !== null;
   }
 }

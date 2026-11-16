@@ -1,0 +1,4 @@
+{
+  "pike": { "name": "PIKE", "speed": 70, "life": 3, "radius": 3.2, "damage": 90, "armor": 360, "splashArmor": 0.35, "fuse": 0.3 },
+  "salvo": { "name": "ROCKETS", "speed": 52, "life": 3, "radius": 3.8, "damage": 75, "armor": 190, "splashArmor": 0.35, "fuse": 0.45 }
+}

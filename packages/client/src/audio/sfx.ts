@@ -7,7 +7,7 @@ import type { Vec3 } from '@dropline/shared';
  * will not change.
  */
 
-const MAX_VOICES = 28;
+const MAX_VOICES = 48;
 
 interface BurstOpts {
   dur: number;
@@ -184,6 +184,13 @@ export class Sfx {
       this.burst(b, { type: 'lowpass', f0: 2400, f1: 260, dur: 0.34, gain: 0.95 });
       this.burst(b, { type: 'bandpass', f0: 900, dur: 0.1, gain: 0.5 });
       this.tone(b, { type: 'sine', f0: 115, f1: 34, dur: 0.26, gain: 0.8 });
+    } else if (weapon === 'autocannon') {
+      // Slower and far heavier than a carbine: a thump under every round.
+      this.burst(b, { type: 'bandpass', f0: 1200, dur: 0.08, gain: 0.7 });
+      this.burst(b, { type: 'lowpass', f0: 520, f1: 120, dur: 0.22, gain: 0.8 });
+      this.tone(b, { type: 'sine', f0: 92, f1: 36, dur: 0.2, gain: 0.95 });
+    } else if (weapon === 'pike') {
+      this.rocket(b);
     } else if (weapon === 'longshot') {
       this.burst(b, { type: 'bandpass', f0: 2800, dur: 0.06, gain: 0.7 });
       this.burst(b, { type: 'lowpass', f0: 1500, f1: 180, dur: 0.55, gain: 0.6 });
@@ -278,6 +285,181 @@ export class Sfx {
   charge(pos: Vec3, duration: number, atMe: boolean): void {
     const b = this.bus(pos, atMe ? 2.2 : 1);
     if (b) this.tone(b, { type: 'sawtooth', f0: 260, f1: 1500, dur: duration, gain: 0.16, swell: true });
+  }
+
+  /** A rocket leaving its tube: a thump, then the motor catching. */
+  private rocket(b: AudioNode): void {
+    this.tone(b, { type: 'sine', f0: 140, f1: 48, dur: 0.18, gain: 0.8 });
+    this.burst(b, { type: 'bandpass', f0: 500, f1: 2600, q: 0.9, dur: 0.5, gain: 0.6 });
+    this.burst(b, { type: 'lowpass', f0: 900, f1: 200, dur: 0.6, gain: 0.35, at: 0.04 });
+  }
+
+  /** One rocket of a mech's salvo. `pos` null is the player's own mech. */
+  launch(pos: Vec3 | null): void {
+    if (!this.allow(`launch-${pos ? 'far' : 'own'}`, 0.05)) return;
+    const b = this.bus(pos, pos ? 1.8 : 0.7);
+    if (b) this.rocket(b);
+  }
+
+  /** A rocket bursting. Far ones are a dull thud; near ones crack first. */
+  explosion(pos: Vec3, big = false): void {
+    if (!this.allow('explosion', 0.04)) return;
+    const b = this.bus(pos, big ? 5 : 3.2);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 2600, dur: 0.05, gain: 0.8 });
+    this.burst(b, { type: 'lowpass', f0: 1800, f1: 90, dur: big ? 1.3 : 0.7, gain: 1 });
+    this.tone(b, { type: 'sine', f0: big ? 78 : 96, f1: 24, dur: big ? 0.9 : 0.5, gain: 1 });
+    if (big) this.burst(b, { type: 'bandpass', f0: 420, f1: 140, q: 2, dur: 1.5, gain: 0.5, at: 0.12 });
+  }
+
+  /** The mech meter is full. */
+  meterReady(): void {
+    const b = this.bus(null, 0.8);
+    if (!b) return;
+    [523, 784, 1047].forEach((f, i) => this.tone(b, { type: 'triangle', f0: f, dur: 0.22, gain: 0.22, at: i * 0.09 }));
+    this.burst(b, { type: 'bandpass', f0: 300, f1: 1800, q: 2, dur: 0.3, gain: 0.25 });
+  }
+
+  /** The call went out: a radio blip and a confirming tone. */
+  mechCall(): void {
+    const b = this.bus(null, 0.8);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 2200, q: 6, dur: 0.05, gain: 0.5 });
+    this.tone(b, { type: 'square', f0: 660, dur: 0.07, gain: 0.12, at: 0.06 });
+    this.tone(b, { type: 'square', f0: 990, dur: 0.12, gain: 0.12, at: 0.15 });
+  }
+
+  /** The call (or another mech action) was refused. */
+  denied(): void {
+    if (!this.allow('denied', 0.25)) return;
+    const b = this.bus(null, 0.7);
+    if (!b) return;
+    this.tone(b, { type: 'square', f0: 160, dur: 0.09, gain: 0.2 });
+    this.tone(b, { type: 'square', f0: 120, dur: 0.14, gain: 0.2, at: 0.11 });
+  }
+
+  /** A mech falling from the sky: a whistle that drops for exactly as long as the fall. */
+  dropWhistle(pos: Vec3, duration: number, hostile: boolean): void {
+    const b = this.bus(pos, hostile ? 5 : 3.5);
+    if (!b) return;
+    this.tone(b, { type: 'sawtooth', f0: 2400, f1: 320, dur: duration, gain: 0.14, swell: true });
+    this.burst(b, { type: 'bandpass', f0: 3000, f1: 500, q: 1.5, dur: duration, gain: 0.22 });
+  }
+
+  /** It lands. The loudest thing in the match. */
+  mechLand(pos: Vec3): void {
+    const b = this.bus(pos, 6);
+    if (!b) return;
+    this.tone(b, { type: 'sine', f0: 70, f1: 22, dur: 1.1, gain: 1 });
+    this.burst(b, { type: 'lowpass', f0: 1400, f1: 70, dur: 1.2, gain: 1 });
+    this.burst(b, { type: 'bandpass', f0: 900, q: 6, dur: 0.12, gain: 0.6 });
+    this.tone(b, { type: 'triangle', f0: 310, f1: 180, dur: 0.5, gain: 0.25, at: 0.03 });
+  }
+
+  /** Climbing in: the hatch servo and the seal. */
+  embark(): void {
+    const b = this.bus(null, 0.8);
+    if (!b) return;
+    this.tone(b, { type: 'sawtooth', f0: 110, f1: 260, dur: 0.4, gain: 0.12 });
+    this.burst(b, { type: 'bandpass', f0: 700, q: 3, dur: 0.07, gain: 0.6, at: 0.42 });
+    this.burst(b, { type: 'highpass', f0: 3800, dur: 0.3, gain: 0.2, at: 0.45 });
+  }
+
+  /** Start-up finished: the reactor spools and the controls go live. */
+  mechOnline(): void {
+    const b = this.bus(null, 0.8);
+    if (!b) return;
+    this.tone(b, { type: 'sawtooth', f0: 70, f1: 210, dur: 0.5, gain: 0.16, swell: true });
+    this.tone(b, { type: 'triangle', f0: 880, dur: 0.1, gain: 0.2, at: 0.4 });
+    this.tone(b, { type: 'triangle', f0: 1320, dur: 0.18, gain: 0.2, at: 0.5 });
+  }
+
+  /** Out through the hatch; thrown clear with a bang when the mech is lost. */
+  disembark(eject: boolean): void {
+    const b = this.bus(null, 0.8);
+    if (!b) return;
+    this.burst(b, { type: 'highpass', f0: 3200, dur: 0.25, gain: 0.3 });
+    this.burst(b, { type: 'bandpass', f0: 600, q: 3, dur: 0.06, gain: 0.5 });
+    if (!eject) return;
+    this.tone(b, { type: 'sine', f0: 160, f1: 50, dur: 0.25, gain: 0.8 });
+    this.burst(b, { type: 'bandpass', f0: 400, f1: 3200, q: 1.2, dur: 0.7, gain: 0.5, at: 0.04 });
+  }
+
+  /** A mech's footfall. `pos` null is the player's own. */
+  mechStep(pos: Vec3 | null, heavy: boolean): void {
+    if (!this.allow(`step-${pos ? 'far' : 'own'}`, 0.12)) return;
+    const b = this.bus(pos, (pos ? 3 : 0.6) * (heavy ? 1.6 : 1));
+    if (!b) return;
+    this.tone(b, { type: 'sine', f0: heavy ? 60 : 74, f1: 30, dur: heavy ? 0.5 : 0.24, gain: 0.9 });
+    this.burst(b, { type: 'lowpass', f0: 700, f1: 120, dur: heavy ? 0.5 : 0.2, gain: 0.6 });
+    // The leg servo, a moment after the foot is down.
+    this.tone(b, { type: 'sawtooth', f0: 180, f1: 120, dur: 0.16, gain: 0.04, at: 0.1 });
+  }
+
+  /** A mech's dash thrusters. */
+  mechDash(pos: Vec3 | null): void {
+    const b = this.bus(pos, pos ? 3 : 0.8);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 2400, f1: 420, q: 0.8, dur: 0.45, gain: 0.8 });
+    this.tone(b, { type: 'sawtooth', f0: 220, f1: 70, dur: 0.4, gain: 0.14 });
+  }
+
+  /** A dash that ran into something: metal on metal, or metal on a pilot. */
+  ram(pos: Vec3): void {
+    const b = this.bus(pos, 3.5);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 520, q: 5, dur: 0.16, gain: 0.9 });
+    this.tone(b, { type: 'sine', f0: 110, f1: 40, dur: 0.25, gain: 0.9 });
+    this.burst(b, { type: 'highpass', f0: 2800, dur: 0.08, gain: 0.3 });
+  }
+
+  /** The player's fire striking a mech: a clank, with a bright ring for the vent. */
+  armorHit(crit: boolean): void {
+    if (!this.allow('armor', 0.035)) return;
+    const b = this.bus(null, 0.7);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 1150, q: 9, dur: 0.07, gain: 0.8 });
+    this.tone(b, { type: 'triangle', f0: 640, dur: 0.06, gain: 0.14 });
+    if (crit) {
+      this.tone(b, { type: 'triangle', f0: 2100, dur: 0.14, gain: 0.2 });
+      this.tone(b, { type: 'triangle', f0: 3150, dur: 0.1, gain: 0.12 });
+    }
+  }
+
+  /** The player's own mech taking a hit, heard from inside. */
+  hullHit(amount: number): void {
+    if (!this.allow('hull', 0.06)) return;
+    const b = this.bus(null, Math.min(1.1, 0.5 + amount / 300));
+    if (!b) return;
+    this.tone(b, { type: 'sine', f0: 130, f1: 60, dur: 0.2, gain: 0.7 });
+    this.burst(b, { type: 'bandpass', f0: 380, q: 6, dur: 0.14, gain: 0.7 });
+  }
+
+  /** Hull nearly gone: two notes, repeated by the caller while it lasts. */
+  hullAlarm(): void {
+    if (!this.allow('alarm', 1.1)) return;
+    const b = this.bus(null, 0.6);
+    if (!b) return;
+    this.tone(b, { type: 'square', f0: 740, dur: 0.12, gain: 0.1 });
+    this.tone(b, { type: 'square', f0: 554, dur: 0.16, gain: 0.1, at: 0.16 });
+  }
+
+  /** Standing where an enemy mech is about to land. */
+  zoneWarn(): void {
+    if (!this.allow('zone', 0.3)) return;
+    const b = this.bus(null, 0.7);
+    if (b) this.tone(b, { type: 'square', f0: 1240, dur: 0.09, gain: 0.14 });
+  }
+
+  /** A mech blowing apart. */
+  mechDestroyed(pos: Vec3): void {
+    const b = this.bus(pos, 6);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 2200, dur: 0.07, gain: 0.9 });
+    this.burst(b, { type: 'lowpass', f0: 2200, f1: 60, dur: 1.8, gain: 1 });
+    this.tone(b, { type: 'sine', f0: 84, f1: 20, dur: 1.3, gain: 1 });
+    // Bits of it coming down.
+    for (let i = 0; i < 4; i++) this.burst(b, { type: 'bandpass', f0: 700 + i * 350, q: 5, dur: 0.07, gain: 0.3, at: 0.35 + i * 0.17 });
   }
 
   spawn(): void {

@@ -29,6 +29,7 @@ const GUN_SHAPE: Record<string, [number, number]> = {
   carbine: [0.55, 1],
   scattergun: [0.5, 1.5],
   longshot: [0.9, 0.9],
+  pike: [0.75, 2.1],
 };
 
 let noticeTexture: THREE.CanvasTexture | null = null;
