@@ -1,4 +1,5 @@
 import { emptyInput, type InputCmd } from '../input';
+import { createBodies, liveBodies, pushApart, type Bodies } from './bodies';
 import { COMBAT, type Actor, type MatchState } from './combat';
 import { MechEvent, stepMechBody } from './mech';
 import { seat, stepSalvo } from './mechMatch';
@@ -7,6 +8,7 @@ import { stepPlayer } from './movement';
 import type { CollisionWorld } from './world';
 
 const IDLE = emptyInput();
+let scratch: Bodies = createBodies(0);
 
 /**
  * One tick of a single pilot, the way `stepMatch` would step it: movement (or
@@ -17,13 +19,22 @@ const IDLE = emptyInput();
  * Only what the player's own command decides is in here. Health, kills, the
  * mech meter, calling a mech and climbing in or out are the server's to decide
  * and arrive in snapshots. Events are pushed to `m.events` as usual.
+ *
+ * `bodies` is where the others stood when the command was made (see
+ * `bodies.ts`); left out, they are taken from where `m` has them now.
  */
-export function stepOwn(m: MatchState, world: CollisionWorld, a: Actor, cmd: InputCmd, dt: number): void {
+export function stepOwn(m: MatchState, world: CollisionWorld, a: Actor, cmd: InputCmd, dt: number, bodies?: Bodies): void {
   if (!a.alive) return;
   if (cmd.sprint && a.ads > 0.5) cmd = { ...cmd, sprint: false };
 
   if (!a.inMech) {
     stepPlayer(a.p, cmd, world, dt);
+    // Pushed by the others as this client sees them, which is a little in the past.
+    if (!bodies) {
+      if (scratch.length !== m.actors.length * 10) scratch = createBodies(m.actors.length);
+      bodies = liveBodies(m, scratch);
+    }
+    pushApart(a, bodies, world, dt);
     stepWeapon(m, a, cmd, world, dt);
     return;
   }

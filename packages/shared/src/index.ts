@@ -10,6 +10,7 @@ export * from './sim/combat';
 export * from './sim/hitscan';
 export * from './sim/mech';
 export * from './sim/projectiles';
+export * from './sim/bodies';
 export * from './sim/rules';
 export * from './sim/mechMatch';
 export * from './sim/match';

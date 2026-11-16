@@ -8,9 +8,9 @@ import { PROJECTILES, WEAPON_LIST } from '../sim/weapons';
  * `PROTOCOL_VERSION`.
  */
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 /** Versions the server still talks to. Keep the previous one in here while a new build rolls out. */
-export const SUPPORTED_VERSIONS: readonly number[] = [1];
+export const SUPPORTED_VERSIONS: readonly number[] = [2];
 
 /** First byte of every binary message. */
 export const Msg = {

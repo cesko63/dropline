@@ -146,6 +146,29 @@ Bots do all of this too: they call their mech when the meter fills, walk to it,
 fight from the cockpit, and on foot they switch to the launcher and keep their
 distance when a mech shows up.
 
+## Solid bodies
+
+Pilots do not pass through each other or through a mech.
+
+- **Pilot against pilot.** Walking into someone stops you at their shoulder. Keep
+  pushing and they give way slowly: a teammate standing in a doorway can be eased
+  out of it (0.75 m in 2.5 s of pushing), but nobody can be bulldozed. Two pilots
+  put on the same spot drift apart smoothly, at most 6 m/s each.
+- **Pilot against mech.** A mech does not give way at all; you slide along its
+  hull. A mech that walks or dashes into a pilot shoves them aside, along a wall
+  if there is one, never through it.
+- **Your own mech** lets you in as before, and you leave through the hatch on
+  top: you land in front of it, clear of the hull.
+- Bodies are upright cylinders: you cannot stand on someone's head or on a mech,
+  and slide off to the side instead. A pilot climbing a ledge is pushed again
+  once they are over it.
+
+Mechs that keep moving hold out longer against pilots with launchers, now that a
+pilot cannot stand inside the hull: 41 s against 32 s for one that stands still
+(18 matches each, 6.3 and 6.2 kills).
+
+Tuning is under `bodies` in `data/combat.json`.
+
 ## Bots
 
 Bots press the same inputs as a player and run on the same movement code. Each
@@ -179,6 +202,11 @@ says is taken on trust except which keys are held and where the view points.
   runs 5% slow for a moment so the server can work through the burst.
 - **Everyone else is drawn slightly in the past**, between two things the server
   really said: about 45 ms on a clean line, more when the line is uneven.
+- **You bump into what you see.** A player's own pilot is predicted against the
+  others where they are drawn, a little in the past. The server pushes that
+  player against the same moment, rebuilt exactly the way the client drew it
+  (the same snapshots, the same rounding, the same rules for a respawn), so
+  pushing past someone costs no correction. Bots are pushed against the present.
 - **Shots land where you aimed.** The server remembers where everyone was for
   the last second and judges each bullet against the moment the shooter was
   looking at, up to 300 ms back. Past that, a player on a worse line has to lead
@@ -192,7 +220,7 @@ says is taken on trust except which keys are held and where the view points.
 - **The server checks what it is sent**: message size and rate, every field of
   a command, and it runs one command per tick however many arrive, so sending
   more does not move a pilot faster. A client with the wrong protocol version is
-  told to reload.
+  told to reload (version 2 since solid bodies: both sides must push alike).
 
 Measured with the tests in `packages/server/tests` (real server code, real
 client code, a simulated line) and with two browser tabs against `pnpm host`,
@@ -204,6 +232,9 @@ one of them through `pnpm lag`:
 | Corrections at 70 ± 25 ms each way, 30 s | 0 (the server held the pilot for 11 ticks in total) |
 | Corrections in the browser at 165 ms ping, 30 s of fighting | 0 |
 | Three 85 ms hitches on the player's machine | 0 corrections, 0 skipped commands |
+| Two players shoving each other, 70 ± 25 ms | 0 corrections for either |
+| Pressing into a parked mech, 70 ± 25 ms | 0 |
+| Eight players, 60 s of fighting at 70 ± 25 ms | 0 to 3 corrections a player: mech rams, which no client can foresee, and a 0.1 m nudge when joining onto a teammate's spawn. Pushing against where the others stand by then instead cost 38 to 114 |
 | Hits on a strafing target at 16 m, 70 ± 25 ms | 82 of 84 with lag compensation, 4 of 84 without |
 | The same at 260 ms each way | 3 of 84: the 300 ms cap holds |
 | Snapshot size | about 570 B on foot, 770 B in a mech, 955 B in an eight-player fight (28 KB/s per player) |
@@ -219,7 +250,7 @@ others are drawn and every correction.
 ```
 data/                 Engine-neutral game data (plain JSON)
   movement.json         All movement tuning values
-  combat.json           Health, respawn, score limit, hitboxes, teams, mech meter and drop
+  combat.json           Health, respawn, score limit, hitboxes, teams, mech meter and drop, bodies
   bots.json             Bot senses and per-role behaviour
   net.json              Netcode: rates, waits, rewind cap, interpolation, limits
   weapons/*.json        One file per weapon
@@ -236,8 +267,9 @@ packages/
     src/sim/mechMatch.ts  Meter, call-in, landing, ramming, the rocket salvo
     src/sim/projectiles.ts Rockets in flight and their blast
     src/sim/hitscan.ts    Ray against a pilot's head and body
+    src/sim/bodies.ts     Solid bodies: pilots pushed out of each other and out of mechs
     src/sim/predict.ts    One tick of one pilot: what a client runs ahead of the server
-    src/sim/lagcomp.ts    Where everyone was: history and rewind for hit checks
+    src/sim/lagcomp.ts    Where everyone was: history and rewind for hit checks and bumps
     src/sim/rng.ts        Seeded random numbers for everything gameplay
     src/sim/world.ts      Collision queries against the map
     src/ai/nav.ts         Walkable grid and A* paths
@@ -285,8 +317,6 @@ packages/
   audio replaces them.
 - **Models:** pilots, the suit's arm and pod, mechs and the cockpit are built
   from boxes with procedural animation. Smoke, steam and blasts are plain shapes.
-- **Pilots do not collide with each other**, only with the map. A pilot can also
-  walk through a mech; only mechs push each other apart.
 - **One mech frame.** Every pilot calls the same Halberd.
 - **Bots stay on the ground floor.** They jump and slide but do not plan routes
   over ledges or walls.
@@ -306,7 +336,7 @@ packages/
 4. Multiplayer: dedicated server, prediction, lag compensation (done)
 5. Content and polish (now)
    1. Suit weapons: the arm and the shoulder pod, tighter hip fire (done)
-   2. Solid bodies: pilots collide with each other and with mechs
+   2. Solid bodies: pilots collide with each other and with mechs (done)
    3. Settings and gamepad
    4. A second map
    5. Bots off the ground floor

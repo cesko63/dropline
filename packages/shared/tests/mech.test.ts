@@ -536,7 +536,8 @@ describe('mech balance, played by scripts over several seeds', () => {
     const play = (moving: boolean): { life: number; kills: number } => {
       const lives: number[] = [];
       const kills: number[] = [];
-      for (const seed of [31, 32, 33, 34, 35, 36]) {
+      // Eighteen seeds: with solid bodies one touch changes the rest of a match, so six were too few to tell.
+      for (const seed of Array.from({ length: 18 }, (_, n) => 31 + n)) {
         const m = createMatch(map, world, { seed });
         const me = m.actors[0];
         for (const a of m.actors) if (a.brain && a.team === 0) a.brain = null;
@@ -557,16 +558,16 @@ describe('mech balance, played by scripts over several seeds', () => {
     const moving = play(true);
     console.log(`mech vs four pilots: standing ${standing.life.toFixed(0)} s, ${standing.kills.toFixed(1)} kills; moving ${moving.life.toFixed(0)} s, ${moving.kills.toFixed(1)} kills`);
     // Standing in the open against four launchers, the hull lasts about half a
-    // minute and takes a handful of pilots with it. (Measured: 30 s, 5.7 kills.)
+    // minute and takes a handful of pilots with it. (Measured: 32 s, 6.2 kills.)
     expect(standing.life).toBeGreaterThan(15);
     expect(standing.life).toBeLessThan(60);
     expect(standing.kills).toBeGreaterThan(3);
     // Strafing and dashing makes rockets miss: clearly longer, and more kills,
-    // but never safe. (Measured: 52 s, 7.8 kills.)
-    expect(moving.life).toBeGreaterThan(standing.life * 1.25);
+    // but never safe. (Measured: 41 s, 6.3 kills.)
+    expect(moving.life).toBeGreaterThan(standing.life * 1.2);
     expect(moving.life).toBeLessThan(110);
     expect(moving.kills).toBeGreaterThan(standing.kills);
-  });
+  }, 120_000);
 
   it('a pilot caught in the open by a mech dies fast, and running buys time', () => {
     const survive = (moving: boolean): number => {

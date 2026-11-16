@@ -9,6 +9,7 @@
   "teamSize": 4,
   "semiBuffer": 0.15,
   "hitbox": { "bodyRadius": 0.33, "headRadius": 0.19, "headDrop": 0.15, "neck": 0.3 },
+  "bodies": { "pilotShare": 0.5, "pilotPushSpeed": 6, "mechPushSpeed": 24, "hatch": 2.2 },
   "playerLoadout": ["carbine", "scattergun", "longshot", "pike"],
   "mech": {
     "meter": { "passiveTime": 110, "perDamage": 0.0007, "perKill": 0.05, "perArmor": 0.00006 },

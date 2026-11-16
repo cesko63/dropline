@@ -1,11 +1,12 @@
 import { BOTS, BOT_ROLES, botCmd, createBrain } from '../ai/bot';
+import { createBodies, liveBodies, pushApart, type Bodies } from './bodies';
 import { buildNav } from '../ai/nav';
 import { emptyInput, type InputCmd } from '../input';
 import type { MapData, MapSpawn } from '../map/types';
 import { lenH, v3 } from '../math/vec3';
 import { COMBAT, type Actor, type MatchState, type ShotTrace } from './combat';
 import { rayPilot } from './hitscan';
-import { recordHistory, rewindView } from './lagcomp';
+import { recordHistory, rewindBodies, rewindView } from './lagcomp';
 import { MECH, createMech, eyeOf, mechActive, rayMech, type Mech } from './mech';
 import { stepMechs, stepSalvo } from './mechMatch';
 import { createPlayerState, playerHeight, stepPlayer } from './movement';
@@ -34,6 +35,19 @@ export interface MatchOptions {
   scoreLimit?: number;
   /** Mech meter everyone starts with, 0..1. Default 0. */
   startMeter?: number;
+}
+
+/** Scratch table of where bodies stand, for `pushApart`. Grown to the largest match seen. */
+let scratch: Bodies = createBodies(0);
+
+/**
+ * What pilot `a` bumps into this tick: a networked player the moment they were
+ * looking at (see `bodies.ts`), anyone else where things stand now.
+ */
+function bodiesFor(m: MatchState, a: Actor): Bodies {
+  if (scratch.length !== m.actors.length * 10) scratch = createBodies(m.actors.length);
+  if (m.history && a.viewTick >= 0 && !a.brain && rewindBodies(m.history, m.tick, a.viewTick, scratch)) return scratch;
+  return liveBodies(m, scratch);
 }
 
 /** The generator an actor's shots draw from: its own when it has one, else the match's. */
@@ -394,6 +408,7 @@ export function stepMatch(m: MatchState, world: CollisionWorld, cmds: readonly (
     // A pilot in a mech is moved by the mech, below.
     if (a.inMech) continue;
     stepPlayer(a.p, cmd, world, dt);
+    pushApart(a, bodiesFor(m, a), world, dt);
     if (a.p.pos.y < COMBAT.killY) killActor(m, a, null, '', false);
   }
   stepMechs(m, world, dt);

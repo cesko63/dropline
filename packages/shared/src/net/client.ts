@@ -2,6 +2,7 @@ import { createBrain } from '../ai/bot';
 import type { InputCmd } from '../input';
 import type { MapData } from '../map/types';
 import { v3, type Vec3 } from '../math/vec3';
+import { createBodies, liveBodies, type Bodies } from '../sim/bodies';
 import type { Actor, MatchEvent, MatchState } from '../sim/combat';
 import { NET } from '../sim/lagcomp';
 import { createMatch } from '../sim/match';
@@ -106,7 +107,13 @@ export class NetClient {
   private epoch = -1;
   private spawns = -1;
   private viewReset = false;
-  private readonly pending: { seq: number; cmd: InputCmd }[] = [];
+  /**
+   * Commands the server has not confirmed yet, each with where the others stood
+   * when it was made, so a replay bumps into the same things as the first run.
+   */
+  private readonly pending: { seq: number; cmd: InputCmd; bodies: Bodies }[] = [];
+  /** Tables of bodies for `pending`, used round in turn so none is made per command. */
+  private readonly bodyPool: Bodies[] = [];
   private readonly snaps: Snapshot[] = [];
   private readonly events: { tick: number; e: MatchEvent }[] = [];
 
@@ -283,7 +290,7 @@ export class NetClient {
         prev.z = a.p.pos.z;
       }
       m.events.length = 0;
-      stepOwn(m, this.world, a, pending[i].cmd, TICK_DT);
+      stepOwn(m, this.world, a, pending[i].cmd, TICK_DT, pending[i].bodies);
     }
     m.events.length = 0;
 
@@ -317,13 +324,19 @@ export class NetClient {
    * for the server. The command is rounded in place to what was sent.
    */
   command(cmd: InputCmd): MatchEvent[] {
-    if (!this.ready) return [];
+    // Nothing is made until the others have been drawn once: before that they
+    // stand on placeholders, and the pilot would bump into what is not there.
+    if (!this.ready || this.viewTick < 0) return [];
     const m = this.match;
     const a = this.own;
     quantizeInput(cmd);
     const seq = ++this.seq;
     this.send(encodeInput(this.writer, seq, this.epoch, this.viewTick, cmd));
-    this.pending.push({ seq, cmd });
+    // Where everyone else is drawn right now: the moment `viewTick` names.
+    const slot = seq % (MAX_PENDING + 1);
+    if (this.bodyPool[slot]?.length !== m.actors.length * 10) this.bodyPool[slot] = createBodies(m.actors.length);
+    const bodies = liveBodies(m, this.bodyPool[slot]);
+    this.pending.push({ seq, cmd, bodies });
     if (this.pending.length > MAX_PENDING) this.pending.shift();
     this.stats.pending = this.pending.length;
 
@@ -331,7 +344,7 @@ export class NetClient {
     this.prev.y = a.p.pos.y;
     this.prev.z = a.p.pos.z;
     m.events.length = 0;
-    stepOwn(m, this.world, a, cmd, TICK_DT);
+    stepOwn(m, this.world, a, cmd, TICK_DT, bodies);
     const out = m.events.slice();
     m.events.length = 0;
     return out;

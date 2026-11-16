@@ -208,6 +208,9 @@ export class Room {
     m.history = createHistory(m.actors.length);
     this.match = m;
     this.tickBase = this.tick;
+    // Snapshots leave on room ticks that are a multiple of `snapshotEvery`.
+    m.history.snapEvery = NET.snapshotEvery;
+    m.history.snapOffset = this.tickBase;
     this.restartIn = 0;
     this.carry.length = 0;
     for (const a of m.actors) {

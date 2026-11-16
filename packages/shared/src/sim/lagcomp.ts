@@ -33,29 +33,41 @@ export interface LagHistory {
    * x, y, z, yaw, active.
    */
   data: Float64Array;
+  /**
+   * The ticks snapshots go out on: those where `(tick + snapOffset) % snapEvery`
+   * is 0. Set by the server; clients only ever see the world on these ticks.
+   */
+  snapEvery: number;
+  snapOffset: number;
 }
 
 export function createHistory(actors: number, seconds = NET.historySeconds): LagHistory {
   const size = Math.ceil(seconds * TICK_RATE) + 2;
-  return { size, actors, ticks: new Int32Array(size).fill(-1), data: new Float64Array(size * actors * 2 * STRIDE) };
+  return { size, actors, ticks: new Int32Array(size).fill(-1), data: new Float64Array(size * actors * 2 * STRIDE), snapEvery: 1, snapOffset: 0 };
 }
 
-/** Store where everyone stands after the tick that just ran. */
+/** Rounded to the centimeter, as snapshots carry positions to clients. */
+const cm = (v: number): number => Math.round(v * 100) / 100;
+
+/**
+ * Store where everyone stands after the tick that just ran, rounded the way
+ * snapshots round it, so the past the server rebuilds is the one clients drew.
+ */
 export function recordHistory(m: MatchState, h: LagHistory): void {
   const slot = m.tick % h.size;
   h.ticks[slot] = m.tick;
   let i = slot * h.actors * 2 * STRIDE;
   for (const a of m.actors) {
-    h.data[i++] = a.p.pos.x;
-    h.data[i++] = a.p.pos.y;
-    h.data[i++] = a.p.pos.z;
+    h.data[i++] = cm(a.p.pos.x);
+    h.data[i++] = cm(a.p.pos.y);
+    h.data[i++] = cm(a.p.pos.z);
     h.data[i++] = playerHeight(a.p);
     h.data[i++] = a.alive && !a.inMech ? 1 : 0;
   }
   for (const k of m.mechs) {
-    h.data[i++] = k.pos.x;
-    h.data[i++] = k.pos.y;
-    h.data[i++] = k.pos.z;
+    h.data[i++] = cm(k.pos.x);
+    h.data[i++] = cm(k.pos.y);
+    h.data[i++] = cm(k.pos.z);
     h.data[i++] = k.yaw;
     h.data[i++] = mechActive(k) ? 1 : 0;
   }
@@ -149,4 +161,47 @@ export function rewindView(h: LagHistory, now: number, viewTick: number): Rewind
     }
   }
   return view;
+}
+
+/**
+ * Where everyone stood at `viewTick` exactly as the player's client drew it,
+ * into `out` (laid out as `Bodies` in `bodies.ts`). Unlike `rewindView`, which
+ * blends neighbouring ticks, this rebuilds the client's own interpolation: from
+ * the snapshot at or before the moment to the next one, on the same rounded
+ * positions, gliding only where the client glides. So a pilot pushed against it
+ * on the server ends up exactly where the client predicted. False when nothing
+ * that old is kept.
+ */
+export function rewindBodies(h: LagHistory, now: number, viewTick: number, out: Float64Array): boolean {
+  const newest = now - 1;
+  const t = Math.min(newest, Math.max(newest - NET.rewindCap * TICK_RATE, viewTick));
+  const every = h.snapEvery;
+  const whole = Math.floor(t);
+  const t0 = whole - ((((whole + h.snapOffset) % every) + every) % every);
+  const a = frameOf(h, t0);
+  if (a < 0) return false;
+  let b = frameOf(h, t0 + every);
+  let f = Math.max(0, Math.min(1, (t - t0) / every));
+  if (b < 0) {
+    b = a;
+    f = 0;
+  }
+  const per = h.actors * 2 * STRIDE;
+  const d = h.data;
+  for (let i = 0; i < h.actors * 2; i++) {
+    const ia = a * per + i * STRIDE;
+    const ib = b * per + i * STRIDE;
+    const o = i * STRIDE;
+    const here = d[ia + 4] === 1;
+    // The client glides only between two frames where the body is there both
+    // times and has not jumped (a respawn, a seat change); otherwise it holds the first.
+    const glide = here && d[ib + 4] === 1 && Math.hypot(d[ib] - d[ia], d[ib + 1] - d[ia + 1], d[ib + 2] - d[ia + 2]) < TELEPORT;
+    const k = glide ? f : 0;
+    out[o] = d[ia] + (d[ib] - d[ia]) * k;
+    out[o + 1] = d[ia + 1] + (d[ib + 1] - d[ia + 1]) * k;
+    out[o + 2] = d[ia + 2] + (d[ib + 2] - d[ia + 2]) * k;
+    out[o + 3] = d[ia + 3];
+    out[o + 4] = here ? 1 : 0;
+  }
+  return true;
 }

@@ -1,6 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CollisionWorld,
+  MECH,
+  TUNING,
+  resetMech,
+  v3,
   INPUT_BYTES,
   Msg,
   NET,
@@ -305,6 +309,67 @@ describe('prediction and reconciliation', () => {
     settle(sim, p);
     expect(p.me.inMech).toBe(false);
     expect(gap(p.me.p.pos, p.truth.p.pos)).toBe(0);
+  });
+});
+
+describe('solid bodies over the network', () => {
+  /** Start counting corrections from now. */
+  const fresh = (p: Player): void => {
+    Object.assign(p.net.stats, { corrections: 0, maxCorrection: 0, snaps: 0 });
+  };
+
+  it('walks into an empty mech with no correction: it stands still, so both sides agree', () => {
+    const sim = new Sim(world, map);
+    sim.lag = { delay: 70, jitter: 25 };
+    const p = sim.join();
+    sim.run(1);
+    sim.clearBots();
+    const m = sim.room.match;
+    const k = m.mechs[p.net.me];
+    resetMech(k, v3(0, 0.02, 40), 0);
+    k.state = 'idle';
+    sim.place(p, 0.6, 48, 0);
+    sim.run(0.5);
+    // Being put there by the test is a correction of its own; count from here.
+    fresh(p);
+    p.script = (t) => ({ moveZ: 1, sprint: true, moveX: Math.sin(t * 3) * 0.6 });
+    sim.run(6);
+    report('pressing into an empty mech, 70 +/- 25 ms', p);
+    expect(p.net.stats.corrections).toBeLessThanOrEqual(sim.room.stats.droppedInputs);
+    expect(Math.hypot(p.truth.p.pos.x - k.pos.x, p.truth.p.pos.z - k.pos.z)).toBeGreaterThan(TUNING.player.radius + MECH.body.radius - 0.15);
+    settle(sim, p);
+    expect(gap(p.me.p.pos, p.truth.p.pos)).toBe(0);
+  });
+
+  it('needs no correction while two players shove each other: each bumps into what they see', () => {
+    const sim = new Sim(world, map);
+    sim.lag = { delay: 70, jitter: 25 };
+    const a = sim.join({ name: 'A' });
+    const b = sim.join({ name: 'B' });
+    sim.run(1);
+    sim.clearBots();
+    sim.place(a, 0, 50, 0);
+    sim.place(b, 0, 47, Math.PI);
+    sim.run(0.5);
+    fresh(a);
+    fresh(b);
+    // Both lean into each other and sidestep now and then: the worst case for a
+    // client, which sees the other one a little in the past. The server pushes
+    // each against that same past, so they still agree.
+    a.script = (t) => ({ moveZ: 1, moveX: Math.sin(t * 2.3) });
+    b.script = (t) => ({ moveZ: 1, moveX: Math.cos(t * 1.7) });
+    sim.run(10);
+    report('A, two players shoving, 70 +/- 25 ms', a);
+    report('B, two players shoving, 70 +/- 25 ms', b);
+    const apart = Math.hypot(a.truth.p.pos.x - b.truth.p.pos.x, a.truth.p.pos.z - b.truth.p.pos.z);
+    expect(apart).toBeGreaterThan(TUNING.player.radius * 2 - 0.15);
+    for (const p of [a, b]) {
+      expect(p.net.stats.corrections).toBeLessThanOrEqual(sim.room.stats.droppedInputs);
+      expect(p.net.stats.snaps).toBe(0);
+    }
+    settle(sim, a, b);
+    expect(gap(a.me.p.pos, a.truth.p.pos)).toBe(0);
+    expect(gap(b.me.p.pos, b.truth.p.pos)).toBe(0);
   });
 });
 
@@ -728,6 +793,11 @@ describe('a full server', () => {
       expect(p.net.stats.staleEvents).toBe(0);
       // Fights push pilots around (rams, knockback), so corrections happen; they stay small and eased.
       expect(p.net.stats.snaps).toBeLessThanOrEqual(2);
+      // Bumping into the others costs none: each player is pushed on the server by
+      // the others as their client drew them. What is left is rams and the moment
+      // of joining. (Measured: 0 to 3 a player in this minute; 38 to 114 when the
+      // server pushed against where the others stood by then.)
+      expect(p.net.stats.corrections).toBeLessThanOrEqual(8);
     }
     settle(sim, ...players);
     // Whoever has come to rest stands where the server says. (Someone may still be falling from a respawn.)
