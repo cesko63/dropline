@@ -5,11 +5,12 @@ import type { MapData, MapSpawn } from '../map/types';
 import { lenH, v3 } from '../math/vec3';
 import { COMBAT, type Actor, type MatchState, type ShotTrace } from './combat';
 import { rayPilot } from './hitscan';
+import { recordHistory, rewindView } from './lagcomp';
 import { MECH, createMech, eyeOf, mechActive, rayMech, type Mech } from './mech';
 import { stepMechs, stepSalvo } from './mechMatch';
 import { createPlayerState, playerHeight, stepPlayer } from './movement';
 import { spawnProjectile, stepProjectiles } from './projectiles';
-import { createRng, rand, randSigned } from './rng';
+import { createRng, rand, randSigned, type Rng } from './rng';
 import { damageActor, damageMech, killActor } from './rules';
 import { TUNING } from './tuning';
 import { WEAPONS, damageFalloff, type WeaponDef } from './weapons';
@@ -35,6 +36,9 @@ export interface MatchOptions {
   startMeter?: number;
 }
 
+/** The generator an actor's shots draw from: its own when it has one, else the match's. */
+export const shotRng = (m: MatchState, a: Actor): Rng => a.rng ?? m.rng;
+
 export const weaponOf = (a: Actor): WeaponDef => WEAPONS[a.loadout[a.weapon]];
 
 export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOptions): MatchState {
@@ -58,6 +62,8 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
     nav: buildNav(map, world),
     navMech: buildNav(map, world, MECH.body.radius, MECH.body.height),
     cmds: [],
+    history: null,
+    predict: false,
   };
 
   let botName = 0;
@@ -99,6 +105,10 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
         kit: null,
         useHeld: false,
         callHeld: false,
+        redeployHeld: false,
+        rng: null,
+        viewTick: -1,
+        stalled: false,
         kills: 0,
         deaths: 0,
         mechKills: 0,
@@ -203,13 +213,16 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
   origin.z = p.pos.z;
 
   const cone = Math.tan(spreadDeg(a) * DEG);
+  const rng = shotRng(m, a);
+  // A networked player aimed at what they saw, which is the past: trace against that.
+  const view = m.history && a.viewTick >= 0 ? rewindView(m.history, m.tick, a.viewTick) : null;
   const traces: ShotTrace[] = [];
   // Raised before the damage it causes, so listeners see the shot first.
   m.events.push({ type: 'shot', actor: a.id, weapon: def.id, origin: { ...origin }, traces });
   for (let i = 0; i < def.pellets; i++) {
     // Uniform over the spread disc.
-    const ang = rand(m.rng) * Math.PI * 2;
-    const rad = Math.sqrt(rand(m.rng)) * cone;
+    const ang = rand(rng) * Math.PI * 2;
+    const rad = Math.sqrt(rand(rng)) * cone;
     const sx = Math.cos(ang) * rad;
     const sy = Math.sin(ang) * rad;
     dir.x = fwd.x + right.x * sx + up.x * sy;
@@ -233,7 +246,10 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
     let head = false;
     for (const o of m.actors) {
       if (o === a || !o.alive || o.inMech || o.team === a.team) continue;
-      const hit = rayPilot(origin, dir, o.p.pos, playerHeight(o.p), t);
+      const was = view ? view.actors[o.id] : null;
+      // Not there to be seen at that moment (it has only just respawned): no hit.
+      if (view && !was) continue;
+      const hit = rayPilot(origin, dir, was ? was.pos : o.p.pos, was ? was.height : playerHeight(o.p), t);
       if (!hit) continue;
       t = hit.t;
       head = hit.head;
@@ -241,7 +257,9 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
     }
     for (const k of m.mechs) {
       if (k.team === a.team || !mechActive(k)) continue;
-      const hit = rayMech(origin, dir, k, t);
+      const was = view ? view.mechs[k.id] : k;
+      if (!was) continue;
+      const hit = rayMech(origin, dir, was, t);
       if (!hit) continue;
       t = hit.t;
       head = hit.head;
@@ -251,6 +269,8 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
     const end = v3(origin.x + dir.x * t, origin.y + dir.y * t, origin.z + dir.z * t);
     const hitSomeone = victim !== null || struck !== null;
     traces.push({ end, normal: hitSomeone || !wall ? null : wall.normal, victim: victim ? victim.id : -1, mech: struck ? struck.id : -1, head: hitSomeone && head });
+    // On a client the shot is only drawn; whether it hurt anyone is the server's call.
+    if (m.predict) continue;
     if (struck) {
       const amount = def.armor * damageFalloff(def, t) * (head ? MECH.vent.mult : 1) * a.damageScale;
       damageMech(m, struck, a, amount, head, end, def.id);
@@ -265,7 +285,7 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
   a.protect = 0;
   a.bloom = Math.min(def.spread.bloomMaxDeg, a.bloom + def.spread.bloomDeg);
   a.punchPitch += def.recoil.pitchDeg * DEG;
-  a.punchYaw += randSigned(m.rng) * def.recoil.yawDeg * DEG;
+  a.punchYaw += randSigned(rng) * def.recoil.yawDeg * DEG;
 }
 
 function startReload(m: MatchState, a: Actor, def: WeaponDef): void {
@@ -274,7 +294,8 @@ function startReload(m: MatchState, a: Actor, def: WeaponDef): void {
   m.events.push({ type: 'reload', actor: a.id });
 }
 
-function stepWeapon(m: MatchState, a: Actor, cmd: InputCmd, world: CollisionWorld, dt: number): void {
+/** One tick of an actor's weapon: switching, aiming, reloading and firing. */
+export function stepWeapon(m: MatchState, a: Actor, cmd: InputCmd, world: CollisionWorld, dt: number): void {
   const pressed = cmd.fire && !a.triggerHeld;
   a.triggerHeld = cmd.fire;
   a.fireBuffer = pressed ? COMBAT.semiBuffer : Math.max(0, a.fireBuffer - dt);
@@ -332,7 +353,14 @@ function stepWeapon(m: MatchState, a: Actor, cmd: InputCmd, world: CollisionWorl
   }
 }
 
-export function stepMatch(m: MatchState, world: CollisionWorld, cmds: readonly (InputCmd | undefined)[], dt: number): void {
+/**
+ * Advance the match by one tick. `cmds` holds each human's command by actor id.
+ * A missing entry (`undefined`) is a player doing nothing; `null` is a player
+ * whose command has not arrived yet (a networked player running late): that
+ * pilot is held exactly as it is for the tick, so that when the command does
+ * arrive it meets the state the player's own machine predicted from.
+ */
+export function stepMatch(m: MatchState, world: CollisionWorld, cmds: readonly (InputCmd | null | undefined)[], dt: number): void {
   m.events.length = 0;
   if (m.over) return;
   m.tick++;
@@ -341,12 +369,25 @@ export function stepMatch(m: MatchState, world: CollisionWorld, cmds: readonly (
   // Everyone moves first, then everyone shoots, so no one fires at a stale position.
   for (const a of m.actors) {
     m.cmds[a.id] = null;
+    a.stalled = false;
     if (!a.alive) {
       a.respawnIn -= dt;
       if (a.respawnIn <= 0) spawnActor(m, a);
       continue;
     }
+    if (!a.brain && cmds[a.id] === null) {
+      a.stalled = true;
+      a.p.events = 0;
+      continue;
+    }
     let cmd = a.brain ? botCmd(m, a, world, dt) : (cmds[a.id] ?? IDLE);
+    // Giving up the position for a fresh start at a spawn point. Not from a cockpit: climb out first.
+    const redeploy = cmd.redeploy && !a.redeployHeld && !a.inMech;
+    a.redeployHeld = cmd.redeploy;
+    if (redeploy) {
+      spawnActor(m, a);
+      continue;
+    }
     // Aiming down sights rules out sprinting.
     if (cmd.sprint && a.ads > 0.5) cmd = { ...cmd, sprint: false };
     m.cmds[a.id] = cmd;
@@ -360,8 +401,11 @@ export function stepMatch(m: MatchState, world: CollisionWorld, cmds: readonly (
 
   for (const a of m.actors) {
     const cmd = m.cmds[a.id];
-    if (!cmd || !a.alive) continue;
-    if (a.inMech) {
+    // A held pilot's weapon waits with it, but its health and protection run on the match's clock.
+    if (!a.alive || (!cmd && !a.stalled)) continue;
+    if (!cmd) {
+      // Nothing to fire with this tick.
+    } else if (a.inMech) {
       // In the cockpit the aim button launches rockets, and nothing fires until the mech is up.
       const k = m.mechs[a.id];
       if (k.state === 'piloted') {
@@ -379,4 +423,38 @@ export function stepMatch(m: MatchState, world: CollisionWorld, cmds: readonly (
     if (m.over) return;
   }
   stepProjectiles(m, world, dt);
+  if (m.history) recordHistory(m, m.history);
+}
+
+/**
+ * A player takes over a bot's place: the pilot starts again at a spawn point
+ * with the player's weapons, under the player's name. Its team, its mech meter
+ * and any mech it has standing stay as they are.
+ */
+export function seatHuman(m: MatchState, a: Actor, name: string): void {
+  a.brain = null;
+  a.name = name;
+  a.damageScale = 1;
+  // First the fresh start (which also fetches the pilot's kit back from a cockpit), then the new kit.
+  spawnActor(m, a);
+  a.loadout = [...COMBAT.playerLoadout];
+  a.ammo = a.loadout.map((w) => WEAPONS[w].magSize);
+  a.weapon = 0;
+  a.kills = a.deaths = a.mechKills = 0;
+  a.useHeld = a.callHeld = a.redeployHeld = false;
+  a.rng = createRng((m.seed ^ Math.imul(a.id + 1, 0x9e3779b1)) >>> 0);
+  a.viewTick = -1;
+}
+
+/** A player left: a bot of the given role takes the place over, the same way. */
+export function seatBot(m: MatchState, a: Actor, role: string, name: string): void {
+  a.name = name;
+  a.brain = createBrain(role, a.id);
+  a.damageScale = BOT_ROLES[role].damageScale;
+  spawnActor(m, a);
+  a.loadout = [BOT_ROLES[role].weapon, BOTS.antiArmor];
+  a.ammo = a.loadout.map((w) => WEAPONS[w].magSize);
+  a.weapon = 0;
+  a.rng = null;
+  a.viewTick = -1;
 }

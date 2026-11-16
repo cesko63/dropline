@@ -28,6 +28,12 @@ export interface Projectile {
 }
 
 export function spawnProjectile(m: MatchState, a: Actor, kind: string, origin: Vec3, dir: Vec3): void {
+  if (m.predict) {
+    // A client only draws its own rocket leaving, under a negative id of its own;
+    // the real one flies on the server and is matched to it when it is announced.
+    m.events.push({ type: 'launch', id: -1 - m.nextProjectile++, actor: a.id, kind, pos: { ...origin }, dir: { ...dir } });
+    return;
+  }
   const id = m.nextProjectile++;
   m.projectiles.push({ id, owner: a.id, team: a.team, kind, pos: { ...origin }, dir: { ...dir }, life: PROJECTILES[kind].life, scale: a.damageScale });
   m.events.push({ type: 'launch', id, actor: a.id, kind, pos: { ...origin }, dir: { ...dir } });

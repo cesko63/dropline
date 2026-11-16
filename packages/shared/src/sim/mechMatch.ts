@@ -6,6 +6,7 @@ import { MECH, MechEvent, distToMech, eyeOf, mechActive, resetMech, stepMechBody
 import { playerHeight } from './movement';
 import { spawnProjectile } from './projectiles';
 import { randSigned } from './rng';
+import type { Rng } from './rng';
 import { addMeter, damageActor, damageMech, destroyMech, enterMech, leaveMech } from './rules';
 import { TUNING } from './tuning';
 import { PROJECTILES } from './weapons';
@@ -169,7 +170,7 @@ function ram(m: MatchState, k: Mech): void {
 }
 
 /** The pilot rides along: their position is the mech's. */
-function seat(a: Actor, k: Mech): void {
+export function seat(a: Actor, k: Mech): void {
   const p = a.p;
   p.pos.x = k.pos.x;
   p.pos.y = k.pos.y;
@@ -222,6 +223,11 @@ export function stepMechs(m: MatchState, world: CollisionWorld, dt: number): voi
 
     const owner = m.actors[k.id];
     const driven = k.state === 'piloted';
+    // Its pilot's command is late: the machine waits with them (see `stepMatch`).
+    if (driven && owner.stalled) {
+      k.events = 0;
+      continue;
+    }
     const cmd: InputCmd = (driven && m.cmds[k.id]) || IDLE;
     if (k.state === 'boot') {
       // The view is the pilot's from the moment they sit down, so the mech turns to it.
@@ -270,6 +276,7 @@ export function stepSalvo(m: MatchState, a: Actor, k: Mech, fire: boolean, world
     eye.x = k.pos.x;
     eye.y = k.pos.y + MECH.body.eye;
     eye.z = k.pos.z;
+    const rng: Rng = a.rng ?? m.rng;
     const hit = world.castRay(eye, dir, PROJECTILES[S.projectile].speed * PROJECTILES[S.projectile].life);
     const reach = Math.max(8, hit ? hit.dist : 90);
     // The pod sits on the left shoulder, inside the body so it never starts in a wall.
@@ -281,9 +288,9 @@ export function stepSalvo(m: MatchState, a: Actor, k: Mech, fire: boolean, world
     dir.y = eye.y + dir.y * reach - probe.y;
     dir.z = eye.z + dir.z * reach - probe.z;
     let l = Math.hypot(dir.x, dir.y, dir.z);
-    dir.x = dir.x / l + randSigned(m.rng) * spread;
-    dir.y = dir.y / l + randSigned(m.rng) * spread;
-    dir.z = dir.z / l + randSigned(m.rng) * spread;
+    dir.x = dir.x / l + randSigned(rng) * spread;
+    dir.y = dir.y / l + randSigned(rng) * spread;
+    dir.z = dir.z / l + randSigned(rng) * spread;
     l = Math.hypot(dir.x, dir.y, dir.z);
     dir.x /= l;
     dir.y /= l;

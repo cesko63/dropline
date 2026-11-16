@@ -3,13 +3,13 @@ import {
   BOTS,
   COMBAT,
   MECH,
+  NET,
   PROJECTILES,
   TICK_DT,
   WEAPONS,
   createMatch,
   eyeOf,
   lerp,
-  spawnActor,
   stepMatch,
   v3,
   weaponOf,
@@ -18,6 +18,7 @@ import {
   type InputCmd,
   type MapData,
   type MatchEvent,
+  type MatchInfo,
   type MatchState,
   type PlayerState,
   type Vec3,
@@ -25,6 +26,7 @@ import {
 import { Sfx } from './audio/sfx';
 import { CameraRig } from './camera/cameraRig';
 import { Input } from './input/input';
+import type { Connection } from './net/connection';
 import { Avatar, TEAM_LOOK } from './render/avatar';
 import { Effects } from './render/effects';
 import { buildMapMeshes } from './render/mapMesh';
@@ -41,6 +43,15 @@ const OWN_TRACER = '#ffe2b0';
 const IMPACT_SPARK = '#ffcf8a';
 const CRIT_SPARK = '#ffd23f';
 const UP = v3(0, 1, 0);
+/** Ids for rockets drawn from prediction, well clear of the server's own. */
+const LOCAL_ROCKETS = 1_000_000;
+
+/**
+ * Where an event comes from. Offline everything is `sim`. Online the player's
+ * own pilot is `predicted` (shown the moment the key goes down) and the rest
+ * is the `server`'s word, a little later.
+ */
+type EventSource = 'sim' | 'predicted' | 'server';
 
 /** What a kill is credited to in the feed: a weapon, a rocket, or the mech itself. */
 function killLabel(weapon: string): string {
@@ -57,6 +68,8 @@ export interface GameOptions {
   qa: boolean;
   /** Mech meter everyone starts with, 0..1 (`?meter=1` to try the mech at once). */
   startMeter: number;
+  /** Open the connection details as soon as a server is joined (`?net=1`). */
+  netDebug: boolean;
 }
 
 export class Game {
@@ -80,11 +93,23 @@ export class Game {
   private mechDrawn: Vec3[] = [];
   private raise: number[] = [];
   private readonly cmds: InputCmd[] = [];
+  /** The line to the server while playing online, else null. */
+  private conn: Connection | null = null;
+  /** Actor id of the player's own pilot. */
+  private meId = 0;
+  /** Rockets fired from prediction that the server has not announced yet, oldest first. */
+  private readonly ownRockets: number[] = [];
+  /** Server rocket id to the id it is drawn under, for those that were predicted. */
+  private readonly rocketAlias = new Map<number, number>();
+  private nextRocket = LOCAL_ROCKETS;
+  /** When the match ended (milliseconds), for the countdown to the next one online. */
+  private endedAt = 0;
   private accumulator = 0;
   private lastTime = 0;
   private pendingEvents = 0;
   private seed: number;
   private readonly startMeter: number;
+  private netDebug: boolean;
   /** Seconds since damaged mechs last trailed smoke. */
   private smokeT = 0;
   private readonly tmp = new THREE.Vector3();
@@ -105,14 +130,11 @@ export class Game {
     this.hud.debug = options.qa;
     this.seed = options.seed;
     this.startMeter = options.startMeter;
+    this.netDebug = options.netDebug;
 
     this.input = new Input(canvas);
     this.input.onLockChange = (locked) => this.hud.showOverlay(!locked);
     this.input.onLockError = () => this.hud.showLockError();
-    this.hud.onStart(() => {
-      this.sfx.unlock();
-      void this.input.lock();
-    });
     document.addEventListener('visibilitychange', () => this.sfx.setPaused(document.hidden || this.paused));
 
     this.newMatch();
@@ -122,20 +144,64 @@ export class Game {
 
   /** The local player. */
   get me(): Actor {
-    return this.match.actors[0];
+    return this.match.actors[this.meId];
+  }
+
+  /** True while the match being played is the server's. */
+  get online(): boolean {
+    return this.conn !== null;
+  }
+
+  /** Take the mouse and start the sound: has to come from a click or a key press. */
+  resume(): void {
+    this.sfx.unlock();
+    void this.input.lock();
   }
 
   get state(): PlayerState {
     return this.me.p;
   }
 
-  /** The match stands still while the start screen is up. */
+  /**
+   * Offline the match stands still while the start screen is up. Online nothing
+   * pauses it: the menu is only on this player's screen and their pilot stays
+   * in the world.
+   */
   get paused(): boolean {
-    return !this.input.locked && !this.input.override;
+    return !this.conn && !this.input.locked && !this.input.override;
   }
 
-  /** Start a fresh match; each one gets the next seed, so no two play out the same. */
+  /** Start a fresh offline match; each one gets the next seed, so no two play out the same. */
   newMatch(): void {
+    this.conn = null;
+    this.show(createMatch(this.map, this.world, { seed: this.seed++, startMeter: this.startMeter }), 0);
+  }
+
+  /**
+   * Play the server's match: `conn` has been welcomed and holds this client's
+   * copy of it. Called again when the next match starts or after a reconnect.
+   */
+  goOnline(conn: Connection): void {
+    this.conn = conn;
+    this.show(conn.net.match, conn.net.me);
+    this.hud.setEndHint('');
+    if (this.netDebug) this.hud.showNetDebug();
+    this.netDebug = false;
+  }
+
+  /** Someone joined or left: say so in the feed. */
+  rosterChanged(before: MatchInfo, now: MatchInfo): void {
+    now.seats.forEach((seat, i) => {
+      const was = before.seats[i];
+      if (!was || i === this.meId) return;
+      const ally = seat.team === this.me.team;
+      if (was.bot && !seat.bot) this.hud.addNote(seat.name, 'JOINED', ally);
+      else if (!was.bot && seat.bot) this.hud.addNote(was.name, 'LEFT', ally);
+    });
+  }
+
+  /** Put a match on screen: models for everyone in it, a clean HUD, the view on the player's pilot. */
+  private show(match: MatchState, meId: number): void {
     for (const avatar of this.avatars) {
       this.scene.remove(avatar.root, avatar.laser);
       avatar.dispose();
@@ -144,7 +210,13 @@ export class Game {
       this.scene.remove(avatar.root);
       avatar.dispose();
     }
-    this.match = createMatch(this.map, this.world, { seed: this.seed++, startMeter: this.startMeter });
+    this.match = match;
+    this.meId = meId;
+    this.cmds.length = 0;
+    this.ownRockets.length = 0;
+    this.rocketAlias.clear();
+    this.hud.setEndHint('ENTER · PLAY AGAIN');
+    this.hud.setOnline(this.conn !== null);
     const me = this.me;
     this.avatars = this.match.actors.map((a) => new Avatar(a.team, a.team === me.team && a !== me));
     for (const avatar of this.avatars) this.scene.add(avatar.root, avatar.laser);
@@ -187,12 +259,9 @@ export class Game {
     const me = this.me;
     if (input.consume('toggleView')) this.rig.thirdPerson = !this.rig.thirdPerson;
     if (input.consume('mute')) this.hud.setMuted(this.sfx.toggleMute());
-    if (this.match.over && input.consume('confirm')) this.newMatch();
-    // No redeploying out of a cockpit: climb out first.
-    if (input.consume('respawn') && me.alive && !me.inMech && !this.match.over) {
-      spawnActor(this.match, me);
-      this.onSpawn(me);
-    }
+    if (input.consume('netDebug')) this.hud.toggleNet();
+    // Online the server starts the next match by itself.
+    if (this.match.over && !this.conn && input.consume('confirm')) this.newMatch();
     const keys = [input.consume('weapon1'), input.consume('weapon2'), input.consume('weapon3'), input.consume('weapon4')];
     const step = (input.consume('nextWeapon') ? 1 : 0) + input.takeWheel();
     // The mech has one weapon; the pilot's choice waits for them outside.
@@ -214,7 +283,10 @@ export class Game {
     this.sfx.setPaused(paused || document.hidden);
 
     let cmd = this.input.sample();
-    if (!paused) {
+    const conn = this.conn;
+    if (conn) {
+      cmd = this.frameOnline(conn, dt, cmd);
+    } else if (!paused) {
       this.accumulator += dt;
       while (this.accumulator >= TICK_DT) {
         for (const a of m.actors) {
@@ -234,25 +306,35 @@ export class Game {
         stepMatch(m, this.world, this.cmds, TICK_DT);
         this.pendingEvents |= me.p.events;
         this.accumulator -= TICK_DT;
-        for (const e of m.events) this.onEvent(e);
+        for (const e of m.events) this.onEvent(e, 'sim');
       }
     }
 
     const alpha = this.accumulator / TICK_DT;
-    for (const a of m.actors) {
-      const from = this.prev[a.id];
-      const to = a.p.pos;
-      const p = this.drawn[a.id];
-      p.x = lerp(from.x, to.x, alpha);
-      p.y = lerp(from.y, to.y, alpha);
-      p.z = lerp(from.z, to.z, alpha);
-    }
-    for (const k of m.mechs) {
-      const from = this.mechPrev[k.id];
-      const p = this.mechDrawn[k.id];
-      p.x = lerp(from.x, k.pos.x, alpha);
-      p.y = lerp(from.y, k.pos.y, alpha);
-      p.z = lerp(from.z, k.pos.z, alpha);
+    if (conn) {
+      // Everyone else already stands where they are to be drawn (between two
+      // snapshots); only the player's own pilot moves in ticks.
+      for (const a of m.actors) {
+        if (a === me) conn.net.ownDrawn(alpha, this.drawn[a.id]);
+        else Object.assign(this.drawn[a.id], a.p.pos);
+      }
+      for (const k of m.mechs) Object.assign(this.mechDrawn[k.id], k.id === me.id && me.inMech ? this.drawn[me.id] : k.pos);
+    } else {
+      for (const a of m.actors) {
+        const from = this.prev[a.id];
+        const to = a.p.pos;
+        const p = this.drawn[a.id];
+        p.x = lerp(from.x, to.x, alpha);
+        p.y = lerp(from.y, to.y, alpha);
+        p.z = lerp(from.z, to.z, alpha);
+      }
+      for (const k of m.mechs) {
+        const from = this.mechPrev[k.id];
+        const p = this.mechDrawn[k.id];
+        p.x = lerp(from.x, k.pos.x, alpha);
+        p.y = lerp(from.y, k.pos.y, alpha);
+        p.z = lerp(from.z, k.pos.z, alpha);
+      }
     }
 
     // The view follows the mouse every frame rather than waiting for the next tick.
@@ -314,6 +396,10 @@ export class Game {
     // Fully aimed, a scoped weapon swaps its model for the scope view.
     const scoped = def.scope && me.ads > 0.9 && me.alive && !rig.outside;
     this.hud.update(dt, m, me, rig.outside, scoped, cam, s.yaw);
+    if (conn) {
+      this.hud.updateNet(dt, conn.net.stats, conn.status, conn.secondsLeft);
+      if (m.over) this.hud.setEndHint(`NEXT MATCH IN ${Math.max(0, Math.ceil(NET.restartSeconds - (performance.now() - this.endedAt) / 1000))}`);
+    }
     if (this.hud.inDropZone && !paused) this.sfx.zoneWarn();
 
     this.renderer.clear();
@@ -322,6 +408,35 @@ export class Game {
       this.renderer.clearDepth();
       this.renderer.render(this.viewmodel.scene, this.viewmodel.camera);
     }
+  }
+
+  /**
+   * The online half of a frame: send this frame's commands and act on them at
+   * once, then let the client core move everyone else and hand out what the
+   * server says happened.
+   */
+  private frameOnline(conn: Connection, dt: number, cmd: InputCmd): InputCmd {
+    const net = conn.net;
+    if (!net.ready) return cmd;
+    const me = this.me;
+    // A respawn: the view turns to where the pilot was put down.
+    if (net.takeViewReset()) {
+      this.input.yaw = me.p.yaw;
+      this.input.pitch = 0;
+    }
+    // While the line is down nothing is predicted: there is nobody to confirm it.
+    if (conn.status === 'online') {
+      this.accumulator += dt * net.timeScale;
+      while (this.accumulator >= TICK_DT) {
+        cmd = this.input.sample();
+        const shown = net.command(cmd);
+        this.pendingEvents |= me.p.events;
+        this.accumulator -= TICK_DT;
+        for (const e of shown) this.onEvent(e, 'predicted');
+      }
+    }
+    for (const e of net.advance(performance.now(), dt)) this.onEvent(e, 'server');
+    return cmd;
   }
 
   /** Where a pilot's line of sight ends: the first surface, or far away. */
@@ -353,8 +468,11 @@ export class Game {
   private onSpawn(a: Actor): void {
     this.snap(a);
     if (a !== this.me) return;
-    this.input.yaw = a.p.yaw;
-    this.input.pitch = 0;
+    // Online the view was already turned when the server's word arrived (`frameOnline`).
+    if (!this.conn) {
+      this.input.yaw = a.p.yaw;
+      this.input.pitch = 0;
+    }
     this.hud.hideDeath();
     this.sfx.spawn();
   }
@@ -366,13 +484,22 @@ export class Game {
   }
 
   /** Turn what happened in the simulation into effects, sound and HUD feedback. */
-  private onEvent(e: MatchEvent): void {
+  private onEvent(e: MatchEvent, source: EventSource): void {
     const m = this.match;
     const me = this.me;
     switch (e.type) {
       case 'shot': {
         const a = m.actors[e.actor];
         const mine = a === me;
+        a.lastShotTime = m.time;
+        if (mine && source === 'server') {
+          // The shot itself was shown when the trigger was pulled. What the server
+          // adds is whether it struck anyone: sparks in the victim's colours.
+          for (const t of e.traces) {
+            if (t.victim >= 0) this.fx.burst(t.end, null, t.head ? 10 : 5, TEAM_LOOK[m.actors[t.victim].team].visor, 5);
+          }
+          break;
+        }
         const firstPerson = mine && !this.rig.outside;
         const body = a.inMech ? this.mechAvatars[a.id] : this.avatars[a.id];
         const muzzle = firstPerson ? this.viewmodel.muzzleWorld(this.rig.camera, this.tmp) : body.muzzleWorld(this.tmp);
@@ -386,7 +513,7 @@ export class Game {
             this.fx.burst(t.end, t.normal, a.inMech ? 7 : 4, IMPACT_SPARK, a.inMech ? 6 : 4);
             this.fx.decal(t.end, t.normal, a.inMech ? 1.8 : 1);
             struck = t.end;
-          } else if (t.victim >= 0) {
+          } else if (t.victim >= 0 && source !== 'predicted') {
             // Sparks in the victim's colours, more of them for a headshot.
             this.fx.burst(t.end, null, t.head ? 10 : 5, TEAM_LOOK[m.actors[t.victim].team].visor, 5);
           } else if (t.mech >= 0) {
@@ -532,6 +659,8 @@ export class Game {
         const k = m.mechs[e.mech];
         const avatar = this.mechAvatars[k.id];
         const mine = k.id === me.id && me.inMech;
+        // The player's own footfalls come from prediction, in step with what they see.
+        if (mine && source === 'server') break;
         if (e.heavy) avatar.land(k.landSpeed);
         else avatar.step();
         this.sfx.mechStep(mine ? null : k.pos, e.heavy);
@@ -549,6 +678,7 @@ export class Game {
       case 'mechDash': {
         const k = m.mechs[e.mech];
         const mine = k.id === me.id && me.inMech;
+        if (mine && source === 'server') break;
         this.sfx.mechDash(mine ? null : k.pos);
         if (!mine || this.rig.outside) this.fx.smoke(k.pos, 6, 1, 1.4, 0.7, null, 0.55);
         if (mine) {
@@ -623,6 +753,16 @@ export class Game {
         const def = PROJECTILES[e.kind];
         const mine = a === me;
         const salvo = a.inMech;
+        let id = e.id;
+        if (mine && source === 'predicted') {
+          // Drawn at once under an id of its own, until the server announces the real one.
+          id = this.nextRocket++;
+          this.ownRockets.push(id);
+        } else if (mine && source === 'server' && this.ownRockets.length) {
+          // The rocket already in the air is this one: remember it for when it bursts.
+          this.rocketAlias.set(e.id, this.ownRockets.shift()!);
+          break;
+        }
         // Seen from outside it leaves the tube or the pod; from the player's own
         // shoulder it leaves the launcher in their hands.
         let from: THREE.Vector3 | null = null;
@@ -633,7 +773,7 @@ export class Game {
         } else {
           from = this.avatars[a.id].muzzleWorld(this.tmp);
         }
-        this.fx.rocket(e.id, e.pos, e.dir, def.speed, def.life + 0.2, from);
+        this.fx.rocket(id, e.pos, e.dir, def.speed, def.life + 0.2, from);
         if (salvo) {
           this.mechAvatars[a.id].podFlash();
           this.sfx.launch(mine ? null : e.pos);
@@ -643,7 +783,8 @@ export class Game {
       }
       case 'explode': {
         const def = PROJECTILES[e.kind];
-        this.fx.endRocket(e.id);
+        this.fx.endRocket(this.rocketAlias.get(e.id) ?? e.id);
+        this.rocketAlias.delete(e.id);
         this.fx.explosion(e.pos, e.normal, def.radius);
         this.sfx.explosion(e.pos);
         this.rig.shake(this.near(e.pos, 24) * 0.6);
@@ -651,6 +792,7 @@ export class Game {
       }
 
       case 'matchEnd':
+        this.endedAt = performance.now();
         this.hud.showEnd(e.winner === me.team, m, me);
         this.sfx.matchEnd(e.winner === me.team);
         break;

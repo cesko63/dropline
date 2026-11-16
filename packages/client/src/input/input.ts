@@ -25,6 +25,7 @@ export const BINDINGS = {
   toggleView: ['KeyV'],
   respawn: ['KeyK'],
   mute: ['KeyM'],
+  netDebug: ['KeyN'],
   confirm: ['Enter'],
 };
 
@@ -146,6 +147,7 @@ export class Input {
       reload: this.held('reload'),
       use: this.held('use'),
       call: this.held('call'),
+      redeploy: this.held('respawn'),
       weapon: this.weapon,
     };
     if (this.override) {

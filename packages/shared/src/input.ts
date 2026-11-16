@@ -22,6 +22,8 @@ export interface InputCmd {
   use: boolean;
   /** Call the mech down. Acts once per press. */
   call: boolean;
+  /** Give up the current position and start again at a spawn point. Acts once per press. */
+  redeploy: boolean;
 }
 
 /*
@@ -43,4 +45,5 @@ export const emptyInput = (): InputCmd => ({
   weapon: -1,
   use: false,
   call: false,
+  redeploy: false,
 });

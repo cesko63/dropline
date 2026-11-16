@@ -6,8 +6,10 @@
     "dev": "pnpm --filter @dropline/client dev",
     "build": "pnpm --filter @dropline/client build",
     "dev:server": "pnpm --filter @dropline/server dev",
-    "test": "pnpm --filter @dropline/shared test",
-    "typecheck": "pnpm -r typecheck"
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "host": "pnpm --filter @dropline/server start",
+    "lag": "pnpm --filter @dropline/server lag"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

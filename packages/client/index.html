@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DROPLINE — mech prototype</title>
+    <title>DROPLINE — multiplayer prototype</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
@@ -25,7 +25,11 @@
         <div id="fps">-- fps</div>
         <div id="view-mode">FIRST PERSON · V</div>
         <div id="muted" hidden>SOUND OFF · M</div>
+        <div id="net" hidden><i></i><span id="net-text">PING --</span></div>
       </div>
+
+      <pre id="net-debug" hidden></pre>
+      <div id="link"><i></i><span id="link-text"></span></div>
 
       <div id="score">
         <div class="side ally">
@@ -96,15 +100,27 @@
         <p class="tag" id="end-score"></p>
         <h2 id="end-title">VICTORY</h2>
         <p id="end-stats"></p>
-        <p class="hint">ENTER · PLAY AGAIN</p>
+        <p class="hint" id="end-hint">ENTER · PLAY AGAIN</p>
       </div>
     </div>
 
     <div id="overlay">
       <div class="panel">
-        <p class="tag">Mech prototype · working title</p>
+        <p class="tag">Multiplayer prototype · working title</p>
         <h1>DROPLINE</h1>
-        <button id="start" type="button">Click to deploy</button>
+        <div id="menu">
+          <label for="callsign">Callsign</label>
+          <input id="callsign" type="text" maxlength="16" autocomplete="off" spellcheck="false" />
+          <div class="choices">
+            <button id="play-online" type="button">Deploy online</button>
+            <button id="play-offline" type="button" class="quiet">Practice offline</button>
+          </div>
+        </div>
+        <div id="resume" hidden>
+          <button id="start" type="button">Click to resume</button>
+          <button id="leave" type="button" class="quiet">Leave match</button>
+        </div>
+        <p id="menu-status" role="status" hidden></p>
         <p id="lock-error" hidden>
           This window does not allow mouse capture. Open this address in Chrome, Edge or Firefox to play.
         </p>
@@ -126,7 +142,8 @@
           <div><dt>V</dt><dd>First / third person</dd></div>
           <div><dt>K</dt><dd>Redeploy at a spawn point</dd></div>
           <div><dt>M</dt><dd>Sound on / off</dd></div>
-          <div><dt>Esc</dt><dd>Pause and release the mouse</dd></div>
+          <div><dt>N</dt><dd>Connection details, when online</dd></div>
+          <div><dt>Esc</dt><dd>Release the mouse. Offline this pauses the match</dd></div>
         </dl>
       </div>
     </div>

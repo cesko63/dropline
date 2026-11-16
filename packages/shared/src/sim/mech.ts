@@ -137,7 +137,7 @@ const hit: ActorHit = { t: 0, head: false };
  * its back. A hit on the vent (`head` in the result) does extra damage, so the
  * way to beat a mech is to get behind it. Returns a shared object.
  */
-export function rayMech(o: Vec3, d: Vec3, k: Mech, maxT: number): ActorHit | null {
+export function rayMech(o: Vec3, d: Vec3, k: { pos: Vec3; yaw: number }, maxT: number): ActorHit | null {
   const B = MECH.body;
   const V = MECH.vent;
   const tBody = rayUprightCapsule(o, d, k.pos.x, k.pos.z, k.pos.y + B.radius, k.pos.y + B.height - B.radius, B.radius);

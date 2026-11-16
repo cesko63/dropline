@@ -4,6 +4,7 @@ import type { NavGrid } from '../ai/nav';
 import type { InputCmd } from '../input';
 import type { MapSpawn } from '../map/types';
 import type { Vec3 } from '../math/vec3';
+import type { LagHistory } from './lagcomp';
 import type { Mech } from './mech';
 import type { PlayerState } from './movement';
 import type { Projectile } from './projectiles';
@@ -72,6 +73,22 @@ export interface Actor {
   kit: Kit | null;
   useHeld: boolean;
   callHeld: boolean;
+  redeployHeld: boolean;
+
+  /**
+   * The pilot's own generator for spread and recoil, or null to draw from the
+   * match's. A networked human has one, so the client can predict its own shots
+   * and land on the same numbers as the server.
+   */
+  rng: Rng | null;
+  /**
+   * The match tick this pilot's player was looking at when the command was made
+   * (others are drawn a little in the past), or -1. Shots are traced against
+   * where the targets stood then; see `lagcomp.ts`.
+   */
+  viewTick: number;
+  /** No command arrived for this tick: the pilot is held still until one does. */
+  stalled: boolean;
 
   kills: number;
   deaths: number;
@@ -160,4 +177,11 @@ export interface MatchState {
   navMech: NavGrid;
   /** The command each actor used in the latest tick (scratch). */
   cmds: (InputCmd | null)[];
+  /** Where everyone stood over the last second, for lag compensation. Null when nobody needs it (offline). */
+  history: LagHistory | null;
+  /**
+   * True on a client's copy of the match: only the player's own pilot is stepped
+   * there (`stepOwn`), and nothing it does hurts anyone. Damage comes from the server.
+   */
+  predict: boolean;
 }

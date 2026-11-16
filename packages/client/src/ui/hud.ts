@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMBAT, MECH, TUNING, WEAPONS, lenH, spreadDeg, weaponOf, type Actor, type MatchState, type Vec3 } from '@dropline/shared';
+import { COMBAT, MECH, TUNING, WEAPONS, lenH, spreadDeg, weaponOf, type Actor, type MatchState, type NetStats, type Vec3 } from '@dropline/shared';
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -94,6 +94,14 @@ export class Hud {
   private readonly prompt = el('prompt');
   private readonly promptText = new Text(el('prompt'));
   private readonly warn = el('warn');
+  private readonly net = el('net');
+  private readonly netText = new Text(el('net-text'));
+  private readonly netDebug = el('net-debug');
+  private readonly link = el('link');
+  private readonly linkText = new Text(el('link-text'));
+  private readonly endHint = new Text(el('end-hint'));
+  private netDebugIn = 0;
+  private wasLinked = true;
   private readonly mechTags: HTMLElement[] = [];
   private readonly mechTagText: Text[] = [];
   private reveal: number[] = [];
@@ -490,6 +498,24 @@ export class Hud {
     if (killer) line.append(name(killer));
     line.append(mid, name(victim, victimNote));
     if (killer === me || victim === me) line.className = 'mine';
+    this.pushFeed(line);
+  }
+
+  /** News that is not a kill, in the same feed: a player joined or left. */
+  addNote(name: string, what: string, ally: boolean): void {
+    const line = document.createElement('div');
+    line.className = 'note';
+    const who = document.createElement('span');
+    who.className = ally ? 'ally' : 'enemy';
+    who.textContent = name;
+    const tail = document.createElement('span');
+    tail.className = 'how';
+    tail.textContent = what;
+    line.append(who, tail);
+    this.pushFeed(line);
+  }
+
+  private pushFeed(line: HTMLElement): void {
     this.feedBox.append(line);
     line.animate([{ opacity: 0, transform: 'translateX(16px)' }, { opacity: 1, transform: 'none' }], { duration: 160, easing: 'ease-out' });
     this.feed.push({ el: line, life: 5 });
@@ -534,6 +560,62 @@ export class Hud {
     this.end.classList.add('on');
   }
 
+  /** The line under the result: how the next match starts. */
+  setEndHint(text: string): void {
+    this.endHint.set(text);
+  }
+
+  /** Show or hide everything that only means something on a server. */
+  setOnline(online: boolean): void {
+    this.net.hidden = !online;
+    if (online) return;
+    this.netDebug.hidden = true;
+    this.link.classList.remove('on');
+    this.wasLinked = true;
+  }
+
+  /** The connection details panel (N). */
+  toggleNet(): void {
+    if (this.net.hidden) return;
+    this.netDebug.hidden = !this.netDebug.hidden;
+    this.netDebugIn = 0;
+  }
+
+  showNetDebug(): void {
+    this.netDebug.hidden = false;
+  }
+
+  /**
+   * The ping readout, the notice while the line is down, and the details panel.
+   * `status` is the connection's; `left` the seconds it will keep trying.
+   */
+  updateNet(dt: number, st: NetStats, status: string, left: number): void {
+    const linked = status === 'online';
+    const kind = !linked || st.ping > 180 ? 'bad' : st.ping > 90 ? 'slow' : 'good';
+    if (this.net.dataset.kind !== kind) this.net.dataset.kind = kind;
+    this.netText.set(linked ? `PING ${Math.round(st.ping)} MS` : 'NO LINK');
+    if (linked !== this.wasLinked) {
+      this.wasLinked = linked;
+      this.link.classList.toggle('on', !linked);
+    }
+    if (!linked) this.linkText.set(`CONNECTION LOST · RECONNECTING ${Math.ceil(left)}`);
+
+    if (this.netDebug.hidden) return;
+    this.netDebugIn -= dt;
+    if (this.netDebugIn > 0) return;
+    this.netDebugIn = 0.25;
+    this.netDebug.textContent = [
+      `ping        ${st.ping.toFixed(0)} ms`,
+      `jitter      ${st.jitter.toFixed(1)} ms`,
+      `drawn late  ${st.delay.toFixed(0)} ms`,
+      `snapshot    ${st.snapshotBytes.toFixed(0)} B  (max ${st.snapshotBytesMax})`,
+      `unanswered  ${st.pending} commands, ${st.queued} waiting on server`,
+      `corrections ${st.corrections}  last ${(st.lastCorrection * 100).toFixed(1)} cm  snaps ${st.snaps}`,
+      `past newest ${st.extrapolated} frames`,
+      `stale       ${st.staleEvents} events skipped`,
+    ].join('\n');
+  }
+
   setMuted(muted: boolean): void {
     el('muted').hidden = !muted;
   }
@@ -545,9 +627,5 @@ export class Hud {
   /** Tell the player why clicking did nothing. */
   showLockError(): void {
     el('lock-error').hidden = false;
-  }
-
-  onStart(handler: () => void): void {
-    this.overlay.addEventListener('click', handler);
   }
 }

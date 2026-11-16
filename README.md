@@ -4,11 +4,11 @@ A browser first-person shooter with pilot movement (wallrun, double jump, slide,
 mantle, jetpack thrust) and war mechs that pilots call down from the sky.
 Original game: its own name, designs and assets.
 
-Current state: **mech prototype**. A 4-v-4 skirmish against bots on the test
-map: one player and three allied bots against four enemy bots, first team to 50
-points (1 for a pilot, 3 for a mech). Four pilot weapons, health that
-regenerates, respawns, and a mech for every pilot who fills their meter. Offline
-only; no networking yet.
+Current state: **multiplayer prototype**. A 4-v-4 skirmish on the test map,
+first team to 50 points (1 for a pilot, 3 for a mech). Four pilot weapons,
+health that regenerates, respawns, and a mech for every pilot who fills their
+meter. Play it online on a dedicated server, where up to eight players take the
+places of bots, or offline against bots alone.
 
 ## Run
 
@@ -20,19 +20,32 @@ pnpm install
 pnpm dev
 ```
 
-Then open http://localhost:5173 and click to capture the mouse.
+Then open http://localhost:5173 and choose **Practice offline**. To play online,
+start the game server in a second terminal and choose **Deploy online**:
+
+```bash
+pnpm host
+```
+
+Every browser tab that deploys is another player; the server fills the other
+seats with bots.
 
 | Command | What it does |
 |---|---|
 | `pnpm dev` | Start the client with hot reload |
-| `pnpm test` | Run the headless movement, combat, bot and mech tests |
+| `pnpm host` | Start the game server on port 8787 (`PORT` and `SEED` change the port and the match) |
+| `pnpm dev:server` | The same, restarting when the code changes |
+| `pnpm lag` | Start the lag simulator on port 8788, in front of the server (see Multiplayer) |
+| `pnpm test` | Run the headless movement, combat, bot, mech and netcode tests |
 | `pnpm typecheck` | Type-check all packages |
 | `pnpm build` | Production build of the client |
-| `pnpm dev:server` | Play a bots-only match headless in Node and print the score |
 
-Address options: `?seed=123` replays a given match, `?qa=1` shows every bot's
-role, state and attack token over its head, `?meter=1` starts everyone with a
-full mech meter.
+Address options, offline: `?seed=123` replays a given match, `?qa=1` shows every
+bot's role, state and attack token over its head, `?meter=1` starts everyone
+with a full mech meter. Online: `?server=ws://host:port` picks the server (the
+default is port 8787 on the page's own host, or `VITE_SERVER_URL` at build
+time), `?name=Ada` sets the callsign, `?net=1` opens the connection details,
+`?online=1` joins without the start screen.
 
 ## Controls
 
@@ -56,8 +69,9 @@ full mech meter.
 | V | First / third person |
 | K | Redeploy at a spawn point |
 | M | Sound on / off |
-| Enter | Play again after a match |
-| Esc | Pause and release the mouse |
+| N | Connection details, when online |
+| Enter | Play again after a match (offline; online the next match starts by itself) |
+| Esc | Release the mouse. Offline this pauses the match |
 
 ## Weapons
 
@@ -115,6 +129,59 @@ They see through a view cone with line of sight, hear gunfire, search where they
 last saw you, and only two of them may fire on the same target at once. Speed
 across their view is what makes them miss.
 
+## Multiplayer
+
+The server is the authority: it runs the whole match at 60 ticks a second and
+tells every player 30 times a second what it sees. Nothing a player's machine
+says is taken on trust except which keys are held and where the view points.
+
+- **Your own pilot answers at once.** The client runs the same movement and
+  weapon code as the server on every key press and does not wait for an answer.
+  When the server's word arrives, the client takes it and replays the commands
+  the server has not seen yet. If the two ever disagree, the difference is eased
+  away over a tenth of a second instead of snapping.
+- **A late command waits for its pilot.** When a command is late, the server
+  holds that pilot still for up to 100 ms instead of guessing, so the command
+  meets exactly the state it was made for. This is why ordinary lag costs no
+  corrections at all. After a hitch on the player's machine the client's clock
+  runs 5% slow for a moment so the server can work through the burst.
+- **Everyone else is drawn slightly in the past**, between two things the server
+  really said: about 45 ms on a clean line, more when the line is uneven.
+- **Shots land where you aimed.** The server remembers where everyone was for
+  the last second and judges each bullet against the moment the shooter was
+  looking at, up to 300 ms back. Past that, a player on a worse line has to lead
+  their shots. Rockets fly in server time and are not rewound.
+- **Seats.** A player who joins takes over a bot on the team with fewer
+  players. If the line drops, the seat with its score and meter is held for 20
+  seconds and the client reconnects by itself; leaving on purpose hands it
+  back to a bot at once. Ten seconds after a match ends, the next one starts.
+- **A hidden tab** lets go of every key; the pilot stands where it was and the
+  game catches up when the tab returns.
+- **The server checks what it is sent**: message size and rate, every field of
+  a command, and it runs one command per tick however many arrive, so sending
+  more does not move a pilot faster. A client with the wrong protocol version is
+  told to reload.
+
+Measured with the tests in `packages/server/tests` (real server code, real
+client code, a simulated line) and with two browser tabs against `pnpm host`,
+one of them through `pnpm lag`:
+
+| | Result |
+|---|---|
+| Corrections on a clean line, 20 s of parkour | 0 |
+| Corrections at 70 ± 25 ms each way, 30 s | 0 (the server held the pilot for 11 ticks in total) |
+| Corrections in the browser at 165 ms ping, 30 s of fighting | 0 |
+| Three 85 ms hitches on the player's machine | 0 corrections, 0 skipped commands |
+| Hits on a strafing target at 16 m, 70 ± 25 ms | 82 of 84 with lag compensation, 4 of 84 without |
+| The same at 260 ms each way | 3 of 84: the 300 ms cap holds |
+| Snapshot size | about 570 B on foot, 770 B in a mech, 955 B in an eight-player fight (28 KB/s per player) |
+| Server cost | 0.16 ms per tick with two players and six bots |
+
+To try a bad line yourself, run `pnpm lag` beside the server and open
+http://localhost:5173/?server=ws://localhost:8788. `pnpm lag --delay 120
+--jitter 40` makes it worse. **N** shows ping, jitter, how far in the past
+others are drawn and every correction.
+
 ## Layout
 
 ```
@@ -122,6 +189,7 @@ data/                 Engine-neutral game data (plain JSON)
   movement.json         All movement tuning values
   combat.json           Health, respawn, score limit, hitboxes, teams, mech meter and drop
   bots.json             Bot senses and per-role behaviour
+  net.json              Netcode: rates, waits, rewind cap, interpolation, limits
   weapons/*.json        One file per weapon
   projectiles.json      Rockets: speed, blast, damage to pilots and to mechs
   mechs/halberd.json    The mech: hull, body, movement, dash, vent, weapons
@@ -136,28 +204,40 @@ packages/
     src/sim/mechMatch.ts  Meter, call-in, landing, ramming, the rocket salvo
     src/sim/projectiles.ts Rockets in flight and their blast
     src/sim/hitscan.ts    Ray against a pilot's head and body
+    src/sim/predict.ts    One tick of one pilot: what a client runs ahead of the server
+    src/sim/lagcomp.ts    Where everyone was: history and rewind for hit checks
     src/sim/rng.ts        Seeded random numbers for everything gameplay
     src/sim/world.ts      Collision queries against the map
     src/ai/nav.ts         Walkable grid and A* paths
     src/ai/bot.ts         Bot senses, states, aim and movement
-    src/net/              (later) protocol
+    src/net/protocol.ts   Messages, binary commands, protocol version
+    src/net/snapshot.ts   What the server sends: own pilot exact, the rest packed
+    src/net/client.ts     The client core: prediction, reconciliation, interpolation
     tests/                Headless movement, combat, bot and mech tests
   client/             Browser game (Three.js, Vite)
     src/game.ts           Fixed-tick loop, events to effects, frame rendering
+    src/net/              The WebSocket around the client core: greeting, ping, reconnect
     src/input/            Keyboard, mouse, pointer lock, bindings
     src/camera/           First / third person camera, recoil, zoom, shake
     src/render/           Scene, map, pilots, mechs, first-person weapons, cockpit, effects
     src/audio/            Sound effects
-    src/ui/               HUD
-  server/             Authoritative server (stub for now)
+    src/ui/               HUD and start screen
+  server/             Dedicated game server (Node, WebSocket)
+    src/index.ts          Sockets, the tick loop, /health
+    src/rooms/room.ts     One match: seats, command queues, snapshots, reconnects
+    src/lagProxy.ts       Lag simulator
+    tests/                Netcode tests: a server and clients on a simulated line
 ```
 
 ## Design rules
 
 - **The simulation lives in `shared`.** `stepMatch(match, world, inputs, dt)` and
-  `stepPlayer` depend on nothing else, so the server can be the authority and the
-  client can predict. The client only turns the events of each tick into effects,
-  sound and HUD.
+  `stepPlayer` depend on nothing else, so the server is the authority and the
+  client predicts with the very same code. The client only turns the events of
+  each tick into effects, sound and HUD.
+- **The netcode core is shared too.** `NetClient` has no socket and no clock of
+  its own, so the tests run real clients against the real room and count every
+  correction.
 - **Gameplay randomness is seeded.** Spread, bot decisions and spawn choices draw
   from one generator stored in the match, so the same seed and inputs replay the
   same match. Effects use their own randomness.
@@ -179,12 +259,18 @@ packages/
 - **Bots stay on the ground floor.** They jump and slide but do not plan routes
   over ledges or walls.
 - No settings screen, gamepad or touch controls yet.
+- **One match per server**, on one map, with no accounts: a callsign is all a
+  player has. The dev client is served to `localhost` only; hosting for players
+  elsewhere is step 6.
+- **WebSocket only.** It runs over TCP, so one lost packet holds up everything
+  behind it. The stall and the interpolation buffer absorb that; a datagram
+  transport would do better on a poor line.
 
 ## Roadmap
 
 1. Movement prototype (done)
 2. Gunplay and offline bots (done)
-3. Mech: call-in, embark, mech combat (this)
-4. Multiplayer: dedicated server, prediction, lag compensation
+3. Mech: call-in, embark, mech combat (done)
+4. Multiplayer: dedicated server, prediction, lag compensation (this)
 5. Content and polish
 6. Deployment

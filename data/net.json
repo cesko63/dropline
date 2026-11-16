@@ -1,0 +1,32 @@
+{
+  "port": 8787,
+  "snapshotEvery": 2,
+  "nameLength": 16,
+  "helloTimeout": 5,
+  "graceSeconds": 20,
+  "restartSeconds": 10,
+  "input": {
+    "stallTicks": 6,
+    "resetStallTicks": 30,
+    "maxQueue": 10,
+    "queueTarget": 2,
+    "trimWindow": 180,
+    "dilate": 0.05,
+    "dilateWindow": 10,
+    "maxPerSecond": 150,
+    "maxMessageBytes": 512
+  },
+  "rewindCap": 0.3,
+  "historySeconds": 1,
+  "interp": {
+    "baseTicks": 2.7,
+    "jitterScale": 2.5,
+    "maxTicks": 15,
+    "extrapolate": 0.1,
+    "staleEvent": 0.35
+  },
+  "correction": {
+    "easeTime": 0.1,
+    "snapDistance": 3
+  }
+}
