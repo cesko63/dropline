@@ -140,7 +140,7 @@ export class Game {
     options: GameOptions,
   ) {
     this.renderer = createRenderer(canvas);
-    this.env = createEnvironment(this.scene);
+    this.env = createEnvironment(this.scene, map.env);
     this.scene.add(buildMapMeshes(map, this.renderer));
     this.fx = new Effects(this.scene);
     this.hud.debug = options.qa;

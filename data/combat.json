@@ -18,8 +18,15 @@
     "destroyScore": 3
   },
   "teams": [
-    { "name": "Vanguard", "bots": ["rifle", "rusher", "marksman", "rifle"] },
-    { "name": "Corsair", "bots": ["rifle", "rifle", "rusher", "marksman"] }
-  ],
-  "botNames": ["Vesper", "Kite", "Moth", "Rook", "Ash", "Dune", "Flint", "Sable", "Wren", "Onyx"]
+    {
+      "name": "CORPS",
+      "bots": ["rifle", "rusher", "marksman", "rifle"],
+      "botNames": ["Vesper", "Kite", "Moth", "Rook", "Ash", "Dune", "Flint", "Wren"]
+    },
+    {
+      "name": "Z.E.R.O",
+      "bots": ["rifle", "rifle", "rusher", "marksman"],
+      "botNames": ["Z-0417", "Z-1180", "Z-0093", "Z-2216", "Z-0754", "Z-1302", "Z-0068", "Z-1949"]
+    }
+  ]
 }

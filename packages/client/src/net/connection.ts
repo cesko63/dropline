@@ -41,6 +41,8 @@ export class Connection {
   reason: CloseReason | null = null;
   /** Seated: `net.match` is ready to be shown. Also called after a reconnect. */
   onWelcome: () => void = () => {};
+  /** The server plays a map other than the one loaded here; the connection is closed. */
+  onOtherMap: (id: string) => void = () => {};
   /** The next match began. */
   onMatch: () => void = () => {};
   /** Someone joined or left. `before` is the roster as it was. */
@@ -61,7 +63,7 @@ export class Connection {
     private readonly url: string,
     private readonly name: string,
     world: CollisionWorld,
-    map: MapData,
+    private readonly map: MapData,
   ) {
     this.net = new NetClient(world, map, (data) => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(data);
@@ -114,6 +116,11 @@ export class Connection {
     }
     switch (msg.t) {
       case 'welcome':
+        if (msg.map !== this.map.name) {
+          this.close();
+          this.onOtherMap(msg.map);
+          return;
+        }
         this.token = msg.token;
         try {
           sessionStorage.setItem(TOKEN_KEY, msg.token);

@@ -1,10 +1,19 @@
 import * as THREE from 'three';
+import type { MapEnv } from '@dropline/shared';
 
-export const SKY = {
-  top: new THREE.Color('#081526'),
-  mid: new THREE.Color('#2a4f73'),
-  horizon: new THREE.Color('#f2a66d'),
-  fog: new THREE.Color('#8f8589'),
+/** Sky and light of maps that bring none of their own (the test map). */
+const DEFAULT_ENV: MapEnv = {
+  skyTop: '#081526',
+  skyMid: '#2a4f73',
+  skyHorizon: '#f2a66d',
+  fog: '#8f8589',
+  fogDensity: 0.0055,
+  sunColor: '#ffd9b0',
+  sunIntensity: 3.2,
+  sunDir: [70, 78, 60],
+  hemiSky: '#a9c8ee',
+  hemiGround: '#5a4a40',
+  hemiIntensity: 2.4,
 };
 
 export function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
@@ -24,8 +33,9 @@ export interface Environment {
   follow(x: number, y: number, z: number): void;
 }
 
-export function createEnvironment(scene: THREE.Scene): Environment {
-  scene.fog = new THREE.FogExp2(SKY.fog, 0.0055);
+export function createEnvironment(scene: THREE.Scene, mapEnv?: MapEnv): Environment {
+  const env = mapEnv ?? DEFAULT_ENV;
+  scene.fog = new THREE.FogExp2(new THREE.Color(env.fog), env.fogDensity);
 
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(500, 32, 16),
@@ -34,9 +44,10 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       depthWrite: false,
       fog: false,
       uniforms: {
-        top: { value: SKY.top },
-        mid: { value: SKY.mid },
-        horizon: { value: SKY.horizon },
+        top: { value: new THREE.Color(env.skyTop) },
+        mid: { value: new THREE.Color(env.skyMid) },
+        horizon: { value: new THREE.Color(env.skyHorizon) },
+        sunTint: { value: new THREE.Color(env.sunColor) },
         sunDir: { value: new THREE.Vector3() },
       },
       vertexShader: /* glsl */ `
@@ -50,6 +61,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
         uniform vec3 mid;
         uniform vec3 horizon;
         uniform vec3 sunDir;
+        uniform vec3 sunTint;
         varying vec3 vDir;
         void main() {
           vec3 d = normalize(vDir);
@@ -57,7 +69,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
           vec3 col = mix(horizon, mid, smoothstep(-0.02, 0.28, h));
           col = mix(col, top, smoothstep(0.2, 0.85, h));
           float s = max(dot(d, sunDir), 0.0);
-          col += vec3(1.0, 0.72, 0.42) * (pow(s, 6.0) * 0.35 + pow(s, 400.0) * 3.0);
+          col += sunTint * (pow(s, 6.0) * 0.35 + pow(s, 400.0) * 3.0);
           gl_FragColor = vec4(col, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -68,10 +80,11 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   sky.renderOrder = -1;
   scene.add(sky);
 
-  scene.add(new THREE.HemisphereLight('#a9c8ee', '#5a4a40', 2.4));
+  scene.add(new THREE.HemisphereLight(env.hemiSky, env.hemiGround, env.hemiIntensity));
 
-  const sunOffset = new THREE.Vector3(70, 78, 60);
-  const sun = new THREE.DirectionalLight('#ffd9b0', 3.2);
+  // The sun sits 120 m out along its direction, so the shadow camera's depth range fits.
+  const sunOffset = new THREE.Vector3(env.sunDir[0], env.sunDir[1], env.sunDir[2]).normalize().multiplyScalar(120);
+  const sun = new THREE.DirectionalLight(env.sunColor, env.sunIntensity);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const cam = sun.shadow.camera;

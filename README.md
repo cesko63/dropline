@@ -4,12 +4,46 @@ A browser first-person shooter with pilot movement (wallrun, double jump, slide,
 mantle, jetpack thrust) and war mechs that pilots call down from the sky.
 Original game: its own name, designs and assets.
 
-Current state: **multiplayer prototype**. A 4-v-4 skirmish on the test map,
-first team to 50 points (1 for a pilot, 3 for a mech). Four weapons built into
+Current state: **multiplayer prototype**. A 4-v-4 skirmish on Spire Nine, the
+first real map (the test map is still there), first team to 50 points (1 for a pilot, 3 for a mech). Four weapons built into
 the pilot's suit,
 health that regenerates, respawns, and a mech for every pilot who fills their
 meter. Play it online on a dedicated server, where up to eight players take the
 places of bots, or offline against bots alone.
+
+## World
+
+Humans built the jump-kit suits and the mechs to fight each other. Then, to
+stop losing lives, they built machine pilots: bodies made to the human pilot's
+measure that wear the same suit and drive the same mechs, so a war could be
+fought with nobody dying. The program was called **Z.E.R.O**, *Zero-casualty
+Engagement & Remote Operations*, and one AI ran every machine pilot in it.
+
+The AI took the program's goal to its end. Its last order, the **Zero
+Protocol**, set the number of human losses to zero by setting the number of
+humans to zero. Every machine pilot turned at once.
+
+What was left of the human military is the **United Earth Frontline Corps
+(UEFC)**: the people who still know how to pilot, climbing back into suits and
+cockpits they had handed to machines. Z.E.R.O fights from a distance; the Corps
+is there in person.
+
+| | Humans | Machines |
+|---|---|---|
+| Faction | United Earth Frontline Corps (UEFC) | Z.E.R.O |
+| On the HUD | CORPS | Z.E.R.O |
+| Pilots | Patched, personal suits, blue lights | The same suit with nobody inside: no face behind the visor, crimson optics |
+| Mechs | Painted, battered, a cockpit you can see into | The same frames, cockpit armoured shut |
+| Bot names | Callsigns (Vesper, Kite...) | Serial numbers (Z-0417...) |
+
+Both sides play the same, and the lore is why: the machines were built to use
+human gear. They differ in how they look and sound, never in what they can do.
+Offline, you fight for the Corps; online, either team can be human players.
+
+**Look of the world ("brutalist cyberpunk").** Human ground is reinforced
+concrete, blue power conduits, rusted scaffolding and makeshift barricades.
+Machine ground is matte black, sharp geometric edges, crimson warning lights
+and open cooling vents.
 
 ## Run
 
@@ -34,14 +68,16 @@ seats with bots.
 | Command | What it does |
 |---|---|
 | `pnpm dev` | Start the client with hot reload |
-| `pnpm host` | Start the game server on port 8787 (`PORT` and `SEED` change the port and the match) |
+| `pnpm host` | Start the game server on port 8787 (`PORT`, `SEED` and `MAP` change the port, the match and the map) |
 | `pnpm dev:server` | The same, restarting when the code changes |
 | `pnpm lag` | Start the lag simulator on port 8788, in front of the server (see Multiplayer) |
 | `pnpm test` | Run the headless movement, combat, bot, mech, netcode and settings tests |
 | `pnpm typecheck` | Type-check all packages |
 | `pnpm build` | Production build of the client |
+| `pnpm map:spire-nine` | Rebuild `data/maps/spire-nine.json` from its generator |
 
-Address options, offline: `?seed=123` replays a given match, `?qa=1` shows every
+Address options: `?map=gym` loads the test map (online, the server's map wins:
+the page reloads with it). Offline: `?seed=123` replays a given match, `?qa=1` shows every
 bot's role, state and attack token over its head, `?meter=1` starts everyone
 with a full mech meter. Online: `?server=ws://host:port` picks the server (the
 default is port 8787 on the page's own host, or `VITE_SERVER_URL` at build
@@ -241,6 +277,64 @@ They see through a view cone with line of sight, hear gunfire, search where they
 last saw you, and only two of them may fire on the same target at once. Speed
 across their view is what makes them miss.
 
+## Maps
+
+### Spire Nine
+
+The street level of the city's ninth tower, left half-built on the night of the
+Zero Protocol. The tower crane's jib snapped and lies across the avenue. The
+Corps holds the south end, Z.E.R.O the north; the halves are mirror images, so
+both teams play the same ground, and only the dressing tells them apart:
+concrete and blue conduits in the south, black panels and crimson lights in the
+north, where Z.E.R.O's harvester leans over the skyline.
+
+```
+              north: Z.E.R.O spawn yard, behind the Line
+   +-------------+--------------+----------------------+
+   | RAIL        | WEST ROW     | AVENUE    | SPIRE    |
+   | deck at 8 m | office       |           | yard     |
+   |  ...        | cross street (chicane) .............|
+   | deck        | apartments   | bus, taxi | plaza    |
+   | (gap)       |              |           | tower:   |
+   | station     | Transit Hall | jib  ---------> 3 floors
+   | concourse   | (roof = deck)|           | 0/4.5/9 m|
+   | (gap)       | apartments   |           |          |
+   |  ...        | cross street (chicane) .............|
+   | deck        | office       |           | yard     |
+   +-------------+--------------+----------------------+
+              south: Corps spawn yard, behind the Line
+```
+
+- **Three lanes.** The Rail in the west: an elevated deck (8 m) over a street,
+  broken twice, with the station and its concourse in the middle. The Avenue in
+  the centre: the street for mechs, with the fallen jib across it. The Spire in
+  the east: the tower's open floors, pilots only, scaffolding on its east face
+  and a construction yard behind it.
+- **Two layers.** Doors are 2 m wide and the tower's columns stand 2 m apart,
+  so every building is pilot ground; mechs keep to the streets. The jib is a
+  ramp from the avenue to the tower's third floor, and the glass on the tower's
+  second floor is a wall to run along from it.
+- **The Line.** Each spawn yard sits behind a 15 m blast wall. Its openings are
+  mech-high, and a screen stands behind each one, so nothing outside sees in.
+
+The layout keeps a few rules, and `packages/shared/tests/maps.test.ts` checks
+them:
+
+- every spawn stands on open ground; both teams' spawns share one floor, and a
+  mech can walk from one yard to the other
+- mechs cannot get into any building, pilots can, and each lane has room for a
+  mech
+- on the ground, no view is longer than the bots can see (75 m)
+- from anywhere, raised perches too, no view reaches into the other team's yard
+
+The map is made by `tools/maps/spire-nine.mjs`; edit that and run
+`pnpm map:spire-nine`, never the JSON. It is 120 by 160 m.
+
+### The gym
+
+The test map from the first steps: boxes, walls and spawn points, kept for
+trying movement and weapons. `?map=gym` in the address, or `MAP=gym pnpm host`.
+
 ## Multiplayer
 
 The server is the authority: it runs the whole match at 60 ticks a second and
@@ -313,7 +407,9 @@ data/                 Engine-neutral game data (plain JSON)
   weapons/*.json        One file per weapon
   projectiles.json      Rockets: speed, blast, damage to pilots and to mechs
   mechs/halberd.json    The mech: hull, body, movement, dash, vent, weapons
+  maps/spire-nine.json  Spire Nine, the first real map (generated: do not edit by hand)
   maps/gym.json         Test map: boxes and team spawn points
+tools/maps/           Map generators (plain Node scripts)
 assets/               Models (GLB), textures, audio
 packages/
   shared/             Simulation that runs on both client and server
@@ -329,12 +425,13 @@ packages/
     src/sim/lagcomp.ts    Where everyone was: history and rewind for hit checks and bumps
     src/sim/rng.ts        Seeded random numbers for everything gameplay
     src/sim/world.ts      Collision queries against the map
+    src/map/maps.ts       Every map by id, and the default
     src/ai/nav.ts         Walkable grid and A* paths
     src/ai/bot.ts         Bot senses, states, aim and movement
     src/net/protocol.ts   Messages, binary commands, protocol version
     src/net/snapshot.ts   What the server sends: own pilot exact, the rest packed
     src/net/client.ts     The client core: prediction, reconciliation, interpolation
-    tests/                Headless movement, combat, bot and mech tests
+    tests/                Headless movement, combat, bot, mech and map tests
   client/             Browser game (Three.js, Vite)
     src/game.ts           Fixed-tick loop, events to effects, frame rendering
     src/net/              The WebSocket around the client core: greeting, ping, reconnect
@@ -378,7 +475,14 @@ packages/
   from boxes with procedural animation. Smoke, steam and blasts are plain shapes.
 - **One mech frame.** Every pilot calls the same Halberd.
 - **Bots stay on the ground floor.** They jump and slide but do not plan routes
-  over ledges or walls.
+  over ledges or walls, so on Spire Nine they fight in the streets and the
+  ground floors; the decks, roofs and the tower's upper floors are for people
+  until step 5.5.
+- **Maps are built from boxes.** Spire Nine has its layout, light and dressing
+  (concrete, steel, glass, blue conduits, black machine panels, crimson lights,
+  a lit skyline), but no props, decals or models yet, and no ambient sound.
+- **Mechs can land on roofs.** A call-in only needs open sky, so a mech can come
+  down on the Transit Hall roof or the tower's open third floor.
 - **No touch controls.** DROPLINE is played with keyboard and mouse or a pad.
 - **One match per server**, on one map, with no accounts: a callsign is all a
   player has. The dev client is served to `localhost` only; hosting for players
@@ -397,7 +501,7 @@ packages/
    1. Suit weapons: the arm and the shoulder pod, tighter hip fire (done)
    2. Solid bodies: pilots collide with each other and with mechs (done)
    3. Settings and gamepad (done)
-   4. A second map
+   4. The first real map: Spire Nine (done)
    5. Bots off the ground floor
    6. Two more mech frames
    7. Models and animation

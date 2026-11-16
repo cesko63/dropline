@@ -1,5 +1,4 @@
-import { CollisionWorld, NET, type MapData } from '@dropline/shared';
-import gym from '../../../data/maps/gym.json';
+import { CollisionWorld, NET, mapById } from '@dropline/shared';
 import { Game } from './game';
 import { readLayout } from './input/bindings';
 import { Connection, type CloseReason } from './net/connection';
@@ -26,14 +25,15 @@ function serverUrl(params: URLSearchParams): string {
 }
 
 async function boot(): Promise<void> {
-  const map = gym as MapData;
-  const world = await CollisionWorld.create(map);
-  // `?seed=123` replays a given offline match; `?qa=1` shows what every bot is
-  // thinking; `?meter=1` starts everyone with a full mech meter (offline).
+  // `?map=gym` picks the map (online, the server's map wins); `?seed=123`
+  // replays a given offline match; `?qa=1` shows what every bot is thinking;
+  // `?meter=1` starts everyone with a full mech meter (offline).
   // `?server=ws://host:port` picks the server; `?online=1` joins it straight
   // away without the start screen (automated checks); `?name=` sets the
   // callsign; `?net=1` opens the connection details.
   const params = new URLSearchParams(location.search);
+  const map = mapById(params.get('map'));
+  const world = await CollisionWorld.create(map);
   const seed = Number(params.get('seed')) || (Date.now() & 0x7fffffff);
   const settings = new SettingsStore(browserStorage());
   const game = new Game(document.getElementById('view') as HTMLCanvasElement, world, map, {
@@ -77,6 +77,14 @@ async function boot(): Promise<void> {
     menu.showConnecting(url.replace(/^wss?:\/\//, ''));
     const c = new Connection(url, name, world, map);
     conn = c;
+    // The server plays another map: load it and join again.
+    c.onOtherMap = (id) => {
+      const next = new URLSearchParams(location.search);
+      next.set('map', id);
+      next.set('online', '1');
+      next.set('name', name);
+      location.search = next.toString();
+    };
     c.onWelcome = () => {
       const first = !game.online;
       game.goOnline(c);

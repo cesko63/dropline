@@ -1,7 +1,6 @@
 import { createServer } from 'node:http';
-import { CollisionWorld, NET, PROTOCOL_VERSION, TICK_RATE, type MapData } from '@dropline/shared';
+import { CollisionWorld, DEFAULT_MAP, MAPS, NET, PROTOCOL_VERSION, TICK_RATE } from '@dropline/shared';
 import { WebSocketServer, type WebSocket } from 'ws';
-import gym from '../../../data/maps/gym.json';
 import { Room, type Conn } from './rooms/room';
 
 /**
@@ -11,6 +10,7 @@ import { Room, type Conn } from './rooms/room';
  *
  *   PORT   port to listen on (default: `port` in /data/net.json)
  *   SEED   seed of the first match (default: the clock)
+ *   MAP    map id, for example `gym` (default: the first real map)
  */
 
 const TICK_MS = 1000 / TICK_RATE;
@@ -27,7 +27,9 @@ async function timerGrain(): Promise<number> {
 }
 
 async function main(): Promise<void> {
-  const map = gym as MapData;
+  const mapId = process.env.MAP || DEFAULT_MAP;
+  const map = MAPS[mapId];
+  if (!map) throw new Error(`No map called "${mapId}". Maps: ${Object.keys(MAPS).join(', ')}`);
   const world = await CollisionWorld.create(map);
   const port = Number(process.env.PORT) || NET.port;
   const seed = Number(process.env.SEED) || (Date.now() & 0x7fffffff);

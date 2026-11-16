@@ -80,9 +80,9 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
     predict: false,
   };
 
-  let botName = 0;
   for (let team = 0; team < 2; team++) {
     let botSlot = 0;
+    let botName = 0;
     for (let slot = 0; slot < teamSize; slot++) {
       const id = m.actors.length;
       const human = team === 0 && slot < humans;
@@ -92,7 +92,7 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
       const loadout = human ? [...COMBAT.playerLoadout] : [BOT_ROLES[role].weapon, BOTS.antiArmor];
       const a: Actor = {
         id,
-        name: human ? (humans > 1 ? `Pilot ${slot + 1}` : 'You') : COMBAT.botNames[botName++ % COMBAT.botNames.length],
+        name: human ? (humans > 1 ? `Pilot ${slot + 1}` : 'You') : COMBAT.teams[team].botNames[botName++ % COMBAT.teams[team].botNames.length],
         team,
         p: createPlayerState(v3()),
         health: 0,
