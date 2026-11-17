@@ -300,7 +300,8 @@ export class Game {
     this.hud.setEndHint('{confirm} · PLAY AGAIN');
     this.hud.setOnline(this.conn !== null);
     const me = this.me;
-    this.avatars = this.match.actors.map((a) => new Avatar(a.team, a.team === me.team && a !== me));
+    this.viewmodel.setTeam(me.team);
+    this.avatars = this.match.actors.map((a) => new Avatar(a.team, a.team === me.team && a !== me, a.id));
     for (const avatar of this.avatars) this.scene.add(avatar.root, avatar.laser);
     this.mechAvatars = this.match.mechs.map((k) => new MechAvatar(k.team, k.team === me.team));
     for (const avatar of this.mechAvatars) this.scene.add(avatar.root);

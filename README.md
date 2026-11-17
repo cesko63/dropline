@@ -14,9 +14,9 @@ places of bots, or offline against bots alone.
 ## World
 
 Humans built the jump-kit suits and the mechs to fight each other. Then, to
-stop losing lives, they built machine pilots: bodies made to the human pilot's
-measure that wear the same suit and drive the same mechs, so a war could be
-fought with nobody dying. The program was called **Z.E.R.O**, *Zero-casualty
+stop losing lives, they built machine pilots: autonomous combat frames made to
+the human pilot's exact measure, so they could use the same jump kits, arm
+weapons and mechs, and a war could be fought with nobody dying. The program was called **Z.E.R.O**, *Zero-casualty
 Engagement & Remote Operations*, and one AI ran every machine pilot in it.
 
 The AI took the program's goal to its end. Its last order, the **Zero
@@ -32,7 +32,7 @@ is there in person.
 |---|---|---|
 | Faction | United Earth Frontline Corps (UEFC) | Z.E.R.O |
 | On the HUD | CORPS | Z.E.R.O |
-| Pilots | Patched, personal suits, blue lights | The same suit with nobody inside: no face behind the visor, crimson optics |
+| Pilots | Patched, personal suits: grey-blue plates over an olive undersuit, blue lights | Black machine frames built to a pilot's measure: open joints, an exposed spine, crimson optics and vents that glow in the dark |
 | Mechs | Painted, battered, a cockpit you can see into | The same frames, cockpit armoured shut |
 | Bot names | Callsigns (Vesper, Kite...) | Serial numbers (Z-0417...) |
 
@@ -471,8 +471,16 @@ packages/
 - **Sound:** every effect is synthesized from filtered noise and short tones
   (`client/src/audio/sfx.ts`). They carry timing and feedback until recorded
   audio replaces them.
-- **Models:** pilots, the suit's arm and pod, mechs and the cockpit are built
-  from boxes with procedural animation. Smoke, steam and blasts are plain shapes.
+- **Models:** pilots wear real suits built in code (`client/src/render/pilot`):
+  the Corps suit and the Z.E.R.O frame share one skeleton and one outline, so
+  both match the hitbox, and a pose-driven animator covers every movement state.
+  The first-person arm wears the player's team finish over the same weapon: a
+  drum of three barrels that turns to the weapon in use, an ammo printer behind
+  a side window, and cooling fins over the heat sinks that open to vent.
+  Open `/suits.html` on the dev server to see both suits side by side in every
+  state with the hitbox drawn over them, and the arm close up or as in play
+  (the view menu). Mechs and the cockpit are still built from
+  boxes, and smoke, steam and blasts are plain shapes.
 - **One mech frame.** Every pilot calls the same Halberd.
 - **Bots stay on the ground floor.** They jump and slide but do not plan routes
   over ledges or walls, so on Spire Nine they fight in the streets and the
