@@ -591,8 +591,18 @@ packages/
   footfall by their weight, throw the cannon arm back by its recoil (lightly for
   the autocannon, hard for the Lance), rock when hit and fling their arms out on
   the stomp. Open `/mechs.html` to see all three in every state, in either
-  finish, with the hitbox and vent drawn over them. The first-person cockpit is
-  still built from boxes, and smoke, steam and blasts are plain shapes.
+  finish, with the hitbox and vent drawn over them, or sit in one (the view
+  menu).
+  Each frame's cockpit matches its window from outside: the Halberd's wide
+  chest window, the Bastion's bunker slit under a heavy brow, the Lynx's bubble
+  canopy. Corps pilots look out through scratched glass; Z.E.R.O pilots, sealed
+  in, see a camera feed with scan lines. The dash carries the hull bar, a pip
+  per charge of the move and a lamp for the ability (lit when ready, bright
+  while it runs), set low between the HUD's corners. Start-up brings the cabin
+  on in order (dash lights, readouts, the view), a failing hull turns the
+  lights red and flashes the warning strip, the pilot's hands work the sticks,
+  and the cannon out to the right is the mech's own arm, kicking by its weight.
+  Smoke, steam and blasts are still plain shapes.
 - **Mech frames are tuned on bot duels.** The numbers above come from bots on
   the test map; how the shield, cloak and leap play between people is untested.
 - **Bots do not wallrun.** They climb, drop and leap, but never run along a
@@ -628,7 +638,7 @@ packages/
    7. Models and animation
       1. Pilot suits and the arm gun (done)
       2. The three mech frames (done)
-      3. The cockpit from inside
+      3. The cockpit from inside (done)
       4. Effects: smoke, steam, sparks, blasts and wrecks
    8. Sound and music
    9. Closing pass: teaching, performance, error cards, balance

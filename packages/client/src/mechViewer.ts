@@ -1,12 +1,14 @@
 import * as THREE from 'three';
-import { COMBAT, FRAMES, FRAME_IDS, createMech, frameIndex, type Mech } from '@dropline/shared';
+import { COMBAT, FRAMES, FRAME_IDS, createMech, createPlayerState, frameIndex, type Actor, type Mech } from '@dropline/shared';
 import { MechAvatar } from './render/mechAvatar';
 import { createEnvironment, createRenderer } from './render/scene';
+import { Viewmodel } from './render/viewmodel';
 
 /**
  * Dev page (/mechs.html): the three mech frames side by side on a treadmill,
  * put through every state, with the hitbox and the vent drawn over them. Drag
- * to orbit, wheel to zoom. `window.mechs` drives it from the console.
+ * to orbit, wheel to zoom. The view menu sits in one frame's cockpit instead.
+ * `window.mechs` drives it from the console.
  */
 
 type State = 'drop' | 'standby' | 'start up' | 'stand' | 'walk' | 'run' | 'dash' | 'jump' | 'stomp' | 'ability' | 'wreck';
@@ -35,7 +37,7 @@ interface Stand {
   walked: number;
 }
 
-const opts = { state: 'stand' as State, team: 0, fire: false, hits: false, spin: false, look: 0, night: false, boxes: false, slow: false };
+const opts = { state: 'stand' as State, team: 0, fire: false, hits: false, spin: false, look: 0, night: false, boxes: false, slow: false, inside: -1 };
 
 /** The capsule and vent sphere the simulation hits (shared/sim/mech.ts, rayMech). */
 function hitbox(id: string): THREE.Group {
@@ -115,7 +117,11 @@ look.step = '0.01';
 look.value = '0';
 look.addEventListener('input', () => (opts.look = Number(look.value)));
 lookLabel.append(look);
-panel.append(teamSelect, lookLabel);
+const insideSelect = document.createElement('select');
+insideSelect.add(new Option('outside', '-1'));
+for (const [i, id] of FRAME_IDS.entries()) insideSelect.add(new Option(`${FRAMES[id].name} cockpit`, String(i)));
+insideSelect.addEventListener('change', () => (opts.inside = Number(insideSelect.value)));
+panel.append(teamSelect, lookLabel, insideSelect);
 
 function refresh(): void {
   for (const b of panel.querySelectorAll('button')) {
@@ -137,6 +143,7 @@ function setState(st: State): void {
     k.grounded = true;
     k.pos.y = 0;
     k.vel.x = k.vel.y = k.vel.z = 0;
+    k.health = FRAMES[FRAME_IDS[k.frame]].health;
     k.shieldUp = false;
     k.cloak = 0;
     k.dashTime = 0;
@@ -181,6 +188,7 @@ function drive(s: Stand, dt: number): void {
     if (s.walked >= F.move.strideLength) {
       s.walked -= F.move.strideLength;
       avatar.step();
+      if (opts.inside === s.mech.id) vm.thud(0.45);
     }
     k.stride = s.walked;
   }
@@ -217,6 +225,7 @@ function drive(s: Stand, dt: number): void {
   k.yaw = opts.spin ? Math.sin(performance.now() / 1600) * 1.4 : 0;
 }
 
+const F_HEALTH = (k: Mech): number => FRAMES[FRAME_IDS[k.frame]].health;
 let lastShot = 0;
 let lastHit = 0;
 let yaw = 0.6;
@@ -247,8 +256,15 @@ function frame(now: number): void {
     const avatar = s.avatar!;
     if (shoot && k.state === 'piloted') avatar.fireFlash();
     if (hurt && k.state === 'piloted') avatar.flash(Math.random() < 0.3);
+    // Getting hit wears the hull down past the warning line, then it is repaired for the next round.
+    if (hurt) k.health = k.health > F_HEALTH(k) * 0.3 ? F_HEALTH(k) * 0.2 : F_HEALTH(k);
     const pos = { x: s.x, y: k.pos.y, z: 0 };
-    avatar.update(dt, k, pos, k.yaw, opts.look, true);
+    // From inside, its own body is hidden, as in play.
+    avatar.update(dt, k, pos, k.yaw, opts.look, opts.inside !== k.id);
+    if (opts.inside === k.id) {
+      if (shoot && k.state === 'piloted') vm.fire();
+      if (hurt && k.state === 'piloted') vm.thud(0.6);
+    }
     s.box.position.set(pos.x, pos.y, pos.z);
     s.box.rotation.y = k.yaw;
   }
@@ -259,7 +275,15 @@ function frame(now: number): void {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    vm.resize(w / h);
   }
+  if (opts.inside >= 0) {
+    renderCockpit(stands[opts.inside], dt);
+    if (!manual) requestAnimationFrame(frame);
+    return;
+  }
+  camera.fov = 45;
+  camera.updateProjectionMatrix();
   const target = tmp.set(focus, 2.6, 0);
   camera.position.set(
     target.x + Math.sin(yaw) * Math.cos(tilt) * dist,
@@ -269,6 +293,31 @@ function frame(now: number): void {
   camera.lookAt(target);
   renderer.render(scene, camera);
   if (!manual) requestAnimationFrame(frame);
+}
+
+const vm = new Viewmodel();
+const pilot = { id: 0, team: 0, p: createPlayerState({ x: 0, y: 0, z: 0 }), alive: true, loadout: ['autocannon'], ammo: [99], equip: 0, ads: 0, weapon: 0, punchPitch: 0, reload: 0 } as unknown as Actor;
+
+/** The view from a frame's cockpit, as in play: the world through its eye, then the cockpit over it. */
+function renderCockpit(s: Stand, dt: number): void {
+  const k = s.mech;
+  const F = FRAMES[FRAME_IDS[k.frame]];
+  pilot.team = opts.team;
+  pilot.loadout[0] = F.loadout[0];
+  pilot.p.vel.x = k.vel.x;
+  pilot.p.vel.z = k.vel.z;
+  pilot.p.grounded = k.grounded;
+  vm.setTeam(opts.team);
+  vm.update(dt, pilot, 0, 0, k.state === 'none' ? null : k);
+  camera.fov = 80;
+  camera.updateProjectionMatrix();
+  camera.position.set(s.x, k.pos.y + F.body.eye, -0.2);
+  camera.rotation.set(opts.look, k.yaw, 0, 'YXZ');
+  renderer.render(scene, camera);
+  renderer.autoClear = false;
+  renderer.clearDepth();
+  renderer.render(vm.scene, vm.camera);
+  renderer.autoClear = true;
 }
 
 let dragging = false;

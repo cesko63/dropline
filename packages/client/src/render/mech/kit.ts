@@ -119,7 +119,7 @@ export function buildMechSkeleton(parent: THREE.Object3D, frame: MechFrame): Mec
 // ---------------------------------------------------------------------------
 // Finishes
 
-interface Finish {
+export interface Finish {
   paint: string;
   paint2: string;
   frame: string;
@@ -137,7 +137,7 @@ interface Finish {
   open: boolean;
 }
 
-const FINISH: Finish[] = [
+export const FINISH: Finish[] = [
   { paint: '#6c7783', paint2: '#56606b', frame: '#30353c', dark: '#1d2126', cloth: '#4d5534', steel: '#8b929c', stripe: '#c9a227', light: '#5fe0ff', glass: '#9fd8ee', wear: 0.09, open: true },
   { paint: '#3a3d45', paint2: '#2b2e35', frame: '#1b1d21', dark: '#0e0f12', cloth: '#25282e', steel: '#6a717b', stripe: '#8c1622', light: '#ff2236', glass: '#000000', wear: 0.025, open: false },
 ];
