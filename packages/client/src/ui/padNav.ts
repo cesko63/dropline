@@ -1,12 +1,14 @@
 import type { Sfx } from '../audio/sfx';
 import { PAD_START } from '../input/input';
 import type { Pad } from '../input/gamepad';
+import type { Hangar } from './hangar';
 import type { SettingsScreen } from './settingsScreen';
 
 /**
  * The start screen and the settings on a pad: the D-pad or the left stick moves
  * between controls (held, it repeats), left and right step a slider, A presses,
- * B goes back, LB and RB change the settings tab, MENU resumes the match.
+ * B goes back, LB and RB change the settings or hangar tab, MENU resumes the match.
+ * In the hangar the right stick turns the preview (see `Hangar.update`).
  */
 
 const A = 0;
@@ -33,6 +35,7 @@ export class PadNav {
     private readonly panel: HTMLElement,
     private readonly settings: SettingsScreen,
     private readonly sfx: Sfx,
+    private readonly hangar: Hangar,
   ) {}
 
   /** Once a frame while the start screen is up. */
@@ -47,9 +50,12 @@ export class PadNav {
 
     if (p[PAD_START]) {
       if (this.settings.isOpen) this.settings.close();
+      if (this.hangar.isOpen) this.hangar.close();
       this.onStart();
       return;
     }
+    if (this.hangar.isOpen && (p[LB] || p[RB])) this.hangar.nextTab(p[RB] ? 1 : -1);
+    if (p[B] && this.hangar.isOpen) this.hangar.close();
     if (this.settings.isOpen && (p[LB] || p[RB])) this.settings.nextTab(p[RB] ? 1 : -1);
     if (p[B] && this.settings.isOpen) this.settings.close();
     if (p[A]) {

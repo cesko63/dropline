@@ -140,6 +140,26 @@ export class Sfx {
     this.tone(d, { type: 'sine', f0: 660, dur: 0.06, gain: 0.1, at: 0.09 });
   }
 
+  /** A side or a mech frame picked in the hangar: a servo whir that locks with a clunk. */
+  uiEquip(): void {
+    const d = this.ui(0.7);
+    if (!d) return;
+    this.tone(d, { type: 'sawtooth', f0: 180, f1: 420, dur: 0.12, gain: 0.05 });
+    this.burst(d, { dur: 0.12, type: 'bandpass', f0: 900, f1: 2600, q: 2, gain: 0.06 });
+    this.tone(d, { type: 'square', f0: 110, f1: 70, dur: 0.07, gain: 0.09, at: 0.12 });
+    this.burst(d, { dur: 0.05, type: 'lowpass', f0: 1400, gain: 0.14, at: 0.12 });
+  }
+
+  /** The mech in the hangar preview touches down: a deep, short thud. */
+  uiThud(): void {
+    if (!this.allow('uiThud', 0.3)) return;
+    const d = this.ui(0.8);
+    if (!d) return;
+    this.tone(d, { type: 'sine', f0: 90, f1: 38, dur: 0.35, gain: 0.3 });
+    this.burst(d, { dur: 0.25, type: 'lowpass', f0: 600, f1: 120, gain: 0.25 });
+    this.burst(d, { dur: 0.4, type: 'bandpass', f0: 2400, f1: 900, q: 0.6, gain: 0.03, at: 0.03 });
+  }
+
   /** A key bound; `swapped` when another action gave it up. */
   uiBound(swapped: boolean): void {
     const d = this.ui(0.6);

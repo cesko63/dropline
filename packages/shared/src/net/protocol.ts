@@ -41,7 +41,8 @@ export interface MatchInfo {
   seats: SeatInfo[];
 }
 
-export type ClientHello = { t: 'hello'; v: number; name: string; token?: string };
+/** `side` is the team the player would rather join (0 Corps, 1 Z.E.R.O); the server honours it while the teams stay even. */
+export type ClientHello = { t: 'hello'; v: number; name: string; token?: string; side?: number };
 
 export type ServerMessage =
   /** `you` is the actor id this player controls; `token` gets the same seat back after a dropped connection. */

@@ -29,8 +29,10 @@ const IDLE = emptyInput();
 
 export interface MatchOptions {
   seed: number;
-  /** Human players; they take the first actor ids on team 0. Default 1. */
+  /** Human players; they take the first actor ids on `humanTeam`. Default 1. */
   humans?: number;
+  /** The side the humans fight for: 0 the Corps, 1 Z.E.R.O. Default 0. */
+  humanTeam?: number;
   teamSize?: number;
   scoreLimit?: number;
   /** Mech meter everyone starts with, 0..1. Default 0. */
@@ -55,9 +57,13 @@ export const shotRng = (m: MatchState, a: Actor): Rng => a.rng ?? m.rng;
 
 export const weaponOf = (a: Actor): WeaponDef => WEAPONS[a.loadout[a.weapon]];
 
+/** The actor id of the first human in a match made with these options. */
+export const firstHumanId = (opts: MatchOptions): number => (opts.humanTeam === 1 ? (opts.teamSize ?? COMBAT.teamSize) : 0);
+
 export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOptions): MatchState {
   const teamSize = opts.teamSize ?? COMBAT.teamSize;
   const humans = opts.humans ?? 1;
+  const humanTeam = opts.humanTeam === 1 ? 1 : 0;
   const m: MatchState = {
     seed: opts.seed,
     tick: 0,
@@ -85,7 +91,7 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
     let botName = 0;
     for (let slot = 0; slot < teamSize; slot++) {
       const id = m.actors.length;
-      const human = team === 0 && slot < humans;
+      const human = team === humanTeam && slot < humans;
       const roles = COMBAT.teams[team].bots;
       const role = human ? '' : roles[botSlot++ % roles.length];
       // Bots carry their role's weapon and a launcher for when a mech shows up.

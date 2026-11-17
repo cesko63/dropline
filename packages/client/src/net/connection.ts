@@ -64,6 +64,8 @@ export class Connection {
     private readonly name: string,
     world: CollisionWorld,
     private readonly map: MapData,
+    /** The side the player picked in the hangar; the server takes it while the teams are even. */
+    private readonly side = 0,
   ) {
     this.net = new NetClient(world, map, (data) => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(data);
@@ -94,7 +96,7 @@ export class Connection {
     this.ws = ws;
     ws.binaryType = 'arraybuffer';
     ws.onopen = () => {
-      const hello: ClientHello = { t: 'hello', v: PROTOCOL_VERSION, name: this.name, token: this.token || undefined };
+      const hello: ClientHello = { t: 'hello', v: PROTOCOL_VERSION, name: this.name, token: this.token || undefined, side: this.side };
       ws.send(JSON.stringify(hello));
     };
     ws.onmessage = (ev) => {

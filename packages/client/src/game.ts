@@ -8,6 +8,7 @@ import {
   TICK_DT,
   WEAPONS,
   createMatch,
+  firstHumanId,
   eyeOf,
   lerp,
   stepMatch,
@@ -113,6 +114,8 @@ export class Game {
   private conn: Connection | null = null;
   /** Actor id of the player's own pilot. */
   private meId = 0;
+  /** The side the player fights for offline (picked in the hangar): 0 the Corps, 1 Z.E.R.O. */
+  side = 0;
   /** Rockets fired from prediction that the server has not announced yet, oldest first. */
   private readonly ownRockets: number[] = [];
   /** Server rocket id to the id it is drawn under, for those that were predicted. */
@@ -256,7 +259,8 @@ export class Game {
   /** Start a fresh offline match; each one gets the next seed, so no two play out the same. */
   newMatch(): void {
     this.conn = null;
-    this.show(createMatch(this.map, this.world, { seed: this.seed++, startMeter: this.startMeter }), 0);
+    const opts = { seed: this.seed++, startMeter: this.startMeter, humanTeam: this.side };
+    this.show(createMatch(this.map, this.world, opts), firstHumanId(opts));
   }
 
   /**

@@ -53,6 +53,8 @@ export interface PlayerOptions {
   name?: string;
   token?: string;
   version?: number;
+  /** The side asked for in the hello (the hangar's pick). */
+  side?: number;
   /** Frames a second this client draws at. */
   fps?: number;
 }
@@ -126,7 +128,7 @@ export class Player {
     this.connected = true;
     this.closedByServer = false;
     this.nextFrame = this.lastFrame = this.sim.now;
-    this.up.send(JSON.stringify({ t: 'hello', v: this.opts.version ?? PROTOCOL_VERSION, name: this.opts.name ?? 'Tester', token }));
+    this.up.send(JSON.stringify({ t: 'hello', v: this.opts.version ?? PROTOCOL_VERSION, name: this.opts.name ?? 'Tester', token, side: this.opts.side }));
     return this;
   }
 
