@@ -1,4 +1,5 @@
 import { emptyInput, type InputCmd } from '../input';
+import { FRAME_LIST } from '../sim/mech';
 import { PROJECTILES, WEAPON_LIST } from '../sim/weapons';
 
 /**
@@ -8,9 +9,9 @@ import { PROJECTILES, WEAPON_LIST } from '../sim/weapons';
  * `PROTOCOL_VERSION`.
  */
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 /** Versions the server still talks to. Keep the previous one in here while a new build rolls out. */
-export const SUPPORTED_VERSIONS: readonly number[] = [2];
+export const SUPPORTED_VERSIONS: readonly number[] = [3];
 
 /** First byte of every binary message. */
 export const Msg = {
@@ -198,7 +199,7 @@ export class Reader {
  * Weapon ids, rocket kinds and the other causes of death, sent as one byte.
  * Appending is safe; reordering needs a protocol version bump.
  */
-export const NAMES: readonly string[] = ['', ...WEAPON_LIST.map((w) => w.id), ...Object.keys(PROJECTILES), 'crush', 'ram'];
+export const NAMES: readonly string[] = ['', ...WEAPON_LIST.map((w) => w.id), ...Object.keys(PROJECTILES), 'crush', 'ram', 'stomp'];
 const NAME_INDEX = new Map(NAMES.map((n, i) => [n, i]));
 export const nameId = (name: string): number => NAME_INDEX.get(name) ?? 0;
 
@@ -215,6 +216,8 @@ const Btn = {
   Use: 64,
   Call: 128,
   Redeploy: 256,
+  /** Two bits from here: the mech frame a call brings down. */
+  FrameShift: 9,
 } as const;
 
 /** One command as the server receives it. */
@@ -241,6 +244,7 @@ export function quantizeInput(cmd: InputCmd): InputCmd {
   cmd.moveX = Math.round(Math.max(-1, Math.min(1, cmd.moveX)) * 127) / 127;
   cmd.moveZ = Math.round(Math.max(-1, Math.min(1, cmd.moveZ)) * 127) / 127;
   cmd.weapon = cmd.weapon >= 0 && cmd.weapon < 8 ? Math.floor(cmd.weapon) : -1;
+  cmd.frame = cmd.frame >= 0 && cmd.frame < FRAME_LIST.length ? Math.floor(cmd.frame) : 0;
   return cmd;
 }
 
@@ -259,7 +263,8 @@ export function encodeInput(w: Writer, seq: number, epoch: number, viewTick: num
       (cmd.reload ? Btn.Reload : 0) |
       (cmd.use ? Btn.Use : 0) |
       (cmd.call ? Btn.Call : 0) |
-      (cmd.redeploy ? Btn.Redeploy : 0),
+      (cmd.redeploy ? Btn.Redeploy : 0) |
+      (cmd.frame << Btn.FrameShift),
   );
   w.i8(Math.round(cmd.moveX * 127));
   w.i8(Math.round(cmd.moveZ * 127));
@@ -288,7 +293,8 @@ export function decodeInput(data: ArrayBuffer | Uint8Array): InputMsg | null {
   const pitch = r.f64();
   if (!Number.isFinite(viewTick) || !Number.isFinite(yaw) || !Number.isFinite(pitch)) return null;
   if (Math.abs(pitch) > PITCH_LIMIT || Math.abs(yaw) > 1e6) return null;
-  if (moveX < -127 || moveZ < -127 || weapon < -1 || weapon > 7) return null;
+  const frame = (b >> Btn.FrameShift) & 3;
+  if (moveX < -127 || moveZ < -127 || weapon < -1 || weapon > 7 || frame >= FRAME_LIST.length) return null;
   const cmd = emptyInput();
   cmd.moveX = moveX / 127;
   cmd.moveZ = moveZ / 127;
@@ -304,6 +310,7 @@ export function decodeInput(data: ArrayBuffer | Uint8Array): InputMsg | null {
   cmd.call = (b & Btn.Call) !== 0;
   cmd.redeploy = (b & Btn.Redeploy) !== 0;
   cmd.weapon = weapon;
+  cmd.frame = frame;
   return { seq, epoch, viewTick, cmd };
 }
 

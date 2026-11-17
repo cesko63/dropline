@@ -2,7 +2,7 @@ import bots from '../../../../data/bots.json';
 import { emptyInput, type InputCmd } from '../input';
 import { clamp, forwardFromYaw, lenH, rightFromYaw, v3, type Vec3 } from '../math/vec3';
 import { COMBAT, type Actor, type MatchState } from '../sim/combat';
-import { eyeOf, heightOf, type Mech } from '../sim/mech';
+import { eyeOf, frameIndex, frameOf, heightOf, type Mech } from '../sim/mech';
 import { rand, randRange, randSigned } from '../sim/rng';
 import { TUNING } from '../sim/tuning';
 import { PROJECTILES, WEAPONS } from '../sim/weapons';
@@ -39,12 +39,14 @@ export interface BotRole {
   rush: boolean;
   /** Share of patrols that head for a perch high above the street, to hold it a while. */
   perchChance: number;
+  /** The mech frame this role calls down. Roles that drive a mech have none. */
+  frame?: string;
 }
 
 export const BOT_ROLES = bots.roles as Record<string, BotRole>;
 
-/** How the bot behaves right now: its own role on foot, the `mech` role in a cockpit. */
-const roleOf = (a: Actor): BotRole => BOT_ROLES[a.inMech ? 'mech' : a.brain!.role];
+/** How the bot behaves right now: its own role on foot, its frame's role in a cockpit. */
+const roleOf = (m: MatchState, a: Actor): BotRole => BOT_ROLES[a.inMech ? frameOf(m.mechs[a.id]).botRole : a.brain!.role];
 
 /** The grid the bot can move on: a mech needs more room than a pilot. */
 const navOf = (m: MatchState, a: Actor): NavGrid => (a.inMech ? m.navMech : m.nav);
@@ -55,8 +57,8 @@ const stance = { min: 0, max: 0, fire: 0, rush: false };
  * How a bot stands against its target. On foot against a mech every role does
  * the same: keep well away from it and use the launcher.
  */
-function stanceFor(a: Actor, tgt: Actor): typeof stance {
-  const role = roleOf(a);
+function stanceFor(m: MatchState, a: Actor, tgt: Actor): typeof stance {
+  const role = roleOf(m, a);
   const armored = tgt.inMech && !a.inMech;
   stance.min = armored ? Math.max(role.minRange, BOTS.mechMinRange) : role.minRange;
   stance.max = armored ? Math.max(role.maxRange, BOTS.mechMaxRange) : role.maxRange;
@@ -185,17 +187,20 @@ const dir = v3();
 
 /**
  * Sight: range, a view cone and a clear line to the chest. `aware` skips the
- * cone, for a target the bot is already fighting.
+ * cone, for a target the bot is already fighting. A cloaked mech is only seen
+ * from close by.
  */
-export function canSee(world: CollisionWorld, a: Actor, e: Actor, aware: boolean): boolean {
+export function canSee(m: MatchState, world: CollisionWorld, a: Actor, e: Actor, aware: boolean): boolean {
   eye.x = a.p.pos.x;
-  eye.y = a.p.pos.y + eyeOf(a);
+  eye.y = a.p.pos.y + eyeOf(m, a);
   eye.z = a.p.pos.z;
   const dx = e.p.pos.x - eye.x;
-  const dy = e.p.pos.y + heightOf(e) * 0.7 - eye.y;
+  const dy = e.p.pos.y + heightOf(m, e) * 0.7 - eye.y;
   const dz = e.p.pos.z - eye.z;
   const d = Math.hypot(dx, dy, dz);
   if (d > BOTS.sightRange) return false;
+  const cloak = frameOf(m.mechs[e.id]).ability;
+  if (e.inMech && m.mechs[e.id].cloak > 0 && cloak.kind === 'cloak' && d > cloak.revealRange) return false;
   if (d < 0.5) return true;
   if (!aware && d > BOTS.closeRange) {
     const f = forwardFromYaw(a.p.yaw);
@@ -238,7 +243,7 @@ function pickPatrolGoal(m: MatchState, a: Actor): void {
   const b = a.brain!;
   const nav = navOf(m, a);
   b.perch = false;
-  if (rand(m.rng) < roleOf(a).perchChance && nearbyPerch(m, a, nav) && setGoal(m, a, point.x, point.y, point.z)) {
+  if (rand(m.rng) < roleOf(m, a).perchChance && nearbyPerch(m, a, nav) && setGoal(m, a, point.x, point.y, point.z)) {
     b.perch = true;
     return;
   }
@@ -302,7 +307,7 @@ function enter(m: MatchState, a: Actor, next: BotStateName): void {
       m.events.push({ type: 'notice', actor: a.id, target: b.target });
       break;
     case 'engage':
-      b.errScale = roleOf(a).aimErrStartDeg;
+      b.errScale = roleOf(m, a).aimErrStartDeg;
       b.unseen = 0;
       b.pause = 0;
       b.repathIn = 0;
@@ -324,7 +329,7 @@ function markSeen(b: BotBrain, e: Actor): void {
 /** Decisions, a few times a second: what the bot sees and which state follows from it. */
 function think(m: MatchState, a: Actor, world: CollisionWorld): void {
   const b = a.brain!;
-  const role = roleOf(a);
+  const role = roleOf(m, a);
   const T = BOTS.thinkInterval;
   const pos = a.p.pos;
 
@@ -341,14 +346,14 @@ function think(m: MatchState, a: Actor, world: CollisionWorld): void {
 
   let tgt: Actor | null = b.target >= 0 ? m.actors[b.target] : null;
   if (tgt && !tgt.alive) tgt = null;
-  const sees = tgt !== null && canSee(world, a, tgt, b.state !== 'patrol');
+  const sees = tgt !== null && canSee(m, world, a, tgt, b.state !== 'patrol');
   // Prefer the current target; another enemy takes over only when clearly closer.
   let best = sees ? tgt : null;
   let bestD = sees ? distH(a, tgt!) * 0.7 : Infinity;
   for (const e of m.actors) {
     if (e.team === a.team || !e.alive || e === tgt) continue;
     const d = distH(a, e);
-    if (d >= bestD || !canSee(world, a, e, false)) continue;
+    if (d >= bestD || !canSee(m, world, a, e, false)) continue;
     best = e;
     bestD = d;
   }
@@ -432,7 +437,7 @@ function think(m: MatchState, a: Actor, world: CollisionWorld): void {
         }
       }
       // A token is only worth holding by a bot that can use it right now.
-      if (!b.visible || a.reload > 0 || distH(a, tgt) > stanceFor(a, tgt).fire) b.token = false;
+      if (!b.visible || a.reload > 0 || distH(a, tgt) > stanceFor(m, a, tgt).fire) b.token = false;
       else if (!b.token && tokensOn(m, tgt.id) < BOTS.tokensPerTarget) b.token = true;
 
       // Only speed across the line of sight makes a target hard to track;
@@ -520,7 +525,7 @@ function goToMech(m: MatchState, a: Actor, k: Mech, dt: number): { x: number; z:
 /** Movement while fighting: hold the role's distance, strafe, or rush. */
 function engageMove(m: MatchState, a: Actor, tgt: Actor, dist: number, dt: number): { x: number; z: number } | null {
   const b = a.brain!;
-  const role = stanceFor(a, tgt);
+  const role = stanceFor(m, a, tgt);
   const pos = a.p.pos;
   b.strafeIn -= dt;
   if (b.strafeIn <= 0) {
@@ -563,7 +568,7 @@ function engageMove(m: MatchState, a: Actor, tgt: Actor, dist: number, dt: numbe
 /** One tick of a bot: think when due, then steer, aim and work the trigger. */
 export function botCmd(m: MatchState, a: Actor, world: CollisionWorld, dt: number): InputCmd {
   const b = a.brain!;
-  const role = roleOf(a);
+  const role = roleOf(m, a);
   const p = a.p;
   const pos = p.pos;
   const mine = m.mechs[a.id];
@@ -599,8 +604,8 @@ export function botCmd(m: MatchState, a: Actor, world: CollisionWorld, dt: numbe
     const rocket = WEAPONS[a.loadout[a.weapon]].projectile;
     if (rocket && b.visible) lead += Math.hypot(from.x - pos.x, from.z - pos.z) / PROJECTILES[rocket].speed;
     const dx = from.x + tgt.p.vel.x * lead - pos.x;
-    const how = stanceFor(a, tgt);
-    const dy = from.y + heightOf(tgt) * (tgt.inMech ? BOTS.mechAimHeight : role.aimHeight) - (pos.y + eyeOf(a));
+    const how = stanceFor(m, a, tgt);
+    const dy = from.y + heightOf(m, tgt) * (tgt.inMech ? BOTS.mechAimHeight : role.aimHeight) - (pos.y + eyeOf(m, a));
     const dz = from.z + tgt.p.vel.z * lead - pos.z;
     const dist = Math.hypot(dx, dz);
     // In the last part of a charged shot the aim stops tracking, so moving dodges it.
@@ -618,20 +623,13 @@ export function botCmd(m: MatchState, a: Actor, world: CollisionWorld, dt: numbe
 
     if (b.state === 'engage') {
       // Everyone but the rusher shoulders the weapon to shoot at range. In a
-      // mech the same button launches the rocket salvo whenever it is ready.
-      ads = a.inMech ? b.visible && b.token && dist > 12 : !how.rush && b.visible && dist > 6;
+      // mech the same button is the frame's ability.
+      ads = a.inMech ? mechAbility(m, a, mine, dist, how.fire) : !how.rush && b.visible && dist > 6;
       // An empty mech of its own nearby is worth more than the firefight.
       const fetch = toMech >= 0 && toMech < 45;
       go = fetch ? goToMech(m, a, mine, dt) : engageMove(m, a, tgt, dist, dt);
       sprint = fetch || (how.rush && (!b.visible || dist > how.max));
-      if (a.inMech && b.visible) {
-        // A dash to the side now and then spoils the aim of whoever shoots back.
-        b.hopIn -= dt;
-        if (b.hopIn <= 0) {
-          b.jumpFor = 0.1;
-          b.hopIn = randRange(m.rng, 3, 6);
-        }
-      }
+      if (a.inMech && b.visible) mechMove(m, a, mine, dt);
       if (how.rush && b.visible) {
         // Close the last stretch with a slide, and hop now and then to throw off aim.
         const speed = lenH(p.vel);
@@ -740,13 +738,60 @@ export function botCmd(m: MatchState, a: Actor, world: CollisionWorld, dt: numbe
     // Buttons are pressed for one tick at a time, so each press counts once.
     const press = (m.tick + a.id * 7) % 30 === 0;
     cmd.call = press && a.meter >= 1 && mine.state === 'none';
+    cmd.frame = frameIndex(BOT_ROLES[b.role].frame ?? '');
     cmd.use = press && toMech >= 0 && toMech < COMBAT.mech.embark.range - 0.5;
     // The launcher comes out against a mech and goes away again afterwards.
     const fighting = tgt !== null && tgt.inMech && (b.state === 'engage' || b.state === 'notice');
     const launcher = a.loadout.indexOf(BOTS.antiArmor);
     cmd.weapon = fighting && launcher >= 0 ? launcher : 0;
   }
-  // Semi-automatic weapons need the trigger released between shots.
-  cmd.fire = fire && (WEAPONS[a.loadout[a.weapon]].fireMode === 'auto' || !a.triggerHeld);
+  // Semi-automatic weapons need the trigger released between shots. A cloaked
+  // bot holds its fire until the cloak is nearly spent: a shot gives it away.
+  const hidden = a.inMech && mine.cloak > 1;
+  cmd.fire = fire && !hidden && (WEAPONS[a.loadout[a.weapon]].fireMode === 'auto' || !a.triggerHeld);
   return cmd;
+}
+
+/**
+ * The aim button in a cockpit, by frame: the salvo whenever it is ready and the
+ * target is not on top of it; the shield while it cannot shoot back or a
+ * launcher is aimed at it; the cloak to slip out of sight once the hull has
+ * taken a beating.
+ */
+function mechAbility(m: MatchState, a: Actor, k: Mech, dist: number, fireRange: number): boolean {
+  const b = a.brain!;
+  const F = frameOf(k);
+  const A = F.ability;
+  if (A.kind === 'salvo') return b.visible && b.token && dist > 12;
+  if (A.kind === 'shield') {
+    // Up while it cannot shoot back, and whenever a launcher is levelled at it;
+    // never against rounds that go straight through it.
+    const tgt = m.actors[b.target];
+    const def = WEAPONS[tgt.loadout[tgt.weapon]];
+    if (!b.visible || !def || def.pierceShield || k.shield <= A.health * 0.25) return false;
+    return dist > fireRange || a.reload > 0 || (def.projectile !== undefined && tgt.ads > 0.5);
+  }
+  return b.visible && k.health < F.health * 0.7;
+}
+
+/** The jump button in a cockpit, by frame: a dash or a leap now and then to spoil the aim of whoever shoots back, a stomp when pilots come close. */
+function mechMove(m: MatchState, a: Actor, k: Mech, dt: number): void {
+  const b = a.brain!;
+  const J = frameOf(k).mobility;
+  if (J.kind === 'stomp') {
+    // A fresh press each time: the button has to come up between stomps.
+    if (k.charges < 1 || k.jumpHeld) return;
+    for (const o of m.actors) {
+      if (o.team === a.team || !o.alive || o.inMech) continue;
+      if (Math.hypot(o.p.pos.x - k.pos.x, o.p.pos.z - k.pos.z) > J.radius * 0.7 || Math.abs(o.p.pos.y - k.pos.y) > 3) continue;
+      b.jumpFor = 0.05;
+      return;
+    }
+    return;
+  }
+  b.hopIn -= dt;
+  if (b.hopIn <= 0) {
+    b.jumpFor = 0.1;
+    b.hopIn = randRange(m.rng, 3, 6);
+  }
 }

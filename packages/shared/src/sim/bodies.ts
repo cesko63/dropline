@@ -1,6 +1,6 @@
 import { v3 } from '../math/vec3';
 import { COMBAT, type Actor, type MatchState } from './combat';
-import { MECH, mechActive } from './mech';
+import { frameOf, mechActive, type Mech } from './mech';
 import { SKIN, playerHeight, type PlayerState } from './movement';
 import { TUNING } from './tuning';
 import type { CollisionWorld } from './world';
@@ -69,8 +69,11 @@ function block(p: PlayerState, nx: number, nz: number): void {
   p.vel.z += nz * into;
 }
 
-/** Move pilot `a` out of the bodies in `bodies` (which may include `a` itself; it is skipped). */
-export function pushApart(a: Actor, bodies: Bodies, world: CollisionWorld, dt: number): void {
+/**
+ * Move pilot `a` out of the bodies in `bodies` (which may include `a` itself; it
+ * is skipped). `mechs` gives each mech's frame, and so its size.
+ */
+export function pushApart(a: Actor, bodies: Bodies, mechs: readonly Mech[], world: CollisionWorld, dt: number): void {
   const p = a.p;
   // A mantle follows its own path over the ledge; it is pushed again once it lands.
   if (p.mantle.active) return;
@@ -106,13 +109,14 @@ export function pushApart(a: Actor, bodies: Bodies, world: CollisionWorld, dt: n
   push.z = az;
 
   ax = az = 0;
-  const reach = r + MECH.body.radius;
   for (let id = 0; id < n; id++) {
     const i = (n + id) * STRIDE;
     if (bodies[i + 4] !== 1) continue;
     const ky = bodies[i + 1];
+    const body = frameOf(mechs[id]).body;
+    const reach = r + body.radius;
     // The hatch is open to its own pilot: they climb out through the top.
-    const top = ky + MECH.body.height - (id === a.id ? B.hatch : 0);
+    const top = ky + body.height - (id === a.id ? B.hatch : 0);
     if (p.pos.y >= top || ky >= p.pos.y + h) continue;
     const dx = p.pos.x - bodies[i];
     const dz = p.pos.z - bodies[i + 2];

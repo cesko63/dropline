@@ -1,9 +1,9 @@
 import { emptyInput, type InputCmd } from '../input';
 import { createBodies, liveBodies, pushApart, type Bodies } from './bodies';
 import { COMBAT, type Actor, type MatchState } from './combat';
-import { MechEvent, stepMechBody } from './mech';
-import { seat, stepSalvo } from './mechMatch';
-import { stepWeapon } from './match';
+import { stepMechBody } from './mech';
+import { pushBodyEvents, seat } from './mechMatch';
+import { stepMechWeapons, stepWeapon } from './match';
 import { stepPlayer } from './movement';
 import type { CollisionWorld } from './world';
 
@@ -34,7 +34,7 @@ export function stepOwn(m: MatchState, world: CollisionWorld, a: Actor, cmd: Inp
       if (scratch.length !== m.actors.length * 10) scratch = createBodies(m.actors.length);
       bodies = liveBodies(m, scratch);
     }
-    pushApart(a, bodies, world, dt);
+    pushApart(a, bodies, m.mechs, world, dt);
     stepWeapon(m, a, cmd, world, dt);
     return;
   }
@@ -51,11 +51,7 @@ export function stepOwn(m: MatchState, world: CollisionWorld, a: Actor, cmd: Inp
     k.pitch = cmd.pitch;
   }
   stepMechBody(k, driven ? cmd : IDLE, world, dt, driven, m.mechs);
-  if (k.events & MechEvent.Dash) m.events.push({ type: 'mechDash', mech: k.id });
-  if (k.events & MechEvent.Land) m.events.push({ type: 'mechStep', mech: k.id, heavy: true });
-  else if (k.events & MechEvent.Step) m.events.push({ type: 'mechStep', mech: k.id, heavy: false });
+  pushBodyEvents(m, k);
   seat(a, k);
-  if (!driven) return;
-  stepWeapon(m, a, { ...cmd, ads: false, weapon: -1 }, world, dt);
-  stepSalvo(m, a, k, cmd.ads, world, dt);
+  if (driven) stepMechWeapons(m, a, k, cmd, world, dt);
 }

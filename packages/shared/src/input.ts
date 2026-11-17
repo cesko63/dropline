@@ -24,11 +24,14 @@ export interface InputCmd {
   call: boolean;
   /** Give up the current position and start again at a spawn point. Acts once per press. */
   redeploy: boolean;
+  /** The mech frame a call brings down, as an index into `FRAME_LIST`. */
+  frame: number;
 }
 
 /*
- * In a mech the same command drives the machine: `jump` is the dash and `ads`
- * launches the rocket salvo; `crouch` and `weapon` do nothing.
+ * In a mech the same command drives the machine: `jump` is the frame's move
+ * (dash, leap or stomp) and `ads` its ability (rocket salvo, shield or cloak);
+ * `crouch` and `weapon` do nothing.
  */
 
 export const emptyInput = (): InputCmd => ({
@@ -46,4 +49,5 @@ export const emptyInput = (): InputCmd => ({
   use: false,
   call: false,
   redeploy: false,
+  frame: 0,
 });

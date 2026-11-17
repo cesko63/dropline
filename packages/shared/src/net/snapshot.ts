@@ -1,7 +1,7 @@
 import type { BotStateName } from '../ai/bot';
 import type { Vec3 } from '../math/vec3';
-import type { Actor, MatchEvent, MatchState, ShotTrace } from '../sim/combat';
-import { MECH, type Mech, type MechStateName } from '../sim/mech';
+import { MECH_ABILITIES, type Actor, type MatchEvent, type MatchState, type ShotTrace } from '../sim/combat';
+import { frameOf, type Mech, type MechStateName } from '../sim/mech';
 import type { PlayerState } from '../sim/movement';
 import { Msg, NAMES, Reader, Writer, nameId } from './protocol';
 
@@ -69,11 +69,13 @@ export interface ActorRec {
 }
 
 /** Bits of `MechRec.flags`. */
-export const MechFlag = { Grounded: 1, Dashing: 2 } as const;
+export const MechFlag = { Grounded: 1, Dashing: 2, Shield: 4, Cloaked: 8 } as const;
 
 export interface MechRec {
   /** Index into none, dropping, idle, boot, piloted. The rest is unset for `none`. */
   state: number;
+  /** Index into `FRAME_LIST`. */
+  frame: number;
   flags: number;
   x: number;
   y: number;
@@ -90,6 +92,8 @@ export interface MechRec {
   /** Ground covered since the last footfall, as a fraction of a stride. */
   stride: number;
   landSpeed: number;
+  /** What is left of the shield, 0..1 of a full one. */
+  shield: number;
 }
 
 export interface Snapshot {
@@ -171,7 +175,9 @@ function writeMech(w: Writer, k: Mech): void {
   const state = MECH_STATES.indexOf(k.state);
   w.u8(state);
   if (state === 0) return;
-  w.u8((k.grounded ? MechFlag.Grounded : 0) | (k.dashTime > 0 ? MechFlag.Dashing : 0));
+  const F = frameOf(k);
+  w.u8(k.frame);
+  w.u8((k.grounded ? MechFlag.Grounded : 0) | (k.dashTime > 0 ? MechFlag.Dashing : 0) | (k.shieldUp ? MechFlag.Shield : 0) | (k.cloak > 0 ? MechFlag.Cloaked : 0));
   w.i16(packLen(k.pos.x));
   w.i16(packLen(k.pos.y));
   w.i16(packLen(k.pos.z));
@@ -184,17 +190,19 @@ function writeMech(w: Writer, k: Mech): void {
   w.u16(Math.min(65535, Math.round(k.stateTime * 1000)));
   w.i8(packUnit(k.dashX));
   w.i8(packUnit(k.dashZ));
-  w.u8(Math.max(0, Math.min(255, Math.round((k.stride / MECH.move.strideLength) * 255))));
+  w.u8(Math.max(0, Math.min(255, Math.round((k.stride / F.move.strideLength) * 255))));
   w.u8(Math.min(255, Math.round(k.landSpeed * 4)));
+  w.u8(F.ability.kind === 'shield' ? Math.round((k.shield / F.ability.health) * 255) : 0);
 }
 
 function readMech(r: Reader): MechRec {
   const state = r.u8();
   if (state === 0) {
-    return { state, flags: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, health: 0, stateTime: 0, dashX: 0, dashZ: 0, stride: 0, landSpeed: 0 };
+    return { state, frame: 0, flags: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, health: 0, stateTime: 0, dashX: 0, dashZ: 0, stride: 0, landSpeed: 0, shield: 0 };
   }
   return {
     state,
+    frame: r.u8(),
     flags: r.u8(),
     x: r.i16() / 100,
     y: r.i16() / 100,
@@ -210,6 +218,7 @@ function readMech(r: Reader): MechRec {
     dashZ: r.i8() / 127,
     stride: r.u8() / 255,
     landSpeed: r.u8() / 4,
+    shield: r.u8() / 255,
   };
 }
 
@@ -342,9 +351,11 @@ function syncMech(io: Io, k: Mech): void {
   const state = io.u8(MECH_STATES.indexOf(k.state));
   k.state = MECH_STATES[state] ?? 'none';
   if (state === 0) return;
-  const bits = io.u8((k.grounded ? 1 : 0) | (k.dashHeld ? 2 : 0));
+  k.frame = io.u8(k.frame);
+  const bits = io.u8((k.grounded ? 1 : 0) | (k.jumpHeld ? 2 : 0) | (k.shieldUp ? 4 : 0));
   k.grounded = (bits & 1) !== 0;
-  k.dashHeld = (bits & 2) !== 0;
+  k.jumpHeld = (bits & 2) !== 0;
+  k.shieldUp = (bits & 4) !== 0;
   k.stateTime = io.f64(k.stateTime);
   syncVec(io, k.pos);
   syncVec(io, k.vel);
@@ -357,14 +368,17 @@ function syncMech(io: Io, k: Mech): void {
   const n = io.u8(k.ammo.length);
   k.ammo.length = n;
   for (let i = 0; i < n; i++) k.ammo[i] = io.u16(k.ammo[i] ?? 0);
-  k.dashCharges = io.f64(k.dashCharges);
+  k.charges = io.f64(k.charges);
   k.dashTime = io.f64(k.dashTime);
   k.dashX = io.f64(k.dashX);
   k.dashZ = io.f64(k.dashZ);
   k.rammed = io.i32(k.rammed);
-  k.salvoCooldown = io.f64(k.salvoCooldown);
+  k.abilityCooldown = io.f64(k.abilityCooldown);
   k.salvoLeft = io.u8(k.salvoLeft);
   k.salvoNext = io.f64(k.salvoNext);
+  k.shield = io.f64(k.shield);
+  k.shieldRest = io.f64(k.shieldRest);
+  k.cloak = io.f64(k.cloak);
   k.stride = io.f64(k.stride);
 }
 
@@ -438,13 +452,14 @@ const Ev = {
   mechOnline: 12,
   disembark: 13,
   mechStep: 14,
-  mechDash: 15,
+  mechAbility: 15,
   ram: 16,
   mechDamage: 17,
   mechDestroyed: 18,
   launch: 19,
   explode: 20,
   matchEnd: 21,
+  shieldHit: 22,
 } as const;
 
 /** Everyone gets this event. */
@@ -506,7 +521,7 @@ export function writeEvent(w: Writer, e: MatchEvent): void {
       w.u8(e.traces.length);
       for (const t of e.traces) {
         writeV(w, t.end);
-        w.u8((t.normal ? 1 : 0) | (t.head ? 2 : 0));
+        w.u8((t.normal ? 1 : 0) | (t.head ? 2 : 0) | (t.shield ? 4 : 0));
         w.i8(t.victim);
         w.i8(t.mech);
         if (t.normal) writeNormal(w, t.normal);
@@ -549,6 +564,7 @@ export function writeEvent(w: Writer, e: MatchEvent): void {
     case 'mechCall':
       w.u8(Ev.mechCall);
       w.u8(e.actor);
+      w.u8(e.frame);
       writeV(w, e.pos);
       w.f32(e.duration);
       break;
@@ -581,9 +597,18 @@ export function writeEvent(w: Writer, e: MatchEvent): void {
       w.u8(e.mech);
       w.u8(e.heavy ? 1 : 0);
       break;
-    case 'mechDash':
-      w.u8(Ev.mechDash);
+    case 'mechAbility':
+      w.u8(Ev.mechAbility);
       w.u8(e.mech);
+      w.u8(MECH_ABILITIES.indexOf(e.what));
+      break;
+    case 'shieldHit':
+      w.u8(Ev.shieldHit);
+      w.u8(e.mech);
+      w.u8(e.attacker);
+      w.f32(e.amount);
+      w.u8(e.broken ? 1 : 0);
+      writeV(w, e.pos);
       break;
     case 'ram':
       w.u8(Ev.ram);
@@ -646,7 +671,7 @@ function readEvent(r: Reader): MatchEvent {
         const bits = r.u8();
         const victim = r.i8();
         const mech = r.i8();
-        traces.push({ end, victim, mech, head: (bits & 2) !== 0, normal: bits & 1 ? readNormal(r) : null });
+        traces.push({ end, victim, mech, head: (bits & 2) !== 0, shield: (bits & 4) !== 0, normal: bits & 1 ? readNormal(r) : null });
       }
       return { type: 'shot', actor, weapon, origin, traces };
     }
@@ -668,7 +693,7 @@ function readEvent(r: Reader): MatchEvent {
     case Ev.meterReady:
       return { type: 'meterReady', actor: r.u8() };
     case Ev.mechCall:
-      return { type: 'mechCall', actor: r.u8(), pos: readV(r), duration: r.f32() };
+      return { type: 'mechCall', actor: r.u8(), frame: r.u8(), pos: readV(r), duration: r.f32() };
     case Ev.callDenied:
       return { type: 'callDenied', actor: r.u8(), reason: r.u8() === 0 ? 'meter' : 'zone' };
     case Ev.mechLand:
@@ -681,8 +706,14 @@ function readEvent(r: Reader): MatchEvent {
       return { type: 'disembark', actor: r.u8(), eject: r.u8() !== 0 };
     case Ev.mechStep:
       return { type: 'mechStep', mech: r.u8(), heavy: r.u8() !== 0 };
-    case Ev.mechDash:
-      return { type: 'mechDash', mech: r.u8() };
+    case Ev.mechAbility: {
+      const mech = r.u8();
+      const what = MECH_ABILITIES[r.u8()];
+      if (!what) throw new Error('unknown mech ability');
+      return { type: 'mechAbility', mech, what };
+    }
+    case Ev.shieldHit:
+      return { type: 'shieldHit', mech: r.u8(), attacker: r.u8(), amount: r.f32(), broken: r.u8() !== 0, pos: readV(r) };
     case Ev.ram:
       return { type: 'ram', mech: r.u8(), victim: r.i8(), other: r.i8() };
     case Ev.mechDamage: {

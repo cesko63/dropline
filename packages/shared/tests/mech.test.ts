@@ -1,15 +1,20 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import gym from '../../../data/maps/gym.json';
 import {
+  BOT_ROLES,
   COMBAT,
   CollisionWorld,
-  MECH,
+  FRAMES,
+  FRAME_LIST,
   PROJECTILES,
   TICK_DT,
   WEAPONS,
+  canSee,
   createMatch,
   emptyInput,
   enterMech,
+  frameIndex,
+  frameOf,
   resetMech,
   stepMatch,
   v3,
@@ -18,11 +23,21 @@ import {
   type MapData,
   type MatchEvent,
   type MatchState,
+  type CloakAbility,
+  type DashMove,
+  type LeapMove,
   type Mech,
+  type SalvoAbility,
+  type ShieldAbility,
+  type StompMove,
 } from '../src';
 
 const map = gym as MapData;
 const R = COMBAT.mech;
+/** The default frame, which every mech here is unless a test says otherwise. */
+const MECH = FRAMES.halberd;
+const DASH = MECH.mobility as DashMove;
+const SALVO = MECH.ability as SalvoAbility;
 const B = MECH.body;
 let world: CollisionWorld;
 
@@ -66,13 +81,15 @@ function run(m: MatchState, seconds: number, input: Script = still, other: Scrip
   return events;
 }
 
+const dashes = (events: MatchEvent[]): MatchEvent[] => events.filter((e) => e.type === 'mechAbility' && e.what === 'dash');
+
 const of = <T extends MatchEvent['type']>(events: MatchEvent[], type: T): Extract<MatchEvent, { type: T }>[] =>
   events.filter((e): e is Extract<MatchEvent, { type: T }> => e.type === type);
 
-/** Stand a mech at a place without the call-in: empty, or with its owner already at the controls. */
-function stage(m: MatchState, a: Actor, x: number, z: number, yaw: number, piloted: boolean): Mech {
+/** Stand a mech of a frame at a place without the call-in: empty, or with its owner already at the controls. */
+function stage(m: MatchState, a: Actor, x: number, z: number, yaw: number, piloted: boolean, frame = 0): Mech {
   const k = m.mechs[a.id];
-  resetMech(k, v3(x, 0.02, z), yaw);
+  resetMech(k, v3(x, 0.02, z), yaw, frame);
   k.state = 'idle';
   if (piloted) {
     a.p.yaw = yaw;
@@ -290,36 +307,36 @@ describe('mech movement', () => {
   it('dashes where it is steered, spends a charge each time and earns it back', () => {
     const { m, me, mine } = duel();
     stage(m, me, 44, 40, 0, true);
-    const first = run(m, MECH.dash.time + 0.3, (t) => ({ jump: t < 0.05 }));
-    expect(of(first, 'mechDash').length).toBe(1);
+    const first = run(m, DASH.time + 0.3, (t) => ({ jump: t < 0.05 }));
+    expect(dashes(first).length).toBe(1);
     // Standing still it goes where it faces: north, by more than a second of walking.
     const reach = 40 - mine.pos.z;
     expect(reach).toBeGreaterThan(5.5);
     expect(reach).toBeLessThan(9);
     expect(Math.abs(mine.pos.x - 44)).toBeLessThan(0.01);
-    expect(mine.dashCharges).toBeLessThan(MECH.dash.charges - 0.8);
+    expect(mine.charges).toBeLessThan(DASH.charges - 0.8);
 
     // The second charge goes sideways with the stick; then there is none left.
     const x0 = mine.pos.x;
-    const second = run(m, MECH.dash.time + 0.3, (t) => ({ jump: t < 0.05, moveX: 1 }));
-    expect(of(second, 'mechDash').length).toBe(1);
+    const second = run(m, DASH.time + 0.3, (t) => ({ jump: t < 0.05, moveX: 1 }));
+    expect(dashes(second).length).toBe(1);
     expect(mine.pos.x - x0).toBeGreaterThan(5.5);
     const none = run(m, 0.5, (t) => ({ jump: t < 0.05 }));
-    expect(of(none, 'mechDash').length).toBe(0);
+    expect(dashes(none).length).toBe(0);
     // Holding the key does not dash again by itself once a charge is back.
-    const held = run(m, MECH.dash.rechargeTime, () => ({ jump: true }));
-    expect(of(held, 'mechDash').length).toBe(0);
+    const held = run(m, DASH.rechargeTime, () => ({ jump: true }));
+    expect(dashes(held).length).toBe(0);
     const again = run(m, 0.3, (t) => ({ jump: t >= 0.1 && t < 0.15 }));
-    expect(of(again, 'mechDash').length).toBe(1);
+    expect(dashes(again).length).toBe(1);
   });
 
   it('rams a pilot in its path once per dash and throws them aside', () => {
     const { m, me, foe } = duel();
     stage(m, me, 44, 40, 0, true);
     place(foe, 44, 35.5, Math.PI);
-    const events = run(m, MECH.dash.time + 0.1, (t) => ({ jump: t < 0.05 }));
+    const events = run(m, DASH.time + 0.1, (t) => ({ jump: t < 0.05 }));
     expect(of(events, 'ram')).toEqual([{ type: 'ram', mech: 0, victim: foe.id, other: -1 }]);
-    expect(foe.health).toBe(COMBAT.health - MECH.dash.ramDamage);
+    expect(foe.health).toBe(COMBAT.health - DASH.ramDamage);
     expect(foe.p.pos.y).toBeGreaterThan(0.5);
     expect(foe.p.vel.z).toBeLessThan(-3);
   });
@@ -377,7 +394,7 @@ describe('mech combat', () => {
     place(foe, -40, -40, 0);
     // Look at the floor 30 m ahead.
     const pitch = lookAt(0, 30, B.eye);
-    const S = MECH.salvo;
+    const S = SALVO;
     const events = run(m, 3, () => ({ ads: true, pitch }));
     const launches = of(events, 'launch');
     expect(launches.length).toBe(S.count);
@@ -478,7 +495,7 @@ describe('bots and mechs', () => {
       fight.push(...m.events);
     }
     expect(of(fight, 'shot').some((e) => e.actor === bot.id && e.weapon === 'autocannon')).toBe(true);
-    expect(of(fight, 'launch').some((e) => e.actor === bot.id && e.kind === MECH.salvo.projectile)).toBe(true);
+    expect(of(fight, 'launch').some((e) => e.actor === bot.id && e.kind === SALVO.projectile)).toBe(true);
     expect(of(fight, 'damage').some((e) => e.victim === me.id)).toBe(true);
   });
 
@@ -530,6 +547,231 @@ function gunner(m: MatchState, me: Actor, t: number, eye: number, moving: boolea
 }
 
 const mean = (xs: number[]): number => xs.reduce((s, x) => s + x, 0) / xs.length;
+
+describe('mech frames', () => {
+  const BASTION = FRAMES.bastion;
+  const SHIELD = BASTION.ability as ShieldAbility;
+  const STOMP = BASTION.mobility as StompMove;
+  const LYNX = FRAMES.lynx;
+  const LEAP = LYNX.mobility as LeapMove;
+  const CLOAK = LYNX.ability as CloakAbility;
+  const bastion = frameIndex('bastion');
+  const lynx = frameIndex('lynx');
+  const sum = (events: { amount: number }[]): number => events.reduce((t, e) => t + e.amount, 0);
+  const speed = (k: Mech): number => Math.hypot(k.vel.x, k.vel.z);
+
+  it('calls down the frame the pilot picked, with its own hull, weapon and size', () => {
+    for (const F of FRAME_LIST) {
+      const { m, me, mine } = duel();
+      me.meter = 1;
+      const call = of(run(m, 0.05, () => ({ call: true, frame: frameIndex(F.id), pitch: lookAt(0, 20) })), 'mechCall');
+      expect(call[0].frame).toBe(frameIndex(F.id));
+      run(m, R.drop.time + 0.1);
+      expect(mine.state).toBe('idle');
+      expect(frameOf(mine)).toBe(F);
+      expect(mine.health).toBe(F.health);
+      place(me, mine.pos.x, mine.pos.z + 3, 0);
+      run(m, 0.05, () => ({ use: true }));
+      expect(me.loadout).toEqual(F.loadout);
+      expect(me.inMech).toBe(true);
+    }
+    // Every frame fits where the map checks and the mech nav grid say a mech fits.
+    for (const F of FRAME_LIST) {
+      expect(F.body.radius).toBeLessThanOrEqual(B.radius);
+      expect(F.body.height).toBeLessThanOrEqual(B.height);
+    }
+  });
+
+  it('bots call the frame their role is built around', () => {
+    const m = createMatch(map, world, { seed: 3, humans: 0, startMeter: 1, scoreLimit: 9999 });
+    const calls = new Map<number, number>();
+    for (let i = 0; i < 60 * 8; i++) {
+      stepMatch(m, world, [], TICK_DT);
+      for (const e of m.events) if (e.type === 'mechCall') calls.set(e.actor, e.frame);
+    }
+    expect(calls.size).toBeGreaterThan(5);
+    for (const [id, frame] of calls) expect(FRAME_LIST[frame].id).toBe(BOT_ROLES[m.actors[id].brain!.role].frame);
+    expect(new Set(calls.values()).size).toBe(3);
+  });
+
+  it('the Bastion holds up a shield that stops fire from the front, and cannot fire through it', () => {
+    const { m, me, foe, mine } = duel();
+    stage(m, me, 44, 46, 0, true, bastion);
+    // The enemy pilot 26 m ahead aims the carbine at the hull.
+    const pitch = lookAt(2.4, 26);
+    const shoot = (): Partial<InputCmd> => ({ ads: true, fire: true, pitch });
+    run(m, 0.3, () => ({ ads: true }), () => ({ ads: true, pitch }));
+    expect(mine.shieldUp).toBe(true);
+    const front = run(m, 1, () => ({ ads: true, fire: true }), shoot);
+    expect(of(front, 'shot').filter((e) => e.actor === me.id).length).toBe(0);
+    expect(of(front, 'mechDamage').length).toBe(0);
+    const blocked = of(front, 'shieldHit');
+    expect(blocked.length).toBeGreaterThan(5);
+    expect(mine.health).toBe(BASTION.health);
+    expect(mine.shield).toBeLessThan(SHIELD.health - sum(blocked) - SHIELD.drain);
+    // Lowered, the hull takes the rounds and the cannon answers.
+    const open = run(m, 0.6, () => ({ fire: true }), shoot);
+    expect(of(open, 'mechDamage').length).toBeGreaterThan(3);
+    expect(of(open, 'shot').filter((e) => e.actor === me.id).length).toBeGreaterThan(0);
+    // Facing away, it covers nothing behind it.
+    const back = run(m, 1, () => ({ ads: true, yaw: Math.PI }), shoot);
+    expect(of(back, 'shieldHit').length).toBe(0);
+    expect(of(back, 'mechDamage').length).toBeGreaterThan(5);
+    expect(foe.alive).toBe(true);
+  });
+
+  it('the shield covers an ally standing behind it, slows the mech to a walk and breaks under fire', () => {
+    const m = createMatch(map, world, { seed: 2, teamSize: 2 });
+    const [me, ally, foe] = m.actors;
+    for (const a of m.actors) a.brain = null;
+    const mine = stage(m, me, 44, 46, 0, true, bastion);
+    place(ally, 44, 49, 0);
+    place(foe, 44, 20, Math.PI);
+    place(m.actors[3], 10, 70, 0);
+    ally.protect = foe.protect = 0;
+    const step = (seconds: number, mine: Partial<InputCmd>, theirs: Partial<InputCmd>): MatchEvent[] => {
+      const events: MatchEvent[] = [];
+      for (let i = 0; i < Math.round(seconds / TICK_DT); i++) {
+        const cmds = m.actors.map((a, n) => ({ ...emptyInput(), yaw: a.p.yaw, pitch: a.p.pitch, ...(n === 0 ? mine : n === 2 ? theirs : {}) }));
+        stepMatch(m, world, cmds, TICK_DT);
+        events.push(...m.events);
+      }
+      return events;
+    };
+    // The foe aims at the ally's chest, right through where the shield stands.
+    const atAlly = { ads: true, fire: true, pitch: lookAt(1.2, 29) };
+    step(0.3, { ads: true }, { ads: true, pitch: atAlly.pitch });
+    const covered = step(1, { ads: true }, atAlly);
+    expect(of(covered, 'shieldHit').length).toBeGreaterThan(5);
+    expect(ally.health).toBe(COMBAT.health);
+
+    // Behind the shield the mech walks, at best.
+    step(2, { ads: true, moveZ: 1, sprint: true }, {});
+    expect(speed(mine)).toBeCloseTo(BASTION.move.walkSpeed * SHIELD.slow, 1);
+
+    // Poured on, it breaks, and stays down for a while however hard the button is held.
+    mine.shield = 40;
+    let broke = false;
+    for (let t = 0; t < 1 && !broke; t += TICK_DT) {
+      broke = step(TICK_DT, { ads: true }, { ads: true, fire: true, pitch: lookAt(2.4, 20) }).some((e) => e.type === 'mechAbility' && e.what === 'shieldBreak');
+    }
+    expect(broke).toBe(true);
+    expect(mine.shieldUp).toBe(false);
+    step(SHIELD.brokenTime - 0.1, { ads: true }, {});
+    expect(mine.shieldUp).toBe(false);
+    step(0.2, { ads: true }, {});
+    expect(mine.shieldUp).toBe(true);
+  });
+
+  it('the Lynx rail goes straight through a shield', () => {
+    const { m, me, foe, mine } = duel();
+    stage(m, me, 44, 46, 0, true, bastion);
+    stage(m, foe, 44, 20, Math.PI, true, lynx);
+    const pitch = lookAt(2.4, 26, LYNX.body.eye);
+    run(m, 0.3, () => ({ ads: true }));
+    const events = run(m, 2, () => ({ ads: true }), (t) => ({ fire: t % 1.05 < 0.05, pitch }));
+    expect(mine.shieldUp).toBe(true);
+    expect(of(events, 'shieldHit').length).toBe(0);
+    const hits = of(events, 'mechDamage');
+    expect(hits.length).toBe(2);
+    expect(hits[0].amount).toBeCloseTo(WEAPONS.lance.armor * foe.damageScale, 5);
+    expect(mine.health).toBeCloseTo(BASTION.health - sum(hits), 5);
+  });
+
+  it('the Bastion stomps: pilots close by are hurt and thrown off, once per charge', () => {
+    const { m, me, foe, mine } = duel();
+    stage(m, me, 44, 46, 0, true, bastion);
+    place(foe, 44, 41, Math.PI);
+    const first = run(m, 0.05, () => ({ jump: true }));
+    expect(first.filter((e) => e.type === 'mechAbility' && e.what === 'stomp').length).toBe(1);
+    const hurt = of(first, 'damage');
+    expect(hurt.length).toBe(1);
+    expect(hurt[0].amount).toBeCloseTo(STOMP.damage * (1 - 0.5 * (5 / STOMP.radius)), 0);
+    // Thrown away from the mech (toward -Z) and up.
+    expect(foe.p.vel.z).toBeLessThan(-STOMP.knock * 0.9);
+    expect(foe.p.vel.y).toBeGreaterThan(0);
+    expect(mine.charges).toBeLessThan(0.1);
+    // Held down it does nothing more, and a new press needs the charge back.
+    expect(run(m, 1, () => ({ jump: true })).filter((e) => e.type === 'mechAbility').length).toBe(0);
+    run(m, 0.1);
+    expect(run(m, 0.05, () => ({ jump: true })).filter((e) => e.type === 'mechAbility').length).toBe(0);
+    run(m, STOMP.rechargeTime);
+    // Out of reach, the next one hurts nobody.
+    place(foe, 44, 46 - STOMP.radius - 2, Math.PI);
+    const far = run(m, 0.05, () => ({ jump: true }));
+    expect(far.filter((e) => e.type === 'mechAbility' && e.what === 'stomp').length).toBe(1);
+    expect(of(far, 'damage').length).toBe(0);
+  });
+
+  it('the Lynx leaps on its jump jets, two charges at a time', () => {
+    const { m, me, mine } = duel();
+    stage(m, me, 44, 54, 0, true, lynx);
+    const y0 = mine.pos.y;
+    const events = run(m, 0.05, () => ({ jump: true, moveZ: 1 }));
+    expect(events.filter((e) => e.type === 'mechAbility' && e.what === 'leap').length).toBe(1);
+    expect(mine.charges).toBeCloseTo(LEAP.charges - 1, 1);
+    let top = y0;
+    let t = 0;
+    while ((!mine.grounded || t < 0.2) && t < 3) {
+      run(m, TICK_DT, () => ({ moveZ: 1 }));
+      top = Math.max(top, mine.pos.y);
+      t += TICK_DT;
+    }
+    // Straight up it rises up^2 / 2g; it covers ground the whole way.
+    expect(top - y0).toBeCloseTo((LEAP.up * LEAP.up) / (2 * LYNX.move.gravity), 0);
+    expect(mine.pos.z).toBeLessThan(54 - LEAP.forward * 0.8);
+    expect(mine.grounded).toBe(true);
+    // The second charge is there at once; a third is not.
+    expect(run(m, 0.05, () => ({ jump: true })).filter((e) => e.type === 'mechAbility').length).toBe(1);
+    run(m, 1.5);
+    expect(run(m, 0.05, () => ({ jump: true })).filter((e) => e.type === 'mechAbility').length).toBe(0);
+  });
+
+  it('the Lynx cloaks: bots lose it past close range, and firing ends it', () => {
+    const { m, me, foe, mine } = duel();
+    stage(m, me, 44, 58, 0, true, lynx);
+    expect(canSee(m, world, foe, me, true)).toBe(true);
+    const on = run(m, 0.05, () => ({ ads: true }));
+    expect(on.some((e) => e.type === 'mechAbility' && e.what === 'cloakOn')).toBe(true);
+    expect(mine.cloak).toBeGreaterThan(CLOAK.time - 0.1);
+    expect(canSee(m, world, foe, me, true)).toBe(false);
+    place(foe, 44, 58 - CLOAK.revealRange + 2, Math.PI);
+    expect(canSee(m, world, foe, me, true)).toBe(true);
+    // A shot gives it away, and it needs its cooldown before it works again.
+    const off = run(m, 0.05, () => ({ fire: true, ads: true }));
+    expect(off.some((e) => e.type === 'mechAbility' && e.what === 'cloakOff')).toBe(true);
+    expect(mine.cloak).toBe(0);
+    expect(run(m, CLOAK.cooldown - 0.5, () => ({ ads: true })).some((e) => e.type === 'mechAbility' && e.what === 'cloakOn')).toBe(false);
+    expect(run(m, 0.6, () => ({ ads: true })).some((e) => e.type === 'mechAbility' && e.what === 'cloakOn')).toBe(true);
+    // Left alone it runs out by itself.
+    const out = run(m, CLOAK.time + 0.1);
+    expect(out.some((e) => e.type === 'mechAbility' && e.what === 'cloakOff')).toBe(true);
+  });
+
+  it('Bastion flak bursts beside a pilot or a mech it would fly past', () => {
+    const flak = PROJECTILES[WEAPONS.breaker.projectile!];
+    const { m, me, foe, theirs } = duel();
+    stage(m, me, 44, 46, 0, true, bastion);
+    // The pilot stands 1.2 m to the side of where the shells go.
+    place(foe, 45.2, 30, Math.PI);
+    const pitch = lookAt(1.0, 16, BASTION.body.eye);
+    const near = run(m, 0.6, (t) => ({ fire: t < 0.05, pitch }));
+    const hurt = of(near, 'damage');
+    expect(hurt.length).toBe(1);
+    expect(hurt[0].amount).toBeGreaterThan(flak.damage * 0.4);
+    expect(hurt[0].amount).toBeLessThan(flak.damage);
+
+    // A mech 1 m clear of the line takes the blast, not a direct hit.
+    place(foe, 10, 70, 0);
+    stage(m, foe, 44 + FRAMES.halberd.body.radius + 1, 30, Math.PI, true);
+    run(m, 1);
+    const graze = of(run(m, 0.6, (t) => ({ fire: t < 0.05, pitch: lookAt(2.4, 16, BASTION.body.eye) })), 'mechDamage');
+    expect(graze.length).toBe(1);
+    expect(graze[0].amount).toBeGreaterThan(0);
+    expect(graze[0].amount).toBeLessThan(flak.armor * flak.splashArmor);
+    expect(theirs.health).toBeLessThan(FRAMES.halberd.health);
+  });
+});
 
 describe('mech balance, played by scripts over several seeds', () => {
   it('a mech is worth several pilots against a full team on foot, and moving it is worth more', () => {
@@ -653,6 +895,71 @@ describe('mech balance, played by scripts over several seeds', () => {
     expect(mean(times)).toBeLessThan(55);
     expect(mean(left)).toBeLessThan(0.5);
   });
+  it('the three frames are an even match for each other, bot against bot', () => {
+    const seeds = Array.from({ length: 40 }, (_, n) => 100 + n);
+    for (let i = 0; i < FRAME_LIST.length; i++) {
+      for (let j = i + 1; j < FRAME_LIST.length; j++) {
+        let first = 0;
+        let second = 0;
+        for (const seed of seeds) {
+          const m = createMatch(map, world, { seed, teamSize: 1, humans: 0 });
+          const [a, b] = m.actors;
+          // Each side starts from each end of the floor half the time.
+          const flip = seed % 2 === 0;
+          stage(m, a, 40, flip ? 30 : 58, flip ? Math.PI : 0, true, i);
+          stage(m, b, 40, flip ? 58 : 30, flip ? 0 : Math.PI, true, j);
+          let t = 0;
+          while (a.inMech && b.inMech && t < 120) {
+            stepMatch(m, world, [], TICK_DT);
+            t += TICK_DT;
+          }
+          if (a.inMech && !b.inMech) first++;
+          else if (b.inMech && !a.inMech) second++;
+        }
+        console.log(`${FRAME_LIST[i].name} against ${FRAME_LIST[j].name}: ${first} to ${second} over ${seeds.length} duels`);
+        // No frame beats another in more than two duels out of three.
+        // (Measured: Halberd 17 to Bastion 23, Halberd 21 to Lynx 19, Bastion 24 to Lynx 16.)
+        expect(first + second).toBeGreaterThan(seeds.length * 0.9);
+        expect(Math.max(first, second)).toBeLessThanOrEqual(seeds.length * 0.65);
+      }
+    }
+  }, 120_000);
+
+  it('every frame is worth taking against a team on foot', () => {
+    const lives: number[] = [];
+    for (let f = 0; f < FRAME_LIST.length; f++) {
+      const life: number[] = [];
+      const kills: number[] = [];
+      for (const seed of Array.from({ length: 16 }, (_, n) => 300 + n)) {
+        const m = createMatch(map, world, { seed, humans: 0 });
+        const me = m.actors[0];
+        // Its own team sits this one out; the four enemy bots fight on foot.
+        for (const a of m.actors) {
+          if (a.team !== 0 || a === me) continue;
+          a.alive = false;
+          a.respawnIn = 1e9;
+        }
+        const foes = m.actors.filter((a) => a.team === 1);
+        stage(m, me, 40, 58, 0, true, f);
+        foes.forEach((o, i) => place(o, 31 + i * 6, 30, Math.PI));
+        let t = 0;
+        while (me.inMech && t < 120) {
+          for (const o of foes) o.meter = 0;
+          stepMatch(m, world, [], TICK_DT);
+          t += TICK_DT;
+        }
+        life.push(t);
+        kills.push(me.kills);
+      }
+      console.log(`bot ${FRAME_LIST[f].name} against four pilots: ${mean(life).toFixed(0)} s, ${mean(kills).toFixed(1)} kills`);
+      // (Measured: Halberd 13 s and 1.8 kills, Bastion 12 s and 1.4, Lynx 18 s and 2.3.)
+      expect(mean(life)).toBeGreaterThan(8);
+      expect(mean(life)).toBeLessThan(30);
+      expect(mean(kills)).toBeGreaterThan(0.8);
+      lives.push(mean(life));
+    }
+    expect(Math.max(...lives) / Math.min(...lives)).toBeLessThan(2);
+  }, 60_000);
 });
 
 describe('whole matches with mechs, bots only', () => {

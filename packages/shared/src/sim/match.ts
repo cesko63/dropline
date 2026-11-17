@@ -7,12 +7,12 @@ import { lenH, v3 } from '../math/vec3';
 import { COMBAT, type Actor, type MatchState, type ShotTrace } from './combat';
 import { rayPilot } from './hitscan';
 import { recordHistory, rewindBodies, rewindView } from './lagcomp';
-import { MECH, createMech, eyeOf, mechActive, rayMech, type Mech } from './mech';
-import { stepMechs, stepSalvo } from './mechMatch';
+import { createMech, eyeOf, frameOf, mechActive, rayMech, rayShield, type Mech } from './mech';
+import { stepAbility, stepMechs } from './mechMatch';
 import { createPlayerState, playerHeight, stepPlayer } from './movement';
 import { spawnProjectile, stepProjectiles } from './projectiles';
 import { createRng, rand, randSigned, type Rng } from './rng';
-import { damageActor, damageMech, killActor } from './rules';
+import { damageActor, damageMech, damageShield, killActor } from './rules';
 import { TUNING } from './tuning';
 import { WEAPONS, damageFalloff, type WeaponDef } from './weapons';
 import type { CollisionWorld } from './world';
@@ -174,6 +174,8 @@ export function spawnActor(m: MatchState, a: Actor): void {
     const k = m.mechs[a.id];
     k.state = 'idle';
     k.stateTime = 0;
+    k.shieldUp = false;
+    k.cloak = 0;
   }
   const s = pickSpawn(m, a);
   a.p = createPlayerState(v3(s.pos[0], s.pos[1], s.pos[2]), s.yawDeg * DEG);
@@ -191,11 +193,11 @@ export function spawnActor(m: MatchState, a: Actor): void {
 }
 
 /** Total spread right now, degrees: stance, bloom from firing, movement and being airborne. */
-export function spreadDeg(a: Actor): number {
+export function spreadDeg(m: MatchState, a: Actor): number {
   const S = weaponOf(a).spread;
   const base = S.hipDeg + (S.adsDeg - S.hipDeg) * a.ads;
   const steady = 1 - 0.5 * a.ads;
-  const topSpeed = a.inMech ? MECH.move.sprintSpeed : TUNING.ground.sprintSpeed;
+  const topSpeed = a.inMech ? frameOf(m.mechs[a.id]).move.sprintSpeed : TUNING.ground.sprintSpeed;
   const moving = Math.min(1, lenH(a.p.vel) / topSpeed) * S.moveDeg;
   const air = a.p.grounded || a.p.wallrun.active ? 0 : S.airDeg;
   // Aiming steadies everything: bloom and the movement penalties shrink with it.
@@ -223,10 +225,10 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
   up.y = right.z * fwd.x - right.x * fwd.z;
   up.z = right.x * fwd.y - right.y * fwd.x;
   origin.x = p.pos.x;
-  origin.y = p.pos.y + eyeOf(a);
+  origin.y = p.pos.y + eyeOf(m, a);
   origin.z = p.pos.z;
 
-  const cone = Math.tan(spreadDeg(a) * DEG);
+  const cone = Math.tan(spreadDeg(m, a) * DEG);
   const rng = shotRng(m, a);
   // A networked player aimed at what they saw, which is the past: trace against that.
   const view = m.history && a.viewTick >= 0 ? rewindView(m.history, m.tick, a.viewTick) : null;
@@ -269,24 +271,37 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
       head = hit.head;
       victim = o;
     }
+    let shield = false;
     for (const k of m.mechs) {
       if (k.team === a.team || !mechActive(k)) continue;
       const was = view ? view.mechs[k.id] : k;
       if (!was) continue;
-      const hit = rayMech(origin, dir, was, t);
-      if (!hit) continue;
-      t = hit.t;
-      head = hit.head;
+      // A raised shield stops the shot, whoever it was meant for, unless the round pierces it.
+      const ts = def.pierceShield ? -1 : rayShield(origin, dir, k, was, t);
+      const hit = rayMech(origin, dir, was, frameOf(k), ts >= 0 ? ts : t);
+      if (hit) {
+        t = hit.t;
+        head = hit.head;
+        shield = false;
+      } else if (ts >= 0) {
+        t = ts;
+        head = false;
+        shield = true;
+      } else {
+        continue;
+      }
       struck = k;
       victim = null;
     }
     const end = v3(origin.x + dir.x * t, origin.y + dir.y * t, origin.z + dir.z * t);
     const hitSomeone = victim !== null || struck !== null;
-    traces.push({ end, normal: hitSomeone || !wall ? null : wall.normal, victim: victim ? victim.id : -1, mech: struck ? struck.id : -1, head: hitSomeone && head });
+    traces.push({ end, normal: hitSomeone || !wall ? null : wall.normal, victim: victim ? victim.id : -1, mech: struck ? struck.id : -1, head: hitSomeone && head, shield });
     // On a client the shot is only drawn; whether it hurt anyone is the server's call.
     if (m.predict) continue;
-    if (struck) {
-      const amount = def.armor * damageFalloff(def, t) * (head ? MECH.vent.mult : 1) * a.damageScale;
+    if (struck && shield) {
+      damageShield(m, struck, a, def.armor * damageFalloff(def, t) * a.damageScale, end);
+    } else if (struck) {
+      const amount = def.armor * damageFalloff(def, t) * (head ? frameOf(struck).vent.mult : 1) * a.damageScale;
       damageMech(m, struck, a, amount, head, end, def.id);
     } else if (victim) {
       const amount = def.damage * damageFalloff(def, t) * (head ? def.headMult : 1) * a.damageScale;
@@ -368,6 +383,17 @@ export function stepWeapon(m: MatchState, a: Actor, cmd: InputCmd, world: Collis
 }
 
 /**
+ * A piloted mech's cannon and then its ability. The cannon cannot fire through
+ * a raised shield. Shared with `stepOwn`, which predicts the same.
+ */
+export function stepMechWeapons(m: MatchState, a: Actor, k: Mech, cmd: InputCmd, world: CollisionWorld, dt: number): void {
+  const before = a.ammo[0];
+  stepWeapon(m, a, { ...cmd, ads: false, weapon: -1, fire: cmd.fire && !k.shieldUp }, world, dt);
+  // Destroyed by its own blast? Then there is nothing left to work.
+  if (a.inMech) stepAbility(m, a, k, cmd.ads, a.ammo[0] < before, world, dt);
+}
+
+/**
  * Advance the match by one tick. `cmds` holds each human's command by actor id.
  * A missing entry (`undefined`) is a player doing nothing; `null` is a player
  * whose command has not arrived yet (a networked player running late): that
@@ -408,7 +434,7 @@ export function stepMatch(m: MatchState, world: CollisionWorld, cmds: readonly (
     // A pilot in a mech is moved by the mech, below.
     if (a.inMech) continue;
     stepPlayer(a.p, cmd, world, dt);
-    pushApart(a, bodiesFor(m, a), world, dt);
+    pushApart(a, bodiesFor(m, a), m.mechs, world, dt);
     if (a.p.pos.y < COMBAT.killY) killActor(m, a, null, '', false);
   }
   stepMechs(m, world, dt);
@@ -421,12 +447,9 @@ export function stepMatch(m: MatchState, world: CollisionWorld, cmds: readonly (
     if (!cmd) {
       // Nothing to fire with this tick.
     } else if (a.inMech) {
-      // In the cockpit the aim button launches rockets, and nothing fires until the mech is up.
+      // In the cockpit the aim button is the frame's ability, and nothing fires until the mech is up.
       const k = m.mechs[a.id];
-      if (k.state === 'piloted') {
-        stepWeapon(m, a, { ...cmd, ads: false, weapon: -1 }, world, dt);
-        if (a.inMech) stepSalvo(m, a, k, cmd.ads, world, dt);
-      }
+      if (k.state === 'piloted') stepMechWeapons(m, a, k, cmd, world, dt);
     } else {
       stepWeapon(m, a, cmd, world, dt);
     }

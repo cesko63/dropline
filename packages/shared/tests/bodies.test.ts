@@ -3,7 +3,7 @@ import gym from '../../../data/maps/gym.json';
 import {
   COMBAT,
   CollisionWorld,
-  MECH,
+  FRAMES,
   TICK_DT,
   TUNING,
   createMatch,
@@ -132,7 +132,7 @@ describe('solid bodies', () => {
     place(a, 40, 58, 0);
     let closest = Infinity;
     run(m, 3, () => ({ moveZ: 1, sprint: true }), still, () => (closest = Math.min(closest, flat(a, k.pos))));
-    expect(closest).toBeGreaterThan(r + MECH.body.radius - 0.15);
+    expect(closest).toBeGreaterThan(r + FRAMES.halberd.body.radius - 0.15);
     expect(a.p.pos.z).toBeGreaterThan(k.pos.z);
     expect(k.pos.z).toBeCloseTo(50, 5);
   });
@@ -169,7 +169,7 @@ describe('solid bodies', () => {
     expect(a.inMech).toBe(false);
     expect(a.p.grounded).toBe(true);
     // Landed in front of the mech, clear of the hull, without being thrown sideways.
-    expect(flat(a, k.pos)).toBeGreaterThan(r + MECH.body.radius - 0.02);
+    expect(flat(a, k.pos)).toBeGreaterThan(r + FRAMES.halberd.body.radius - 0.02);
     expect(a.p.pos.z).toBeLessThan(k.pos.z);
     expect(Math.abs(a.p.pos.x - k.pos.x)).toBeLessThan(0.5);
   });

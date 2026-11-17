@@ -112,13 +112,22 @@ export interface ShotTrace {
   mech: number;
   /** A headshot, or on a mech a hit on the rear vent. */
   head: boolean;
+  /** Stopped by the raised shield of mech `mech`. */
+  shield: boolean;
 }
+
+/**
+ * What a mech did with its frame's move or ability: the three moves on the
+ * jump button, the shield going up, coming down or breaking, and the cloak.
+ */
+export type MechAbility = 'dash' | 'leap' | 'stomp' | 'shieldUp' | 'shieldDown' | 'shieldBreak' | 'cloakOn' | 'cloakOff';
+export const MECH_ABILITIES: readonly MechAbility[] = ['dash', 'leap', 'stomp', 'shieldUp', 'shieldDown', 'shieldBreak', 'cloakOn', 'cloakOff'];
 
 /** Things that happened during one tick. The client turns them into effects and sound. */
 export type MatchEvent =
   | { type: 'shot'; actor: number; weapon: string; origin: Vec3; traces: ShotTrace[] }
   | { type: 'damage'; victim: number; attacker: number; amount: number; head: boolean; killed: boolean; pos: Vec3 }
-  /** `weapon` is a weapon id, a projectile kind, 'crush' (a mech landing) or 'ram' (a mech's dash). */
+  /** `weapon` is a weapon id, a projectile kind, 'crush' (a mech landing), 'ram' (a mech's dash) or 'stomp'. */
   | { type: 'kill'; victim: number; attacker: number; weapon: string; head: boolean }
   | { type: 'spawn'; actor: number }
   | { type: 'reload'; actor: number }
@@ -131,8 +140,8 @@ export type MatchEvent =
   | { type: 'charge'; actor: number; target: number; duration: number }
   /** The mech meter filled: the pilot may call a mech. */
   | { type: 'meterReady'; actor: number }
-  /** A mech is on its way and lands at `pos` after `duration` seconds. */
-  | { type: 'mechCall'; actor: number; pos: Vec3; duration: number }
+  /** A mech of frame `frame` is on its way and lands at `pos` after `duration` seconds. */
+  | { type: 'mechCall'; actor: number; frame: number; pos: Vec3; duration: number }
   /** A call that did nothing: the meter is not full, or no place to land was found. */
   | { type: 'callDenied'; actor: number; reason: 'meter' | 'zone' }
   | { type: 'mechLand'; mech: number; pos: Vec3 }
@@ -143,7 +152,9 @@ export type MatchEvent =
   | { type: 'disembark'; actor: number; eject: boolean }
   /** A footfall. `heavy` when the mech came down from a height. */
   | { type: 'mechStep'; mech: number; heavy: boolean }
-  | { type: 'mechDash'; mech: number }
+  | { type: 'mechAbility'; mech: number; what: MechAbility }
+  /** Fire stopped by a raised shield; `broken` when it was the last of it. */
+  | { type: 'shieldHit'; mech: number; attacker: number; amount: number; broken: boolean; pos: Vec3 }
   /** A dash that ran into a pilot (`victim`) or a mech (`other`); the unused one is -1. */
   | { type: 'ram'; mech: number; victim: number; other: number }
   | { type: 'mechDamage'; mech: number; attacker: number; amount: number; crit: boolean; destroyed: boolean; pos: Vec3 }

@@ -1,6 +1,8 @@
 import autocannon from '../../../../data/weapons/autocannon.json';
+import breaker from '../../../../data/weapons/breaker.json';
 import carbine from '../../../../data/weapons/carbine.json';
 import longshot from '../../../../data/weapons/longshot.json';
+import lance from '../../../../data/weapons/lance.json';
 import pike from '../../../../data/weapons/pike.json';
 import projectiles from '../../../../data/projectiles.json';
 import scattergun from '../../../../data/weapons/scattergun.json';
@@ -28,6 +30,8 @@ export interface WeaponDef {
   armor: number;
   /** Set on launchers: each shot is a rocket of this kind (see /data/projectiles.json) instead of a ray. */
   projectile?: string;
+  /** Rounds go straight through a raised shield. */
+  pierceShield?: boolean;
   headMult: number;
   /** Damage scales from 1 at `falloffStart` meters down to `falloffMin` at `falloffEnd`. */
   falloffStart: number;
@@ -61,7 +65,7 @@ export interface WeaponDef {
   adsTime: number;
 }
 
-export const WEAPON_LIST = [carbine, scattergun, longshot, pike, autocannon] as unknown as WeaponDef[];
+export const WEAPON_LIST = [carbine, scattergun, longshot, pike, autocannon, breaker, lance] as unknown as WeaponDef[];
 
 export const WEAPONS: Record<string, WeaponDef> = Object.fromEntries(WEAPON_LIST.map((w) => [w.id, w]));
 
@@ -83,6 +87,8 @@ export interface ProjectileDef {
   splashArmor: number;
   /** It bursts when it passes this close to a pilot, so a near miss still counts. */
   fuse: number;
+  /** Set on flak: it also bursts when it passes this close to an enemy mech's hull. */
+  mechFuse?: number;
 }
 
 export const PROJECTILES = projectiles as Record<string, ProjectileDef>;

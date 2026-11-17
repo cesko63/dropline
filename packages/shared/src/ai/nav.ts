@@ -1,7 +1,7 @@
 import bots from '../../../../data/bots.json';
 import type { MapData } from '../map/types';
 import { v3 } from '../math/vec3';
-import { MECH } from '../sim/mech';
+import { MECH_ENVELOPE } from '../sim/mech';
 import type { Rng } from '../sim/rng';
 import { rand } from '../sim/rng';
 import { TUNING } from '../sim/tuning';
@@ -74,7 +74,7 @@ export interface NavBody {
 }
 
 export const PILOT_BODY: NavBody = { radius: TUNING.player.radius, height: TUNING.player.standHeight, stepHeight: TUNING.player.stepHeight, jumps: true };
-export const MECH_BODY: NavBody = { radius: MECH.body.radius, height: MECH.body.height, stepHeight: MECH.body.stepHeight, jumps: false };
+export const MECH_BODY: NavBody = { ...MECH_ENVELOPE, jumps: false };
 
 /** Reach of the links. Edit /data/bots.json, not this file. */
 const NAV = bots.nav;

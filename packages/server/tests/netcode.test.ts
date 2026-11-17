@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CollisionWorld,
-  MECH,
+  FRAMES,
   TUNING,
   resetMech,
   v3,
@@ -130,7 +130,7 @@ describe('wire format', () => {
     const pos = { x: 1.5, y: -2.25, z: 40.125 };
     const up = { x: 0, y: 1, z: 0 };
     const all: MatchEvent[] = [
-      { type: 'shot', actor: 3, weapon: 'scattergun', origin: pos, traces: [{ end: pos, normal: up, victim: -1, mech: -1, head: false }, { end: pos, normal: null, victim: 5, mech: -1, head: true }, { end: pos, normal: null, victim: -1, mech: 6, head: false }] },
+      { type: 'shot', actor: 3, weapon: 'scattergun', origin: pos, traces: [{ end: pos, normal: up, victim: -1, mech: -1, head: false, shield: false }, { end: pos, normal: null, victim: 5, mech: -1, head: true, shield: false }, { end: pos, normal: null, victim: -1, mech: 6, head: false, shield: true }] },
       { type: 'damage', victim: 5, attacker: 3, amount: 17.5, head: true, killed: true, pos },
       { type: 'kill', victim: 5, attacker: 3, weapon: 'pike_rocket', head: false },
       { type: 'kill', victim: 5, attacker: -1, weapon: '', head: false },
@@ -138,14 +138,17 @@ describe('wire format', () => {
       { type: 'notice', actor: 4, target: 0 },
       { type: 'charge', actor: 4, target: 0, duration: 1.25 },
       { type: 'meterReady', actor: 0 },
-      { type: 'mechCall', actor: 0, pos, duration: 2.5 },
+      { type: 'mechCall', actor: 0, frame: 2, pos, duration: 2.5 },
       { type: 'callDenied', actor: 0, reason: 'zone' },
       { type: 'mechLand', mech: 0, pos },
       { type: 'embark', actor: 0, duration: 1 },
       { type: 'mechOnline', actor: 0 },
       { type: 'disembark', actor: 0, eject: true },
       { type: 'mechStep', mech: 2, heavy: true },
-      { type: 'mechDash', mech: 2 },
+      { type: 'mechAbility', mech: 2, what: 'leap' },
+      { type: 'mechAbility', mech: 3, what: 'cloakOff' },
+      { type: 'shieldHit', mech: 6, attacker: 2, amount: 190, broken: true, pos },
+      { type: 'kill', victim: 5, attacker: 6, weapon: 'stomp', head: false },
       { type: 'ram', mech: 2, victim: -1, other: 6 },
       { type: 'mechDamage', mech: 6, attacker: 2, amount: 320, crit: true, destroyed: false, pos },
       { type: 'mechDestroyed', mech: 6, attacker: -1, weapon: 'crush', pos },
@@ -336,7 +339,7 @@ describe('solid bodies over the network', () => {
     sim.run(6);
     report('pressing into an empty mech, 70 +/- 25 ms', p);
     expect(p.net.stats.corrections).toBeLessThanOrEqual(sim.room.stats.droppedInputs);
-    expect(Math.hypot(p.truth.p.pos.x - k.pos.x, p.truth.p.pos.z - k.pos.z)).toBeGreaterThan(TUNING.player.radius + MECH.body.radius - 0.15);
+    expect(Math.hypot(p.truth.p.pos.x - k.pos.x, p.truth.p.pos.z - k.pos.z)).toBeGreaterThan(TUNING.player.radius + FRAMES.halberd.body.radius - 0.15);
     settle(sim, p);
     expect(gap(p.me.p.pos, p.truth.p.pos)).toBe(0);
   });

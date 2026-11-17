@@ -157,18 +157,18 @@ describe('weapons', () => {
   it('spreads more when firing, moving and in the air, and less when aimed', () => {
     const { m, me } = duel();
     run(m, 0.2);
-    const hip = spreadDeg(me);
+    const hip = spreadDeg(m, me);
     expect(hip).toBeCloseTo(WEAPONS.carbine.spread.hipDeg, 5);
     run(m, 0.5, () => ({ ads: true }));
     expect(me.ads).toBe(1);
-    expect(spreadDeg(me)).toBeCloseTo(WEAPONS.carbine.spread.adsDeg, 5);
+    expect(spreadDeg(m, me)).toBeCloseTo(WEAPONS.carbine.spread.adsDeg, 5);
     run(m, 0.5);
     run(m, 0.3, () => ({ fire: true, yaw: Math.PI }));
-    expect(spreadDeg(me)).toBeGreaterThan(hip + 0.5);
+    expect(spreadDeg(m, me)).toBeGreaterThan(hip + 0.5);
     run(m, 1.5, () => ({ yaw: Math.PI }));
-    expect(spreadDeg(me)).toBeCloseTo(hip, 5);
+    expect(spreadDeg(m, me)).toBeCloseTo(hip, 5);
     run(m, 1, () => ({ moveZ: 1, sprint: true, yaw: Math.PI }));
-    expect(spreadDeg(me)).toBeGreaterThan(hip + 0.4);
+    expect(spreadDeg(m, me)).toBeGreaterThan(hip + 0.4);
   });
 
   it('kicks the view up when firing and lets it settle back', () => {
@@ -326,16 +326,16 @@ describe('bots', () => {
   }
 
   it('sees ahead but not behind or through walls', () => {
-    const { me, bot } = withBot('rifle');
+    const { m, me, bot } = withBot('rifle');
     place(me, 0, 50, 0);
     place(bot, 0, 36, Math.PI);
-    expect(canSee(world, bot, me, false)).toBe(true);
+    expect(canSee(m, world, bot, me, false)).toBe(true);
     bot.p.yaw = 0;
-    expect(canSee(world, bot, me, false)).toBe(false);
-    expect(canSee(world, bot, me, true)).toBe(true);
+    expect(canSee(m, world, bot, me, false)).toBe(false);
+    expect(canSee(m, world, bot, me, true)).toBe(true);
     place(bot, 0, -24, Math.PI);
     place(me, 0, 4, 0);
-    expect(canSee(world, bot, me, true)).toBe(false);
+    expect(canSee(m, world, bot, me, true)).toBe(false);
   });
 
   it('notices, waits out its reaction time, then engages and hurts a target that stands still', () => {

@@ -2,7 +2,7 @@ import { isWalkable } from '../ai/nav';
 import { emptyInput, type InputCmd } from '../input';
 import { v3, type Vec3 } from '../math/vec3';
 import { COMBAT, type Actor, type MatchState } from './combat';
-import { MECH, MechEvent, distToMech, eyeOf, mechActive, resetMech, stepMechBody, type Mech } from './mech';
+import { FRAME_LIST, MechEvent, distToMech, eyeOf, frameOf, mechActive, resetMech, stepMechBody, type Mech, type MechFrame, type SalvoAbility, type StompMove } from './mech';
 import { playerHeight } from './movement';
 import { spawnProjectile } from './projectiles';
 import { randSigned } from './rng';
@@ -14,8 +14,9 @@ import type { CollisionWorld } from './world';
 
 /**
  * The mech's part of a match tick: charging the meter, calling a mech down,
- * the drop and its landing, getting in and out, driving it, the dash that rams
- * and the rocket salvo.
+ * the drop and its landing, getting in and out, driving it, and what each
+ * frame does with the jump and aim buttons: the dash that rams, the stomp, the
+ * rocket salvo, the shield and the cloak.
  */
 
 const R = COMBAT.mech;
@@ -32,9 +33,9 @@ const eye = v3();
 const dir = v3();
 const spot = v3();
 
-/** True, with `out` set to the ground point, if a mech can come down at (x, z) near height y. */
-function dropSpotOk(m: MatchState, world: CollisionWorld, x: number, y: number, z: number, out: Vec3): boolean {
-  const B = MECH.body;
+/** True, with `out` set to the ground point, if a mech of frame `F` can come down at (x, z) near height y. */
+function dropSpotOk(m: MatchState, world: CollisionWorld, F: MechFrame, x: number, y: number, z: number, out: Vec3): boolean {
+  const B = F.body;
   probe.x = x;
   probe.y = y + 1.5;
   probe.z = z;
@@ -48,18 +49,18 @@ function dropSpotOk(m: MatchState, world: CollisionWorld, x: number, y: number, 
   probe.y = out.y + B.height;
   if (world.castRay(probe, UP, R.drop.clearHeight)) return false;
   for (const k of m.mechs) {
-    if (k.state !== 'none' && Math.hypot(k.pos.x - x, k.pos.z - z) < B.radius * 2 + 0.6) return false;
+    if (k.state !== 'none' && Math.hypot(k.pos.x - x, k.pos.z - z) < B.radius + frameOf(k).body.radius + 0.6) return false;
   }
   return true;
 }
 
 /**
- * Where a called mech lands: the ground the pilot is looking at, when that is
- * within range and a mech fits there; otherwise the nearest free spot around
- * the pilot. Bots always use the second, and only take spots they can walk
- * the mech away from. Returns a shared vector, or null when nothing fits.
+ * Where a called mech of frame `F` lands: the ground the pilot is looking at,
+ * when that is within range and the mech fits there; otherwise the nearest free
+ * spot around the pilot. Bots always use the second, and only take spots they
+ * can walk the mech away from. Returns a shared vector, or null when nothing fits.
  */
-export function findDropPoint(m: MatchState, world: CollisionWorld, a: Actor): Vec3 | null {
+export function findDropPoint(m: MatchState, world: CollisionWorld, a: Actor, F: MechFrame = FRAME_LIST[0]): Vec3 | null {
   const p = a.p;
   if (!a.brain) {
     const cp = Math.cos(p.pitch);
@@ -67,7 +68,7 @@ export function findDropPoint(m: MatchState, world: CollisionWorld, a: Actor): V
     dir.y = Math.sin(p.pitch);
     dir.z = -Math.cos(p.yaw) * cp;
     eye.x = p.pos.x;
-    eye.y = p.pos.y + eyeOf(a);
+    eye.y = p.pos.y + eyeOf(m, a);
     eye.z = p.pos.z;
     const hit = world.castRay(eye, dir, R.drop.maxRange * 1.5);
     if (hit) {
@@ -75,13 +76,13 @@ export function findDropPoint(m: MatchState, world: CollisionWorld, a: Actor): V
       let z = hit.point.z;
       // Looking at a wall: land in front of it instead.
       if (hit.normal.y < TUNING.player.minGroundNormalY) {
-        const back = MECH.body.radius + 0.5;
+        const back = F.body.radius + 0.5;
         const nl = Math.hypot(hit.normal.x, hit.normal.z) || 1;
         x += (hit.normal.x / nl) * back;
         z += (hit.normal.z / nl) * back;
       }
       const flat = Math.hypot(x - p.pos.x, z - p.pos.z);
-      if (flat <= R.drop.maxRange && dropSpotOk(m, world, x, hit.normal.y < 0.7 ? p.pos.y : hit.point.y, z, spot)) return spot;
+      if (flat <= R.drop.maxRange && dropSpotOk(m, world, F, x, hit.normal.y < 0.7 ? p.pos.y : hit.point.y, z, spot)) return spot;
     }
   }
   for (const dist of RING_DIST) {
@@ -89,7 +90,7 @@ export function findDropPoint(m: MatchState, world: CollisionWorld, a: Actor): V
       const yaw = p.yaw + turn;
       const x = p.pos.x - Math.sin(yaw) * dist;
       const z = p.pos.z - Math.cos(yaw) * dist;
-      if (!dropSpotOk(m, world, x, p.pos.y, z, spot)) continue;
+      if (!dropSpotOk(m, world, F, x, p.pos.y, z, spot)) continue;
       // A bot's mech has to be able to walk out to the fight: not stuck on a roof.
       if (!a.brain || isWalkable(m.navMech, spot.x, spot.y, spot.z)) return spot;
     }
@@ -97,23 +98,24 @@ export function findDropPoint(m: MatchState, world: CollisionWorld, a: Actor): V
   return null;
 }
 
-/** Spend a full meter on a mech. It lands after the drop time, where the telegraph shows. */
-function tryCall(m: MatchState, world: CollisionWorld, a: Actor): void {
+/** Spend a full meter on a mech of the chosen frame. It lands after the drop time, where the telegraph shows. */
+function tryCall(m: MatchState, world: CollisionWorld, a: Actor, frame: number): void {
   const k = m.mechs[a.id];
   if (k.state !== 'none') return;
   if (a.meter < 1) {
     m.events.push({ type: 'callDenied', actor: a.id, reason: 'meter' });
     return;
   }
-  const at = findDropPoint(m, world, a);
+  const F = FRAME_LIST[frame] ?? FRAME_LIST[0];
+  const at = findDropPoint(m, world, a, F);
   if (!at) {
     m.events.push({ type: 'callDenied', actor: a.id, reason: 'zone' });
     return;
   }
   a.meter = 0;
-  resetMech(k, at, a.p.yaw);
+  resetMech(k, at, a.p.yaw, FRAME_LIST.indexOf(F));
   k.state = 'dropping';
-  m.events.push({ type: 'mechCall', actor: a.id, pos: { ...k.pos }, duration: R.drop.time });
+  m.events.push({ type: 'mechCall', actor: a.id, frame: k.frame, pos: { ...k.pos }, duration: R.drop.time });
 }
 
 /** The mech arrives. Enemies still standing in the zone are crushed. */
@@ -123,16 +125,17 @@ function land(m: MatchState, k: Mech): void {
   k.state = 'idle';
   k.stateTime = 0;
   m.events.push({ type: 'mechLand', mech: k.id, pos: { ...k.pos } });
+  const B = frameOf(k).body;
   for (const o of m.actors) {
     if (o.team === k.team || !o.alive || o.inMech) continue;
     const dy = o.p.pos.y - k.pos.y;
-    if (dy < -playerHeight(o.p) || dy > MECH.body.height) continue;
+    if (dy < -playerHeight(o.p) || dy > B.height) continue;
     if (Math.hypot(o.p.pos.x - k.pos.x, o.p.pos.z - k.pos.z) > D.crushRadius) continue;
     damageActor(m, o, owner, D.crushDamage, false, { ...o.p.pos }, 'crush');
   }
   for (const o of m.mechs) {
     if (o.team === k.team || !mechActive(o)) continue;
-    if (distToMech(o, k.pos.x, k.pos.y + MECH.body.radius, k.pos.z) > D.crushRadius) continue;
+    if (distToMech(o, k.pos.x, k.pos.y + B.radius, k.pos.z) > D.crushRadius) continue;
     damageMech(m, o, owner, D.crushArmor, false, { ...o.pos }, 'crush');
   }
 }
@@ -140,17 +143,19 @@ function land(m: MatchState, k: Mech): void {
 /** Close enough to climb in: beside the mech, or on top of it. */
 function inReach(a: Actor, k: Mech): boolean {
   const dy = a.p.pos.y - k.pos.y;
-  return dy > -2 && dy < MECH.body.height + 1.5 && Math.hypot(a.p.pos.x - k.pos.x, a.p.pos.z - k.pos.z) <= R.embark.range;
+  return dy > -2 && dy < frameOf(k).body.height + 1.5 && Math.hypot(a.p.pos.x - k.pos.x, a.p.pos.z - k.pos.z) <= R.embark.range;
 }
 
 /** A dash that runs into enemies hurts them and throws pilots aside. Once per dash each. */
 function ram(m: MatchState, k: Mech): void {
-  const D = MECH.dash;
+  const F = frameOf(k);
+  const D = F.mobility;
+  if (D.kind !== 'dash') return;
   const owner = m.actors[k.id];
   for (const o of m.actors) {
     if (o.team === k.team || !o.alive || o.inMech || k.rammed & (1 << o.id)) continue;
     const dy = o.p.pos.y - k.pos.y;
-    if (dy < -playerHeight(o.p) || dy > MECH.body.height) continue;
+    if (dy < -playerHeight(o.p) || dy > F.body.height) continue;
     if (Math.hypot(o.p.pos.x - k.pos.x, o.p.pos.z - k.pos.z) > D.ramRadius) continue;
     k.rammed |= 1 << o.id;
     o.p.vel.x += k.dashX * D.ramKnock;
@@ -162,12 +167,67 @@ function ram(m: MatchState, k: Mech): void {
   }
   for (const o of m.mechs) {
     if (o.team === k.team || !mechActive(o) || k.rammed & (1 << (16 + o.id))) continue;
-    if (Math.abs(o.pos.y - k.pos.y) > MECH.body.height) continue;
-    if (Math.hypot(o.pos.x - k.pos.x, o.pos.z - k.pos.z) > MECH.body.radius * 2 + 0.3) continue;
+    if (Math.abs(o.pos.y - k.pos.y) > F.body.height) continue;
+    if (Math.hypot(o.pos.x - k.pos.x, o.pos.z - k.pos.z) > F.body.radius + frameOf(o).body.radius + 0.3) continue;
     k.rammed |= 1 << (16 + o.id);
     m.events.push({ type: 'ram', mech: k.id, victim: -1, other: o.id });
     damageMech(m, o, owner, D.ramArmor, false, { x: o.pos.x, y: o.pos.y + 3, z: o.pos.z }, 'ram');
   }
+}
+
+/**
+ * The stomp lands: enemy pilots close by are hurt and thrown away and up, enemy
+ * mechs take a blow. Walls stop it, as they stop a blast.
+ */
+function stomp(m: MatchState, world: CollisionWorld, k: Mech, S: StompMove): void {
+  const owner = m.actors[k.id];
+  const B = frameOf(k).body;
+  for (const o of m.actors) {
+    if (o.team === k.team || !o.alive || o.inMech) continue;
+    const dy = o.p.pos.y - k.pos.y;
+    if (dy < -2 || dy > B.height) continue;
+    const dx = o.p.pos.x - k.pos.x;
+    const dz = o.p.pos.z - k.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d > S.radius) continue;
+    probe.x = k.pos.x;
+    probe.y = k.pos.y + 1;
+    probe.z = k.pos.z;
+    dir.x = dx;
+    dir.y = o.p.pos.y + 1 - probe.y;
+    dir.z = dz;
+    const l = Math.hypot(dir.x, dir.y, dir.z);
+    if (l > 0.3) {
+      dir.x /= l;
+      dir.y /= l;
+      dir.z /= l;
+      const wall = world.castRay(probe, dir, l);
+      if (wall && wall.dist < l - 0.2) continue;
+    }
+    const nx = d > 0.05 ? dx / d : -Math.sin(k.yaw);
+    const nz = d > 0.05 ? dz / d : -Math.cos(k.yaw);
+    o.p.vel.x = nx * S.knock;
+    o.p.vel.z = nz * S.knock;
+    o.p.vel.y = Math.max(o.p.vel.y, S.lift);
+    o.p.grounded = false;
+    damageActor(m, o, owner, S.damage * (1 - 0.5 * (d / S.radius)) * owner.damageScale, false, { x: o.p.pos.x, y: o.p.pos.y + 1, z: o.p.pos.z }, 'stomp');
+  }
+  for (const o of m.mechs) {
+    if (o.team === k.team || !mechActive(o)) continue;
+    if (Math.abs(o.pos.y - k.pos.y) > B.height) continue;
+    if (Math.hypot(o.pos.x - k.pos.x, o.pos.z - k.pos.z) > S.radius) continue;
+    damageMech(m, o, owner, S.armor * owner.damageScale, false, { x: o.pos.x, y: o.pos.y + 1, z: o.pos.z }, 'stomp');
+  }
+}
+
+/** What the mech's body did this tick, as match events: footfalls and the jump button's move. */
+export function pushBodyEvents(m: MatchState, k: Mech): void {
+  const ev = k.events;
+  if (ev & MechEvent.Dash) m.events.push({ type: 'mechAbility', mech: k.id, what: 'dash' });
+  if (ev & MechEvent.Leap) m.events.push({ type: 'mechAbility', mech: k.id, what: 'leap' });
+  if (ev & MechEvent.Stomp) m.events.push({ type: 'mechAbility', mech: k.id, what: 'stomp' });
+  if (ev & MechEvent.Land) m.events.push({ type: 'mechStep', mech: k.id, heavy: true });
+  else if (ev & MechEvent.Step) m.events.push({ type: 'mechStep', mech: k.id, heavy: false });
 }
 
 /** The pilot rides along: their position is the mech's. */
@@ -200,7 +260,7 @@ export function stepMechs(m: MatchState, world: CollisionWorld, dt: number): voi
     const usePressed = cmd.use && !a.useHeld;
     a.callHeld = cmd.call;
     a.useHeld = cmd.use;
-    if (callPressed && !a.inMech) tryCall(m, world, a);
+    if (callPressed && !a.inMech) tryCall(m, world, a, cmd.frame);
     if (!usePressed) continue;
     if (a.inMech) {
       if (k.state === 'piloted') leaveMech(m, a, k, false);
@@ -239,9 +299,9 @@ export function stepMechs(m: MatchState, world: CollisionWorld, dt: number): voi
       }
     }
     stepMechBody(k, cmd, world, dt, driven, m.mechs);
-    if (k.events & MechEvent.Dash) m.events.push({ type: 'mechDash', mech: k.id });
-    if (k.events & MechEvent.Land) m.events.push({ type: 'mechStep', mech: k.id, heavy: true });
-    else if (k.events & MechEvent.Step) m.events.push({ type: 'mechStep', mech: k.id, heavy: false });
+    pushBodyEvents(m, k);
+    const J = frameOf(k).mobility;
+    if (k.events & MechEvent.Stomp && J.kind === 'stomp') stomp(m, world, k, J);
     if (k.dashTime > 0) ram(m, k);
     if (owner.inMech) seat(owner, k);
     if (k.pos.y < COMBAT.killY) destroyMech(m, k, null, '');
@@ -250,16 +310,55 @@ export function stepMechs(m: MatchState, world: CollisionWorld, dt: number): voi
 }
 
 /**
- * The rocket salvo of a piloted mech: `fire` starts it when it is ready, then
- * the rockets leave one after another toward the point the pilot looks at.
+ * The aim button of a piloted mech, after its weapon has had its turn: the
+ * frame's ability. `fired` says the cannon fired this tick (which ends a cloak).
  */
-export function stepSalvo(m: MatchState, a: Actor, k: Mech, fire: boolean, world: CollisionWorld, dt: number): void {
-  const S = MECH.salvo;
-  k.salvoCooldown = Math.max(0, k.salvoCooldown - dt);
-  if (fire && k.salvoCooldown <= 0 && k.salvoLeft === 0) {
+export function stepAbility(m: MatchState, a: Actor, k: Mech, ads: boolean, fired: boolean, world: CollisionWorld, dt: number): void {
+  const A = frameOf(k).ability;
+  k.abilityCooldown = Math.max(0, k.abilityCooldown - dt);
+  if (A.kind === 'salvo') {
+    stepSalvo(m, a, k, A, ads, world, dt);
+  } else if (A.kind === 'shield') {
+    // Held up while the button is, as long as there is shield left; it rests to refill.
+    const up = ads && k.abilityCooldown <= 0 && k.shield > 0;
+    if (up !== k.shieldUp) {
+      k.shieldUp = up;
+      k.shieldRest = 0;
+      m.events.push({ type: 'mechAbility', mech: k.id, what: up ? 'shieldUp' : 'shieldDown' });
+    }
+    k.shieldRest += dt;
+    if (up) {
+      k.shield -= A.drain * dt;
+      if (k.shield <= 0) {
+        k.shield = 0;
+        k.shieldUp = false;
+        k.abilityCooldown = A.brokenTime;
+        m.events.push({ type: 'mechAbility', mech: k.id, what: 'shieldBreak' });
+      }
+    } else if (k.shieldRest >= A.regenDelay) {
+      k.shield = Math.min(A.health, k.shield + A.regen * dt);
+    }
+  } else if (k.cloak > 0) {
+    k.cloak = fired ? 0 : Math.max(0, k.cloak - dt);
+    if (k.cloak <= 0) {
+      k.abilityCooldown = A.cooldown;
+      m.events.push({ type: 'mechAbility', mech: k.id, what: 'cloakOff' });
+    }
+  } else if (ads && k.abilityCooldown <= 0) {
+    k.cloak = A.time;
+    m.events.push({ type: 'mechAbility', mech: k.id, what: 'cloakOn' });
+  }
+}
+
+/**
+ * The rocket salvo: the aim button starts it when it is ready, then the rockets
+ * leave one after another toward the point the pilot looks at.
+ */
+function stepSalvo(m: MatchState, a: Actor, k: Mech, S: SalvoAbility, fire: boolean, world: CollisionWorld, dt: number): void {
+  if (fire && k.abilityCooldown <= 0 && k.salvoLeft === 0) {
     k.salvoLeft = S.count;
     k.salvoNext = 0;
-    k.salvoCooldown = S.cooldown;
+    k.abilityCooldown = S.cooldown;
   }
   if (k.salvoLeft === 0) return;
   k.salvoNext -= dt;
@@ -275,7 +374,7 @@ export function stepSalvo(m: MatchState, a: Actor, k: Mech, fire: boolean, world
     dir.y = Math.sin(k.pitch);
     dir.z = -cos * cp;
     eye.x = k.pos.x;
-    eye.y = k.pos.y + MECH.body.eye;
+    eye.y = k.pos.y + frameOf(k).body.eye;
     eye.z = k.pos.z;
     const rng: Rng = a.rng ?? m.rng;
     const hit = world.castRay(eye, dir, PROJECTILES[S.projectile].speed * PROJECTILES[S.projectile].life);

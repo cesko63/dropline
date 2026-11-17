@@ -1,0 +1,24 @@
+{
+  "id": "lynx",
+  "name": "Lynx",
+  "short": "LYNX",
+  "blurb": "Light: a rail cannon, jump jets and a few seconds of cloak",
+  "health": 2200,
+  "body": { "radius": 1.15, "height": 4.6, "eye": 3.9, "stepHeight": 0.6 },
+  "move": {
+    "walkSpeed": 6.6,
+    "sprintSpeed": 9.4,
+    "accel": 6,
+    "airAccel": 1.5,
+    "friction": 4,
+    "stopSpeed": 2,
+    "gravity": 22,
+    "maxFallSpeed": 40,
+    "strideLength": 3
+  },
+  "mobility": { "kind": "leap", "charges": 2, "rechargeTime": 5, "up": 12, "forward": 11 },
+  "vent": { "back": 1, "height": 2.9, "radius": 0.55, "mult": 1.6 },
+  "loadout": ["lance"],
+  "ability": { "kind": "cloak", "time": 5, "cooldown": 16, "revealRange": 20 },
+  "botRole": "lynx"
+}

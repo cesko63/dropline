@@ -1,7 +1,7 @@
 import { BOT_ROLES } from '../ai/bot';
 import { type Vec3 } from '../math/vec3';
 import { COMBAT, type Actor, type MatchState } from './combat';
-import { MECH, type Mech } from './mech';
+import { frameOf, type Mech } from './mech';
 import { createPlayerState } from './movement';
 import { WEAPONS } from './weapons';
 
@@ -65,6 +65,8 @@ export function destroyMech(m: MatchState, k: Mech, attacker: Actor | null, weap
   k.state = 'none';
   k.health = 0;
   k.salvoLeft = 0;
+  k.shieldUp = false;
+  k.cloak = 0;
   owner.meter = 0;
   m.events.push({ type: 'mechDestroyed', mech: k.id, attacker: attacker ? attacker.id : -1, weapon, pos });
   if (!attacker) return;
@@ -84,6 +86,25 @@ export function damageMech(m: MatchState, k: Mech, attacker: Actor, amount: numb
   if (destroyed) destroyMech(m, k, attacker, weapon);
 }
 
+/**
+ * Fire stopped by a raised shield. It costs the shield what it would have cost
+ * the hull; a shield that runs out goes down and needs a while before it can be
+ * raised again.
+ */
+export function damageShield(m: MatchState, k: Mech, attacker: Actor, amount: number, pos: Vec3): void {
+  const S = frameOf(k).ability;
+  if (S.kind !== 'shield' || !k.shieldUp || amount <= 0) return;
+  addMeter(m, attacker, Math.min(amount, k.shield) * R.meter.perArmor);
+  k.shield = Math.max(0, k.shield - amount);
+  k.shieldRest = 0;
+  const broken = k.shield <= 0;
+  m.events.push({ type: 'shieldHit', mech: k.id, attacker: attacker.id, amount, broken, pos });
+  if (!broken) return;
+  k.shieldUp = false;
+  k.abilityCooldown = S.brokenTime;
+  m.events.push({ type: 'mechAbility', mech: k.id, what: 'shieldBreak' });
+}
+
 function resetWeaponState(a: Actor): void {
   a.cooldown = a.reload = a.equip = a.bloom = a.punchPitch = a.punchYaw = a.ads = a.fireBuffer = 0;
   a.triggerHeld = false;
@@ -93,7 +114,8 @@ function resetWeaponState(a: Actor): void {
 export function enterMech(m: MatchState, a: Actor, k: Mech): void {
   a.inMech = true;
   a.kit = { loadout: a.loadout, ammo: a.ammo, weapon: a.weapon };
-  a.loadout = [...MECH.loadout];
+  const F = frameOf(k);
+  a.loadout = [...F.loadout];
   a.ammo = k.ammo;
   a.weapon = 0;
   resetWeaponState(a);
@@ -102,7 +124,7 @@ export function enterMech(m: MatchState, a: Actor, k: Mech): void {
   a.p.pitch = pitch;
   a.p.grounded = k.grounded;
   if (a.brain) {
-    a.damageScale = BOT_ROLES.mech.damageScale;
+    a.damageScale = BOT_ROLES[F.botRole].damageScale;
     // Plans made on foot do not fit the machine: start over.
     a.brain.hasGoal = false;
     a.brain.charge = 0;
@@ -137,7 +159,7 @@ export function leaveMech(m: MatchState, a: Actor, k: Mech, eject: boolean): voi
 
   // Just under the top of the mech's own body, which is known to be clear of the map.
   const yaw = k.yaw;
-  const top = { x: k.pos.x, y: k.pos.y + MECH.body.height - 1.9, z: k.pos.z };
+  const top = { x: k.pos.x, y: k.pos.y + frameOf(k).body.height - 1.9, z: k.pos.z };
   a.p = createPlayerState(top, yaw);
   a.p.pitch = eject ? 0 : k.pitch;
   a.p.vel.x = eject ? 0 : -Math.sin(yaw) * E.exitForward;
@@ -150,6 +172,15 @@ export function leaveMech(m: MatchState, a: Actor, k: Mech, eject: boolean): voi
     k.stateTime = 0;
   }
   k.salvoLeft = 0;
-  k.dashHeld = false;
+  k.jumpHeld = false;
+  // Nobody holds the shield up or keeps the cloak running in an empty mech.
+  if (k.shieldUp) m.events.push({ type: 'mechAbility', mech: k.id, what: 'shieldDown' });
+  const A = frameOf(k).ability;
+  if (k.cloak > 0 && A.kind === 'cloak') {
+    k.abilityCooldown = A.cooldown;
+    m.events.push({ type: 'mechAbility', mech: k.id, what: 'cloakOff' });
+  }
+  k.shieldUp = false;
+  k.cloak = 0;
   m.events.push({ type: 'disembark', actor: a.id, eject });
 }

@@ -6,7 +6,7 @@ import { createBodies, liveBodies, type Bodies } from '../sim/bodies';
 import type { Actor, MatchEvent, MatchState } from '../sim/combat';
 import { NET } from '../sim/lagcomp';
 import { createMatch } from '../sim/match';
-import { MECH, type Mech } from '../sim/mech';
+import { frameOf, type Mech } from '../sim/mech';
 import { stepOwn } from '../sim/predict';
 import { TICK_DT, TICK_RATE } from '../sim/tuning';
 import type { CollisionWorld } from '../sim/world';
@@ -42,7 +42,7 @@ const MAX_PENDING = 120;
 const NOTICEABLE = 0.001;
 
 /** Events that are only sound and sparks: not worth playing late. */
-const COSMETIC = new Set<MatchEvent['type']>(['shot', 'notice', 'charge', 'mechStep', 'mechDash', 'ram', 'launch', 'explode']);
+const COSMETIC = new Set<MatchEvent['type']>(['shot', 'notice', 'charge', 'mechStep', 'mechAbility', 'shieldHit', 'ram', 'launch', 'explode']);
 
 export interface NetStats {
   /** Round trip in milliseconds, set by whoever owns the connection. */
@@ -477,6 +477,7 @@ function applyMech(k: Mech, r0: MechRec | undefined, r1: MechRec | undefined, f:
   if (!r0 || !r1) return;
   k.state = mechStateName(r0.state);
   if (r0.state === 0) return;
+  k.frame = r0.frame;
   const glide = r1.state !== 0 && Math.hypot(r1.x - r0.x, r1.y - r0.y, r1.z - r0.z) < TELEPORT;
   const t = glide ? f : 0;
   k.pos.x = lerp(r0.x, r1.x, t) + r0.vx * extra;
@@ -492,9 +493,13 @@ function applyMech(k: Mech, r0: MechRec | undefined, r1: MechRec | undefined, f:
   k.stateTime = r0.stateTime + since;
   k.grounded = (r0.flags & MechFlag.Grounded) !== 0;
   k.dashTime = r0.flags & MechFlag.Dashing ? 0.1 : 0;
+  k.shieldUp = (r0.flags & MechFlag.Shield) !== 0;
+  k.cloak = r0.flags & MechFlag.Cloaked ? 1 : 0;
+  const A = frameOf(k).ability;
+  k.shield = A.kind === 'shield' ? r0.shield * A.health : 0;
   k.dashX = r0.dashX;
   k.dashZ = r0.dashZ;
   // The stride wraps at every footfall; only glide within one.
-  k.stride = (glide && r1.stride >= r0.stride ? lerp(r0.stride, r1.stride, f) : r0.stride) * MECH.move.strideLength;
+  k.stride = (glide && r1.stride >= r0.stride ? lerp(r0.stride, r1.stride, f) : r0.stride) * frameOf(k).move.strideLength;
   k.landSpeed = r0.landSpeed;
 }
