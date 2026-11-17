@@ -118,7 +118,10 @@
             <button id="play-online" type="button">Deploy online</button>
             <button id="play-offline" type="button" class="quiet">Practice offline</button>
           </div>
-          <button id="settings-menu" type="button" class="quiet small">Settings</button>
+          <div class="menu-extras">
+            <button id="hangar-menu" type="button" class="quiet small">Hangar<span id="hangar-summary"></span></button>
+            <button id="settings-menu" type="button" class="quiet small">Settings</button>
+          </div>
         </div>
         <div id="resume" hidden>
           <button id="start" type="button">Click to resume</button>
@@ -128,6 +131,7 @@
           </div>
         </div>
         <div id="settings" hidden></div>
+        <div id="hangar" hidden></div>
         <p id="menu-status" role="status" hidden></p>
         <p id="lock-error" hidden>
           This window does not allow mouse capture. Open this address in Chrome, Edge or Firefox to play.

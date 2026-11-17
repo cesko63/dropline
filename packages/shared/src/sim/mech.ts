@@ -17,6 +17,16 @@ import type { CollisionWorld } from './world';
 /** The frame's numbers. Edit /data/mechs/halberd.json, not this file. */
 export const MECH = halberd;
 
+export type MechDef = typeof halberd;
+
+/**
+ * Every mech frame a pilot can pick in the hangar, by id, in the order the
+ * hangar lists them. A new frame is a JSON file in /data/mechs added here.
+ * The match still drops `MECH` for everyone until a second frame exists.
+ */
+export const MECHS: Record<string, MechDef> = { [halberd.id]: halberd };
+export const MECH_IDS: string[] = Object.keys(MECHS);
+
 /**
  * - `none`: the pilot has no mech out.
  * - `dropping`: called and on its way; it lands at `pos`.

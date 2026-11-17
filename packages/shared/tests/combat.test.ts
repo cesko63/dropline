@@ -10,6 +10,7 @@ import {
   WEAPONS,
   canSee,
   createMatch,
+  firstHumanId,
   damageFalloff,
   emptyInput,
   PATH_STRIDE,
@@ -177,6 +178,20 @@ describe('weapons', () => {
     expect(me.punchPitch).toBeGreaterThan(0.01);
     run(m, 2, () => ({ yaw: Math.PI }));
     expect(me.punchPitch).toBeLessThan(0.001);
+  });
+});
+
+describe('sides', () => {
+  it('puts the player on the side picked in the hangar, with bots filling both teams', () => {
+    for (const humanTeam of [0, 1]) {
+      const opts = { seed: 5, humanTeam };
+      const m = createMatch(map, world, opts);
+      const humans = m.actors.filter((a) => !a.brain);
+      expect(humans.map((a) => a.id)).toEqual([firstHumanId(opts)]);
+      expect(humans[0].team).toBe(humanTeam);
+      expect(humans[0].name).toBe('You');
+      expect(m.actors.filter((a) => a.team === 0).length).toBe(m.actors.filter((a) => a.team === 1).length);
+    }
   });
 });
 

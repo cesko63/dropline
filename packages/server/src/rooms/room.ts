@@ -257,9 +257,14 @@ export class Room {
     return n;
   }
 
-  /** A free place on the team with fewer players, or null when every place has a player. */
-  private freeSeat(): Seat | null {
-    const first = this.humansOn(0) <= this.humansOn(1) ? 0 : 1;
+  /**
+   * A free place on the team with fewer players, or null when every place has a
+   * player. With the teams even, the player's preferred side goes first.
+   */
+  private freeSeat(prefer = -1): Seat | null {
+    const a = this.humansOn(0);
+    const b = this.humansOn(1);
+    const first = a === b && (prefer === 0 || prefer === 1) ? prefer : a <= b ? 0 : 1;
     for (const team of [first, 1 - first]) {
       for (const s of this.seats) if (!s.token && this.match.actors[s.id].team === team) return s;
     }
@@ -334,7 +339,7 @@ export class Room {
       if (seat.client) this.drop(seat.client, 'replaced by a new connection');
       seat.holdFor = 0;
     } else {
-      seat = this.freeSeat() ?? undefined;
+      seat = this.freeSeat(msg.side === 1 ? 1 : msg.side === 0 ? 0 : -1) ?? undefined;
       if (!seat) return this.reject(client, 'full');
       seat.token = newToken();
       seat.name = sanitizeName(msg.name) || `Pilot ${seat.id + 1}`;

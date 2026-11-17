@@ -78,8 +78,11 @@ export class MechAvatar {
   private lastState = 'none';
   private readonly pose = [STAND[0], STAND[1], STAND[0], STAND[1]];
 
-  /** `ally` is from the local player's point of view: it picks the landing zone's colour. */
-  constructor(team: number, ally: boolean) {
+  /**
+   * `ally` is from the local player's point of view: it picks the landing zone's
+   * colour and, unless `marker` says otherwise, puts the ally chevron overhead.
+   */
+  constructor(team: number, ally: boolean, marker = ally) {
     const look = TEAM_LOOK[team];
     this.armor = new THREE.MeshStandardMaterial({ color: '#4a525f', roughness: 0.6, metalness: 0.4 });
     this.plate = new THREE.MeshStandardMaterial({ color: look.plate, roughness: 0.5, metalness: 0.35 });
@@ -178,7 +181,7 @@ export class MechAvatar {
     }
 
     this.rig.add(this.hips);
-    if (ally) {
+    if (marker) {
       const chevron = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.55, 4), new THREE.MeshBasicMaterial({ color: look.visor }));
       chevron.rotation.x = Math.PI;
       chevron.position.y = MECH.body.height + 0.9;
