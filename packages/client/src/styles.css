@@ -916,11 +916,61 @@ body {
   padding-right: 3px;
 }
 
-#drive .hint {
+#drive .hint,
+#mech .hint {
   margin-top: 9px;
   text-align: center;
   color: var(--dim);
   font-size: 10px;
+}
+
+#frame-name {
+  display: inline-block;
+  color: var(--ink);
+}
+
+/* A new frame picked: its name kicks up and settles. */
+#frame-name.changed {
+  animation: frame-pick 0.35s ease-out;
+}
+
+@keyframes frame-pick {
+  0% {
+    transform: translateY(-4px) scale(1.25);
+    color: var(--accent);
+  }
+}
+
+/* No changing frames while one is on its way or standing by. */
+#mech[data-kind='inbound'] #frame-hint,
+#mech[data-kind='waiting'] #frame-hint {
+  visibility: hidden;
+}
+
+/* The shield is up, or the cloak is on: the readout says so in the frame's light. */
+#salvo.active {
+  background: var(--cool);
+}
+
+/* Cloaked: the view takes on a cold shimmer at its edges, so the pilot never forgets. */
+#cloak-edge {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+  box-shadow: inset 0 0 120px 30px rgba(120, 220, 255, 0.28);
+}
+
+#hud.cloaked #cloak-edge {
+  opacity: 1;
+  animation: cloak-shimmer 2.2s ease-in-out infinite;
+}
+
+@keyframes cloak-shimmer {
+  50% {
+    box-shadow: inset 0 0 140px 40px rgba(120, 220, 255, 0.18);
+  }
 }
 
 #hud.in-mech #vitals .bar {
@@ -1063,14 +1113,17 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   #warn.on,
-  #mech[data-kind='ready'] .label {
+  #mech[data-kind='ready'] .label,
+  #frame-name.changed,
+  #hud.cloaked #cloak-edge {
     animation: none;
   }
 }
 
 /* Small windows: drop what is not needed to fight. */
 @media (max-width: 900px), (max-height: 520px) {
-  #drive .hint {
+  #drive .hint,
+  #mech .hint {
     display: none;
   }
 

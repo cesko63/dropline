@@ -255,6 +255,17 @@ export class Sfx {
       this.burst(b, { type: 'bandpass', f0: 1200, dur: 0.08, gain: 0.7 });
       this.burst(b, { type: 'lowpass', f0: 520, f1: 120, dur: 0.22, gain: 0.8 });
       this.tone(b, { type: 'sine', f0: 92, f1: 36, dur: 0.2, gain: 0.95 });
+    } else if (weapon === 'breaker') {
+      // Flak: a deep, hollow cough as the shell leaves the tube.
+      this.burst(b, { type: 'lowpass', f0: 900, f1: 140, dur: 0.3, gain: 0.9 });
+      this.tone(b, { type: 'sine', f0: 70, f1: 30, dur: 0.28, gain: 1 });
+      this.burst(b, { type: 'bandpass', f0: 420, q: 3, dur: 0.12, gain: 0.4 });
+    } else if (weapon === 'lance') {
+      // Rail: a capacitor's snap, the slug's crack, and a ringing tail as the coils cool.
+      this.burst(b, { type: 'highpass', f0: 5200, dur: 0.05, gain: 0.8 });
+      this.tone(b, { type: 'sawtooth', f0: 1800, f1: 220, dur: 0.22, gain: 0.18 });
+      this.burst(b, { type: 'lowpass', f0: 2600, f1: 160, dur: 0.6, gain: 0.7 });
+      this.tone(b, { type: 'sine', f0: 3100, f1: 2900, dur: 0.5, gain: 0.05, at: 0.05 });
     } else if (weapon === 'pike') {
       this.rocket(b);
     } else if (weapon === 'longshot') {
@@ -434,6 +445,86 @@ export class Sfx {
     this.burst(b, { type: 'lowpass', f0: 1800, f1: 90, dur: big ? 1.3 : 0.7, gain: 1 });
     this.tone(b, { type: 'sine', f0: big ? 78 : 96, f1: 24, dur: big ? 0.9 : 0.5, gain: 1 });
     if (big) this.burst(b, { type: 'bandpass', f0: 420, f1: 140, q: 2, dur: 1.5, gain: 0.5, at: 0.12 });
+  }
+
+  /** A flak shell bursting: a sharp crack with little body, far smaller than a rocket. */
+  flakBurst(pos: Vec3): void {
+    if (!this.allow('flak', 0.04)) return;
+    const b = this.bus(pos, 2.2);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 3400, dur: 0.04, gain: 0.8 });
+    this.burst(b, { type: 'lowpass', f0: 2200, f1: 260, dur: 0.3, gain: 0.7 });
+    this.tone(b, { type: 'sine', f0: 140, f1: 50, dur: 0.18, gain: 0.5 });
+  }
+
+  /** The mech frame for the next call changed: a short rising chirp, higher for each frame in the list. */
+  frameSelect(index: number): void {
+    const b = this.bus(null, 0.7);
+    if (!b) return;
+    const f = 520 * Math.pow(1.26, index);
+    this.tone(b, { type: 'square', f0: f, dur: 0.05, gain: 0.1 });
+    this.tone(b, { type: 'square', f0: f * 1.5, dur: 0.08, gain: 0.1, at: 0.06 });
+  }
+
+  /** Jump jets: a roar that climbs, under a hiss. */
+  leap(pos: Vec3 | null): void {
+    const b = this.bus(pos, pos ? 3 : 0.8);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 600, f1: 2400, q: 0.7, dur: 0.6, gain: 0.8 });
+    this.tone(b, { type: 'sawtooth', f0: 90, f1: 180, dur: 0.5, gain: 0.12 });
+    this.burst(b, { type: 'highpass', f0: 3000, dur: 0.35, gain: 0.25 });
+  }
+
+  /** The stomp: a ground-shaking thump and the crack of concrete. */
+  stomp(pos: Vec3 | null): void {
+    const b = this.bus(pos, pos ? 5 : 1);
+    if (!b) return;
+    this.tone(b, { type: 'sine', f0: 58, f1: 22, dur: 0.7, gain: 1 });
+    this.burst(b, { type: 'lowpass', f0: 1200, f1: 70, dur: 0.6, gain: 1 });
+    this.burst(b, { type: 'bandpass', f0: 2600, q: 1.5, dur: 0.18, gain: 0.45, at: 0.03 });
+    // Grit falling back.
+    this.burst(b, { type: 'highpass', f0: 4200, dur: 0.5, gain: 0.12, at: 0.15 });
+  }
+
+  /** The shield coming up (a rising hum) or going down (falling). */
+  shield(pos: Vec3 | null, up: boolean): void {
+    if (!this.allow(`shield-${pos ? 'far' : 'own'}`, 0.1)) return;
+    const b = this.bus(pos, pos ? 2 : 0.7);
+    if (!b) return;
+    this.tone(b, { type: 'sawtooth', f0: up ? 110 : 330, f1: up ? 330 : 90, dur: 0.25, gain: 0.12 });
+    this.tone(b, { type: 'sine', f0: up ? 440 : 880, f1: up ? 880 : 300, dur: 0.22, gain: 0.15 });
+    this.burst(b, { type: 'bandpass', f0: up ? 1500 : 3000, f1: up ? 3000 : 1200, q: 3, dur: 0.2, gain: 0.15 });
+  }
+
+  /** Fire stopped by a shield: a bright electric zap; a heavier crack when it was the last of it. */
+  shieldHit(pos: Vec3 | null, broken: boolean): void {
+    if (!broken && !this.allow(`shieldHit-${pos ? 'far' : 'own'}`, 0.05)) return;
+    const b = this.bus(pos, pos ? 1.6 : 0.5);
+    if (!b) return;
+    this.burst(b, { type: 'bandpass', f0: 3800, q: 4, dur: 0.06, gain: 0.6 });
+    this.tone(b, { type: 'square', f0: 1300 + Math.random() * 300, f1: 600, dur: 0.06, gain: 0.06 });
+  }
+
+  /** The shield gives out: a glassy shatter and the generator winding down. */
+  shieldBreak(pos: Vec3 | null): void {
+    const b = this.bus(pos, pos ? 3 : 0.9);
+    if (!b) return;
+    this.burst(b, { type: 'highpass', f0: 2800, dur: 0.5, gain: 0.7 });
+    this.burst(b, { type: 'bandpass', f0: 4500, f1: 1500, q: 2, dur: 0.4, gain: 0.4 });
+    this.tone(b, { type: 'sawtooth', f0: 400, f1: 50, dur: 0.8, gain: 0.15 });
+  }
+
+  /** The cloak: a soft rushing fade going under, a shimmering ping coming back out. */
+  cloak(pos: Vec3 | null, on: boolean): void {
+    const b = this.bus(pos, pos ? 2.2 : 0.7);
+    if (!b) return;
+    if (on) {
+      this.burst(b, { type: 'bandpass', f0: 3000, f1: 400, q: 1.2, dur: 0.6, gain: 0.35 });
+      this.tone(b, { type: 'sine', f0: 1200, f1: 300, dur: 0.6, gain: 0.08 });
+    } else {
+      this.burst(b, { type: 'bandpass', f0: 400, f1: 3200, q: 1.2, dur: 0.35, gain: 0.35 });
+      this.tone(b, { type: 'triangle', f0: 1400, f1: 2100, dur: 0.18, gain: 0.1 });
+    }
   }
 
   /** The mech meter is full. */

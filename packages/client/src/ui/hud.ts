@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMBAT, MECH, TUNING, WEAPONS, lenH, spreadDeg, weaponOf, type Actor, type MatchState, type NetStats, type Vec3 } from '@dropline/shared';
+import { COMBAT, FRAMES, TUNING, WEAPONS, frameOf, lenH, spreadDeg, weaponOf, type Actor, type MatchState, type NetStats, type Vec3 } from '@dropline/shared';
 import type { Action } from '../input/bindings';
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -89,6 +89,12 @@ export class Hud {
   private readonly meter = el('meter');
   private readonly meterLabel = new Text(el('mech-label'));
   private readonly meterValue = new Text(el('mech-value'));
+  /** Id of the frame the next call brings down, as last shown. */
+  private frameId = '';
+  private readonly frameName = el('frame-name');
+  private readonly frameNameText = new Text(el('frame-name'));
+  private readonly moveName = new Text(el('move-name'));
+  private readonly abilityName = new Text(el('ability-name'));
   private readonly dash = el('dash');
   private readonly dashPips = [el('dash-1'), el('dash-2')];
   private readonly salvo = el('salvo');
@@ -188,7 +194,10 @@ export class Hud {
     if (!me.alive) [label, kind] = ['DOWN', 'special'];
     else if (inMech && mech.state === 'boot') [label, kind] = ['START-UP', 'special'];
     else if (inMech && mech.dashTime > 0) [label, kind] = ['DASH', 'special'];
-    else if (inMech) [label, kind] = [MECH.short, 'air'];
+    else if (inMech && mech.shieldUp) [label, kind] = ['SHIELD', 'special'];
+    else if (inMech && mech.cloak > 0) [label, kind] = ['CLOAKED', 'special'];
+    else if (inMech && !mech.grounded) [label, kind] = ['LEAP', 'special'];
+    else if (inMech) [label, kind] = [frameOf(mech).short, 'air'];
     else if (s.mantle.active) [label, kind] = ['MANTLE', 'special'];
     else if (s.wallrun.active) [label, kind] = ['WALLRUN', 'special'];
     else if (s.sliding) [label, kind] = ['SLIDE', 'special'];
@@ -210,8 +219,9 @@ export class Hud {
     // Health (the mech's hull while in one) and the red edge of the screen: steady
     // when hurt badly, a pulse on each hit.
     this.root.classList.toggle('in-mech', inMech);
+    this.root.classList.toggle('cloaked', inMech && mech.cloak > 0);
     const points = inMech ? mech.health : me.health;
-    const hp = Math.max(0, points) / (inMech ? MECH.health : COMBAT.health);
+    const hp = Math.max(0, points) / (inMech ? frameOf(mech).health : COMBAT.health);
     this.health.style.transform = `scaleX(${hp.toFixed(3)})`;
     this.healthValue.set(String(Math.ceil(Math.max(0, points))));
     this.vitalsLabel.set(inMech ? 'HULL' : 'HEALTH');
@@ -257,7 +267,7 @@ export class Hud {
     // The crosshair opens with the real spread. Aimed, the arm is raised under it
     // and the lines close in to the aimed spread; only the scope replaces them.
     this.crosshair.classList.toggle('mech', inMech);
-    const gap = Math.round(4 + (Math.tan(spreadDeg(me) * DEG) / Math.tan((camera.fov / 2) * DEG)) * (window.innerHeight / 2));
+    const gap = Math.round(4 + (Math.tan(spreadDeg(m, me) * DEG) / Math.tan((camera.fov / 2) * DEG)) * (window.innerHeight / 2));
     if (gap !== this.lastGap) {
       this.lastGap = gap;
       this.crosshair.style.setProperty('--gap', `${gap}px`);
@@ -305,49 +315,88 @@ export class Hud {
     }
   }
 
-  /** The mech meter, the cockpit's dash and rocket readouts, and the prompts around them. */
+  /** The frame picked for the next call: its name kicks up when it changes. */
+  setFrame(id: string): void {
+    const F = FRAMES[id];
+    if (!F || this.frameId === id) return;
+    const first = this.frameId === '';
+    this.frameId = id;
+    this.frameNameText.set(F.short);
+    if (first) return;
+    this.frameName.classList.remove('changed');
+    void this.frameName.offsetWidth;
+    this.frameName.classList.add('changed');
+  }
+
+  /** The mech meter, the cockpit's move and ability readouts, and the prompts around them. */
   private updateMech(m: MatchState, me: Actor): void {
     const k = m.mechs[me.id];
     const R = COMBAT.mech;
+    const F = frameOf(k);
     const dist = Math.hypot(k.pos.x - me.p.pos.x, k.pos.z - me.p.pos.z);
+    const picked = FRAMES[this.frameId]?.short ?? 'MECH';
 
     let kind = 'charging';
     let fill = me.meter;
     if (k.state === 'dropping') {
       kind = 'inbound';
       fill = k.stateTime / R.drop.time;
-      this.meterLabel.set('MECH INBOUND');
+      this.meterLabel.set(`${F.short} INBOUND`);
       this.meterValue.set(Math.max(0, R.drop.time - k.stateTime).toFixed(1));
     } else if (k.state === 'idle') {
       kind = 'waiting';
-      fill = k.health / MECH.health;
-      this.meterLabel.set(`${MECH.short} STANDING BY`);
+      fill = k.health / F.health;
+      this.meterLabel.set(`${F.short} STANDING BY`);
       this.meterValue.set(`${Math.round(dist)} M`);
     } else if (me.meter >= 1) {
       kind = 'ready';
-      this.meterLabel.set('MECH READY');
+      this.meterLabel.set(`${picked} READY`);
       this.meterValue.set(`PRESS ${this.keyOf('call')}`);
     } else {
-      this.meterLabel.set('MECH');
+      this.meterLabel.set(picked);
       this.meterValue.set(`${Math.floor(me.meter * 100)}%`);
     }
     this.meter.style.transform = `scaleX(${Math.max(0, Math.min(1, fill)).toFixed(3)})`;
     if (kind !== this.lastMeterKind) this.meterBox.dataset.kind = this.lastMeterKind = kind;
 
-    // Cockpit: dash charges and the rocket salvo.
+    // Cockpit: the jump button's charges and the aim button's ability.
     if (me.inMech) {
-      const D = MECH.dash;
-      this.dash.style.transform = `scaleX(${(k.dashCharges / D.charges).toFixed(3)})`;
-      this.dashPips.forEach((pip, i) => pip.classList.toggle('on', k.dashCharges >= i + 1));
-      const left = k.salvoCooldown;
-      this.salvo.style.transform = `scaleX(${(1 - left / MECH.salvo.cooldown).toFixed(3)})`;
-      this.salvo.classList.toggle('ready', left <= 0);
-      this.salvoValue.set(left <= 0 ? 'READY' : left.toFixed(1));
+      const J = F.mobility;
+      const A = F.ability;
+      this.moveName.set(J.kind.toUpperCase());
+      this.dash.style.transform = `scaleX(${(k.charges / J.charges).toFixed(3)})`;
+      this.dashPips.forEach((pip, i) => {
+        pip.style.display = i < J.charges ? '' : 'none';
+        pip.classList.toggle('on', k.charges >= i + 1);
+      });
+      let fill = 1;
+      let value = 'READY';
+      let active = false;
+      const wait = k.abilityCooldown;
+      if (A.kind === 'salvo') {
+        this.abilityName.set('ROCKETS');
+        fill = 1 - wait / A.cooldown;
+        if (wait > 0) value = wait.toFixed(1);
+      } else if (A.kind === 'shield') {
+        this.abilityName.set('SHIELD');
+        fill = k.shield / A.health;
+        active = k.shieldUp;
+        value = wait > 0 ? `BROKEN ${wait.toFixed(1)}` : `${Math.round(fill * 100)}%`;
+      } else {
+        this.abilityName.set('CLOAK');
+        active = k.cloak > 0;
+        fill = active ? k.cloak / A.time : 1 - wait / A.cooldown;
+        value = active ? `ON ${k.cloak.toFixed(1)}` : wait > 0 ? wait.toFixed(1) : 'READY';
+      }
+      this.salvo.style.transform = `scaleX(${Math.max(0, Math.min(1, fill)).toFixed(3)})`;
+      this.salvo.classList.toggle('ready', !active && wait <= 0);
+      this.salvo.classList.toggle('active', active);
+      this.salvoValue.set(value);
     }
 
     // "E" when the pilot stands where they can climb in.
     const dy = me.p.pos.y - k.pos.y;
-    const canBoard = k.state === 'idle' && me.alive && !me.inMech && dist <= R.embark.range && dy > -2 && dy < MECH.body.height + 1.5;
+    const canBoard = k.state === 'idle' && me.alive && !me.inMech && dist <= R.embark.range && dy > -2 && dy < F.body.height + 1.5;
     this.promptText.set(canBoard ? `${this.keyOf('use')} · EMBARK` : '');
     this.prompt.classList.toggle('on', canBoard && !m.over);
 
@@ -406,24 +455,27 @@ export class Hud {
       this.reveal[k.id] = Math.max(0, this.reveal[k.id] - dt);
       const ally = k.team === me.team;
       const standing = k.state === 'idle' || k.state === 'boot' || k.state === 'piloted';
-      if (!standing || k.id === me.id || (!ally && !this.debug && this.reveal[k.id] <= 0)) {
+      // A cloaked enemy gives nothing away, not even after a hit.
+      const hidden = !ally && k.cloak > 0;
+      if (!standing || k.id === me.id || hidden || (!ally && !this.debug && this.reveal[k.id] <= 0)) {
         tag.style.opacity = '0';
         continue;
       }
-      const hull = Math.max(1, Math.round((k.health / MECH.health) * 100));
+      const F = frameOf(k);
+      const hull = Math.max(1, Math.round((k.health / F.health) * 100));
       const owner = m.actors[k.id];
-      this.mechTagText[k.id].set(`${owner.name} · ${MECH.short} ${hull}%`);
+      this.mechTagText[k.id].set(`${owner.name} · ${F.short} ${hull}%`);
       const d = Math.hypot(k.pos.x - me.p.pos.x, k.pos.z - me.p.pos.z);
       const fade = ally ? Math.max(0, Math.min(0.9, (90 - d) / 20)) : Math.min(1, this.reveal[k.id] * 2);
       // Staggered in height by slot, so the tags of mechs standing together do not sit on each other.
-      place(tag, k.pos.x, k.pos.y + MECH.body.height + (k.state === 'idle' ? 0.4 : 1.4) + (k.id % 4) * 0.55, k.pos.z, this.debug ? 1 : fade);
+      place(tag, k.pos.x, k.pos.y + F.body.height + (k.state === 'idle' ? 0.4 : 1.4) + (k.id % 4) * 0.55, k.pos.z, this.debug ? 1 : fade);
     }
 
     // The player's own mech, while they are not in it: a marker that stays on
     // screen, sliding to the edge when the mech is out of view.
     const mine = m.mechs[me.id];
     if ((mine.state === 'dropping' || mine.state === 'idle') && !m.over) {
-      v.set(mine.pos.x, mine.pos.y + MECH.body.height + 1.2, mine.pos.z).project(camera);
+      v.set(mine.pos.x, mine.pos.y + frameOf(mine).body.height + 1.2, mine.pos.z).project(camera);
       const behind = v.z > 1;
       let sx = behind ? -v.x : v.x;
       let sy = behind ? -v.y : v.y;

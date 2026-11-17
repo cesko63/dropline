@@ -2,13 +2,14 @@ import * as THREE from 'three';
 import {
   BOTS,
   COMBAT,
-  MECH,
+  FRAME_LIST,
   NET,
   PROJECTILES,
   TICK_DT,
   WEAPONS,
   createMatch,
   eyeOf,
+  frameOf,
   lerp,
   stepMatch,
   v3,
@@ -20,6 +21,7 @@ import {
   type MatchEvent,
   type MatchInfo,
   type MatchState,
+  type MechAbility,
   type PlayerState,
   type Vec3,
 } from '@dropline/shared';
@@ -61,6 +63,7 @@ function killLabel(weapon: string): string {
   if (weapon in PROJECTILES) return PROJECTILES[weapon].name;
   if (weapon === 'crush') return 'MECH DROP';
   if (weapon === 'ram') return 'RAMMED';
+  if (weapon === 'stomp') return 'STOMPED';
   return 'FELL';
 }
 
@@ -303,7 +306,7 @@ export class Game {
     this.viewmodel.setTeam(me.team);
     this.avatars = this.match.actors.map((a) => new Avatar(a.team, a.team === me.team && a !== me, a.id));
     for (const avatar of this.avatars) this.scene.add(avatar.root, avatar.laser);
-    this.mechAvatars = this.match.mechs.map((k) => new MechAvatar(k.team, k.team === me.team));
+    this.mechAvatars = this.match.mechs.map((k) => new MechAvatar(k.team, k.team === me.team, frameOf(k)));
     for (const avatar of this.mechAvatars) this.scene.add(avatar.root);
     this.prev = this.match.actors.map((a) => ({ ...a.p.pos }));
     this.drawn = this.match.actors.map((a) => ({ ...a.p.pos }));
@@ -344,6 +347,7 @@ export class Game {
     if (input.consume('toggleView')) this.rig.thirdPerson = !this.rig.thirdPerson;
     if (input.consume('mute')) this.settings.set({ muted: !this.settings.value.muted });
     if (input.consume('netDebug')) this.hud.toggleNet();
+    if (input.consume('nextFrame')) this.nextFrame();
     // Online the server starts the next match by itself.
     if (this.match.over && !this.conn && input.consume('confirm')) this.newMatch();
     const keys = [input.consume('weapon1'), input.consume('weapon2'), input.consume('weapon3'), input.consume('weapon4')];
@@ -356,6 +360,23 @@ export class Game {
       if (pressed && slot < slots) input.weapon = slot;
     });
     if (step !== 0) input.weapon = (((wanted + Math.sign(step)) % slots) + slots) % slots;
+  }
+
+  /**
+   * Pick the next mech frame for the next call. Any time on foot; once a mech is
+   * on its way or standing by, the choice waits for the next one.
+   */
+  private nextFrame(): void {
+    const k = this.match.mechs[this.meId];
+    if (this.me.inMech || k.state === 'dropping' || k.state === 'idle') {
+      this.sfx.denied();
+      return;
+    }
+    const at = FRAME_LIST.findIndex((f) => f.id === this.settings.value.mechFrame);
+    const F = FRAME_LIST[(at + 1) % FRAME_LIST.length];
+    this.settings.set({ mechFrame: F.id });
+    this.sfx.frameSelect(FRAME_LIST.indexOf(F));
+    this.hud.showBanner(`${F.short} · `, F.blurb.toUpperCase(), 'good');
   }
 
   /** Advance the simulation in fixed ticks, then draw one interpolated frame. */
@@ -439,7 +460,7 @@ export class Game {
     rig.punchYaw = me.alive ? me.punchYaw : 0;
     rig.zoom = zoom;
     rig.forceThird = !me.alive;
-    rig.mech = me.inMech;
+    rig.mech = me.inMech ? frameOf(m.mechs[me.id]) : null;
     rig.update(dt, s, p, cmd.moveX, this.pendingEvents, this.world);
     this.pendingEvents = 0;
     const cam = rig.camera;
@@ -461,7 +482,14 @@ export class Game {
     const puff = this.smokeT > 0.11;
     if (puff) this.smokeT = 0;
     for (const k of m.mechs) {
-      const avatar = this.mechAvatars[k.id];
+      let avatar = this.mechAvatars[k.id];
+      // A new call may bring a different frame: build its model.
+      if (k.state !== 'none' && avatar.frame !== frameOf(k)) {
+        this.scene.remove(avatar.root);
+        avatar.dispose();
+        avatar = this.mechAvatars[k.id] = new MechAvatar(k.team, k.team === me.team, frameOf(k));
+        this.scene.add(avatar.root);
+      }
       const mine = k.id === me.id && me.inMech;
       // The player's own mech turns with the mouse, like their view.
       avatar.update(dt, k, this.mechDrawn[k.id], mine ? s.yaw : k.yaw, mine ? s.pitch : k.pitch, !mine || rig.outside);
@@ -474,9 +502,12 @@ export class Game {
         at.z = k.pos.z;
         this.fx.smoke(at, 2, 0.9, 1.3, 0.6, null, 0.55);
       }
-      if (k.health < MECH.health * 0.25) this.fx.smoke(avatar.ventWorld(this.tmp), 1, 0.3, 1.1, 1.3, null, 0.16);
+      // A cloaked mech leaves no smoke for the enemy to follow.
+      if (k.health < frameOf(k).health * 0.25 && (k.cloak <= 0 || k.team === me.team)) this.fx.smoke(avatar.ventWorld(this.tmp), 1, 0.3, 1.1, 1.3, null, 0.16);
     }
-    if (me.inMech && m.mechs[me.id].health < MECH.health * 0.25 && !paused) this.sfx.hullAlarm();
+    const own = m.mechs[me.id];
+    if (me.inMech && own.health < frameOf(own).health * 0.25 && !paused) this.sfx.hullAlarm();
+    this.hud.setFrame(this.settings.value.mechFrame);
 
     const mouse = this.input.takeMouseDelta();
     this.viewmodel.update(dt, me, mouse.dx, mouse.dy, me.inMech ? m.mechs[me.id] : null);
@@ -541,7 +572,7 @@ export class Game {
     const fz = -Math.cos(s.yaw) * cp;
     const eye = this.eye;
     eye.x = s.pos.x;
-    eye.y = s.pos.y + eyeOf(me);
+    eye.y = s.pos.y + eyeOf(this.match, me);
     eye.z = s.pos.z;
     let best = 0;
     for (const a of this.match.actors) {
@@ -577,7 +608,7 @@ export class Game {
     dir.z = -Math.cos(s.yaw) * cp;
     const eye = this.eye;
     eye.x = s.pos.x;
-    eye.y = s.pos.y + eyeOf(a);
+    eye.y = s.pos.y + eyeOf(this.match, a);
     eye.z = s.pos.z;
     const hit = this.world.castRay(eye, dir, 150);
     const d = hit ? hit.dist : 150;
@@ -612,6 +643,86 @@ export class Game {
     return Math.max(0, 1 - Math.hypot(pos.x - cam.x, pos.y - cam.y, pos.z - cam.z) / range);
   }
 
+  /** Sparks off a raised shield, in its team's light; the wall itself flares there. */
+  private shieldSpark(mech: number, pos: Vec3, count: number): void {
+    const k = this.match.mechs[mech];
+    this.fx.burst(pos, null, count, TEAM_LOOK[k.team].visor, 6);
+    this.mechAvatars[mech].shieldHit();
+    if (mech === this.meId && this.me.inMech) this.viewmodel.shieldHit();
+  }
+
+  /** A mech used its frame's move or ability. The player's own is shown from prediction, not again from the server. */
+  private onMechAbility(id: number, what: MechAbility, source: EventSource): void {
+    const m = this.match;
+    const me = this.me;
+    const k = m.mechs[id];
+    const avatar = this.mechAvatars[id];
+    const mine = id === me.id && me.inMech;
+    if (mine && source === 'server') return;
+    const outside = !mine || this.rig.outside;
+    const at = mine ? null : k.pos;
+    // Enemies hear a cloaked mech's shield and moves, never the cloak itself going on.
+    switch (what) {
+      case 'dash':
+        this.sfx.mechDash(at);
+        if (outside) this.fx.smoke(k.pos, 6, 1, 1.4, 0.7, null, 0.55);
+        if (mine) {
+          this.rig.kick(6);
+          this.viewmodel.thud(0.8);
+          this.input.rumble(0.5, 0.4, 200);
+        }
+        break;
+      case 'leap':
+        this.sfx.leap(at);
+        if (outside) this.fx.smoke(k.pos, 10, 1.4, 1.5, 0.8, null, 0.55);
+        if (mine) {
+          this.rig.kick(4);
+          this.viewmodel.thud(0.6);
+          this.input.rumble(0.4, 0.5, 220);
+        }
+        break;
+      case 'stomp': {
+        const S = frameOf(k).mobility;
+        const radius = S.kind === 'stomp' ? S.radius : 8;
+        avatar.stomp();
+        this.sfx.stomp(at);
+        // The shockwave runs out along the ground as far as it reaches.
+        this.fx.ring(k.pos, radius, k.team === me.team ? ALLY_ZONE : ENEMY_ZONE, 0.45);
+        this.fx.ring(k.pos, radius * 0.6, '#ffe2b0', 0.3);
+        this.fx.smoke(k.pos, 16, radius * 0.35, 1.6, 0.9, null, 0.5);
+        this.fx.decal(k.pos, UP, 6);
+        if (mine) {
+          this.rig.thud(3);
+          this.viewmodel.thud(1.4);
+          this.input.rumble(0.9, 0.5, 260);
+        } else {
+          this.shake(this.near(k.pos, 22) * 0.6);
+        }
+        break;
+      }
+      case 'shieldUp':
+      case 'shieldDown':
+        this.sfx.shield(at, what === 'shieldUp');
+        if (mine) this.input.rumble(0.1, 0.25, 90);
+        break;
+      case 'shieldBreak':
+        this.sfx.shieldBreak(at);
+        this.fx.burst({ x: k.pos.x, y: k.pos.y + 2.5, z: k.pos.z }, null, 30, TEAM_LOOK[k.team].visor, 9);
+        if (mine) {
+          this.hud.showBanner('SHIELD ', 'BROKEN', 'warn');
+          this.input.rumble(0.6, 0.6, 240);
+        }
+        break;
+      case 'cloakOn':
+      case 'cloakOff':
+        // Going under is only heard by its own side; coming out is heard by everyone near.
+        if (what === 'cloakOn' && !mine && k.team !== me.team) break;
+        this.sfx.cloak(at, what === 'cloakOn');
+        if (mine) this.input.rumble(0.15, 0.3, 120);
+        break;
+    }
+  }
+
   /** Turn what happened in the simulation into effects, sound and HUD feedback. */
   private onEvent(e: MatchEvent, source: EventSource): void {
     const m = this.match;
@@ -633,8 +744,8 @@ export class Game {
         const body = a.inMech ? this.mechAvatars[a.id] : this.avatars[a.id];
         const muzzle = firstPerson ? this.viewmodel.muzzleWorld(this.rig.camera, this.tmp) : body.muzzleWorld(this.tmp);
         const color = mine ? OWN_TRACER : TEAM_LOOK[a.team].tracer;
-        // A cannon round is drawn thicker than a rifle's.
-        const width = (firstPerson ? 0.02 : 0.04) * (a.inMech ? 2.2 : 1);
+        // A cannon round is drawn thicker than a rifle's, a rail slug thicker still.
+        const width = (firstPerson ? 0.02 : 0.04) * (a.inMech ? 2.2 : 1) * (e.weapon === 'lance' ? 2 : 1);
         let struck: Vec3 | null = null;
         for (const t of e.traces) {
           this.fx.tracer(muzzle, t.end, color, width);
@@ -645,6 +756,8 @@ export class Game {
           } else if (t.victim >= 0 && source !== 'predicted') {
             // Sparks in the victim's colours, more of them for a headshot.
             this.fx.burst(t.end, null, t.head ? 10 : 5, TEAM_LOOK[m.actors[t.victim].team].visor, 5);
+          } else if (t.shield) {
+            this.shieldSpark(t.mech, t.end, 6);
           } else if (t.mech >= 0) {
             struck = t.end;
           }
@@ -760,7 +873,7 @@ export class Game {
         this.sfx.dropWhistle(e.pos, e.duration, a.team !== me.team);
         if (a === me) {
           this.sfx.mechCall();
-          this.hud.showBanner(`${MECH.short} `, 'INBOUND', 'good');
+          this.hud.showBanner(`${FRAME_LIST[e.frame].short} `, 'INBOUND', 'good');
         }
         break;
       }
@@ -795,7 +908,7 @@ export class Game {
       case 'mechOnline':
         if (e.actor !== me.id) break;
         this.sfx.mechOnline();
-        this.hud.showBanner(`${MECH.short} `, 'ONLINE', 'good');
+        this.hud.showBanner(`${frameOf(m.mechs[me.id]).short} `, 'ONLINE', 'good');
         break;
       case 'disembark': {
         const a = m.actors[e.actor];
@@ -831,16 +944,21 @@ export class Game {
         }
         break;
       }
-      case 'mechDash': {
+      case 'mechAbility':
+        this.onMechAbility(e.mech, e.what, source);
+        break;
+      case 'shieldHit': {
         const k = m.mechs[e.mech];
-        const mine = k.id === me.id && me.inMech;
-        if (mine && source === 'server') break;
-        this.sfx.mechDash(mine ? null : k.pos);
-        if (!mine || this.rig.outside) this.fx.smoke(k.pos, 6, 1, 1.4, 0.7, null, 0.55);
-        if (mine) {
-          this.rig.kick(6);
-          this.viewmodel.thud(0.8);
-          this.input.rumble(0.5, 0.4, 200);
+        this.shieldSpark(k.id, e.pos, Math.min(20, 4 + e.amount / 20));
+        if (e.attacker === me.id) {
+          this.hud.hitmarker(false, false, true);
+          this.sfx.shieldHit(e.pos, e.broken);
+        } else if (k.id === me.id && me.inMech) {
+          this.sfx.shieldHit(null, e.broken);
+          this.viewmodel.thud(Math.min(0.6, e.amount / 400));
+          this.input.rumble(0.15, 0.2, 80);
+        } else {
+          this.sfx.shieldHit(e.pos, e.broken);
         }
         break;
       }
@@ -898,7 +1016,7 @@ export class Game {
         this.fx.decal(e.pos, UP, 20);
         this.sfx.mechDestroyed(e.pos);
         this.shake(this.near(e.pos, 55));
-        if (killer) this.hud.addKill(killer, owner, killLabel(e.weapon), me, ` · ${MECH.short}`);
+        if (killer) this.hud.addKill(killer, owner, killLabel(e.weapon), me, ` · ${frameOf(m.mechs[e.mech]).short}`);
         if (killer === me) {
           this.hud.showBanner('MECH DESTROYED ', owner.name);
           this.rig.kick(6);
@@ -910,7 +1028,7 @@ export class Game {
         const a = m.actors[e.actor];
         const def = PROJECTILES[e.kind];
         const mine = a === me;
-        const salvo = a.inMech;
+        const salvo = a.inMech && !def.mechFuse;
         let id = e.id;
         if (mine && source === 'predicted') {
           // Drawn at once under an id of its own, until the server announces the real one.
@@ -929,9 +1047,9 @@ export class Game {
         } else if (mine && !this.rig.outside) {
           from = this.viewmodel.muzzleWorld(this.rig.camera, this.tmp);
         } else {
-          from = this.avatars[a.id].muzzleWorld(this.tmp);
+          from = (a.inMech ? this.mechAvatars[a.id] : this.avatars[a.id]).muzzleWorld(this.tmp);
         }
-        this.fx.rocket(id, e.pos, e.dir, def.speed, def.life + 0.2, from);
+        this.fx.rocket(id, e.pos, e.dir, def.speed, def.life + 0.2, from, def.mechFuse !== undefined);
         if (salvo) {
           this.mechAvatars[a.id].podFlash();
           this.sfx.launch(mine ? null : e.pos);
@@ -947,8 +1065,10 @@ export class Game {
         this.fx.endRocket(this.rocketAlias.get(e.id) ?? e.id);
         this.rocketAlias.delete(e.id);
         this.fx.explosion(e.pos, e.normal, def.radius);
-        this.sfx.explosion(e.pos);
-        this.shake(this.near(e.pos, 24) * 0.6);
+        // A flak burst is a crack, not a rocket's boom.
+        if (def.mechFuse) this.sfx.flakBurst(e.pos);
+        else this.sfx.explosion(e.pos);
+        this.shake(this.near(e.pos, 24) * (def.mechFuse ? 0.25 : 0.6));
         break;
       }
 

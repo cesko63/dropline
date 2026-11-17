@@ -26,6 +26,7 @@ export type Action =
   | 'nextWeapon'
   | 'use'
   | 'call'
+  | 'nextFrame'
   | 'toggleView'
   | 'respawn'
   | 'mute'
@@ -50,11 +51,11 @@ export const ACTIONS: Record<Action, ActionInfo> = {
   back: { label: 'Back', group: 'Move', keys: ['KeyS', 'ArrowDown'], pad: [] },
   left: { label: 'Left', group: 'Move', keys: ['KeyA', 'ArrowLeft'], pad: [] },
   right: { label: 'Right', group: 'Move', keys: ['KeyD', 'ArrowRight'], pad: [] },
-  jump: { label: 'Jump · double jump · thrust', group: 'Move', keys: ['Space'], pad: ['Pad0'] },
+  jump: { label: 'Jump · double jump · thrust · mech move', group: 'Move', keys: ['Space'], pad: ['Pad0'] },
   crouch: { label: 'Crouch · slide', group: 'Move', keys: ['KeyC'], pad: ['Pad1'] },
   sprint: { label: 'Sprint', group: 'Move', keys: ['ShiftLeft', 'ShiftRight'], pad: ['Pad10'] },
   fire: { label: 'Fire', group: 'Fight', keys: ['Mouse0'], pad: ['Pad7'] },
-  ads: { label: 'Aim · mech rockets', group: 'Fight', keys: ['Mouse2'], pad: ['Pad6'] },
+  ads: { label: 'Aim · mech ability', group: 'Fight', keys: ['Mouse2'], pad: ['Pad6'] },
   reload: { label: 'Vent · reload', group: 'Fight', keys: ['KeyR'], pad: ['Pad2'] },
   weapon1: { label: 'Carbine barrel', group: 'Fight', keys: ['Digit1'], pad: [] },
   weapon2: { label: 'Scattergun barrel', group: 'Fight', keys: ['Digit2'], pad: [] },
@@ -63,6 +64,7 @@ export const ACTIONS: Record<Action, ActionInfo> = {
   nextWeapon: { label: 'Next weapon', group: 'Fight', keys: ['KeyQ'], pad: ['Pad3'] },
   use: { label: 'Embark · climb out', group: 'Mech and match', keys: ['KeyE'], pad: ['Pad4'] },
   call: { label: 'Call mech', group: 'Mech and match', keys: ['KeyF'], pad: ['Pad12'] },
+  nextFrame: { label: 'Change mech frame', group: 'Mech and match', keys: ['KeyT'], pad: ['Pad15'] },
   respawn: { label: 'Redeploy', group: 'Mech and match', keys: ['KeyK'], pad: ['Pad13'] },
   toggleView: { label: 'First / third person', group: 'Other', keys: ['KeyV'], pad: ['Pad14'] },
   mute: { label: 'Sound on / off', group: 'Other', keys: ['KeyM'], pad: [] },

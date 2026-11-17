@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { spring, stepSpring } from '../util/spring';
-import { MECH, MoveEvent, TUNING, clamp, eyeHeight, lenH, v3, type CollisionWorld, type PlayerState, type Vec3 } from '@dropline/shared';
+import { MoveEvent, TUNING, clamp, eyeHeight, lenH, v3, type CollisionWorld, type MechFrame, type PlayerState, type Vec3 } from '@dropline/shared';
 
 const damp = (current: number, target: number, rate: number, dt: number): number =>
   current + (target - current) * (1 - Math.exp(-rate * dt));
@@ -19,8 +19,8 @@ export class CameraRig {
   zoom = 1;
   /** Third person regardless of the toggle: used while dead. */
   forceThird = false;
-  /** The view is a mech's cockpit: higher, steadier, with a longer boom outside. */
-  mech = false;
+  /** The view is this mech frame's cockpit: higher, steadier, with a longer boom outside. Null on foot. */
+  mech: MechFrame | null = null;
   /** Reduce motion: no widening at speed or on kills, no lean into strafes, half the wallrun tilt. */
   calm = false;
   private readonly joltRoll = spring();
@@ -83,7 +83,7 @@ export class CameraRig {
   /** `events` are the MoveEvent flags raised since the previous frame. */
   update(dt: number, s: PlayerState, pos: Vec3, moveX: number, events: number, world: CollisionWorld): void {
     const mech = this.mech;
-    const eyeTarget = mech ? MECH.body.eye : eyeHeight(s);
+    const eyeTarget = mech ? mech.body.eye : eyeHeight(s);
     this.eye = this.carrying ? eyeTarget : damp(this.eye, eyeTarget, 14, dt);
 
     // Smooth out the small vertical pops from stairs; follow exactly in the air.
@@ -118,7 +118,7 @@ export class CameraRig {
     const shakeRoll = shake * 0.035 * (Math.sin(t * 47.9) + Math.sin(t * 33.7));
 
     // Widen the view once the player is moving faster than a plain sprint.
-    const top = mech ? MECH.move.sprintSpeed : TUNING.ground.sprintSpeed;
+    const top = mech ? mech.move.sprintSpeed : TUNING.ground.sprintSpeed;
     const rush = this.calm ? 0 : clamp((lenH(s.vel) - top) / 9, 0, 1) * 12;
     this.fov = damp(this.fov, this.baseFov + rush, 6, dt);
     const fov = (this.fov + this.fovKick) * this.zoom;

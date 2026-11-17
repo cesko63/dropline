@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMBAT, MECH, WEAPONS, clamp, lenH, type Actor, type Mech } from '@dropline/shared';
+import { COMBAT, WEAPONS, clamp, frameOf, lenH, type Actor, type Mech } from '@dropline/shared';
 import { spring, stepSpring } from '../util/spring';
 import { block, rod } from './pilot/rig';
 
@@ -23,6 +23,8 @@ const ARM_YAW = 0.1;
 const CELL_SEAT = new THREE.Vector3(-0.03, 0.094, 0.05);
 /** The mech's cannon arm, seen from the cockpit. */
 const CANNON_REST = new THREE.Vector3(0.5, -0.37, -0.8);
+/** How far along each mech weapon's barrels the muzzle sits. */
+const CANNON_MUZZLE: Record<string, number> = { autocannon: -0.96, breaker: -0.72, lance: -1.13 };
 /** The shoulder pod: swung up beside the head, pulled in to aim, and folded away behind the shoulder. */
 const POD_UP = new THREE.Vector3(0.5, 0.27, -0.75);
 const POD_AIM = new THREE.Vector3(0.41, 0.245, -0.78);
@@ -170,7 +172,13 @@ export class Viewmodel {
   private deploy = 0;
 
   private readonly cannon = new THREE.Group();
+  /** One barrel group per mech weapon, by weapon id; the frame's own is shown. */
+  private readonly cannons: Record<string, THREE.Group> = {};
   private readonly cannonMuzzle = new THREE.Object3D();
+  /** The shield wall in front of the cockpit glass, and how brightly a hit lights it. */
+  private readonly shield: THREE.Mesh;
+  private readonly shieldMat: THREE.MeshBasicMaterial;
+  private shieldFlash = 0;
   private readonly cannonPort = new THREE.Object3D();
 
   /** The muzzle the current weapon fires from. */
@@ -387,14 +395,28 @@ export class Viewmodel {
     this.pod.visible = false;
     this.scene.add(this.pod);
 
-    // --- The mech's cannon: its right arm, seen from the cockpit.
-    this.cannon.add(
-      box(0.22, 0.22, 0.62, dark, 0, 0, 0.12),
-      box(0.02, 0.012, 0.14, glow, 0, 0.078, -0.3),
-      box(0.075, 0.075, 0.72, metal, 0, 0.035, -0.52),
-      box(0.05, 0.05, 0.56, dark, 0, -0.06, -0.44),
-      box(0.11, 0.11, 0.09, dark, 0, 0.035, -0.9),
-      box(0.17, 0.17, 0.8, sleeve, 0.1, -0.12, 0.7, 0.2, -0.25),
+    // --- The mech's cannon: its right arm, seen from the cockpit. The arm is
+    // the same on every frame; the barrels are the frame's weapon.
+    this.cannon.add(box(0.22, 0.22, 0.62, dark, 0, 0, 0.12), box(0.02, 0.012, 0.14, glow, 0, 0.078, -0.3), box(0.17, 0.17, 0.8, sleeve, 0.1, -0.12, 0.7, 0.2, -0.25));
+    const barrels = (id: string, ...parts: THREE.Mesh[]): void => {
+      const g = new THREE.Group();
+      g.add(...parts);
+      g.visible = false;
+      this.cannons[id] = g;
+      this.cannon.add(g);
+    };
+    // Autocannon: one long barrel over a feed.
+    barrels('autocannon', box(0.075, 0.075, 0.72, metal, 0, 0.035, -0.52), box(0.05, 0.05, 0.56, dark, 0, -0.06, -0.44), box(0.11, 0.11, 0.09, dark, 0, 0.035, -0.9));
+    // Breaker: a short, fat tube with a drum of shells under it and a wide bore.
+    barrels('breaker', box(0.16, 0.16, 0.46, metal, 0, 0.04, -0.42), box(0.2, 0.2, 0.08, dark, 0, 0.04, -0.66), box(0.11, 0.11, 0.02, bore, 0, 0.04, -0.705), box(0.14, 0.12, 0.2, dark, 0, -0.1, -0.3));
+    // Lance: two thin rails with glowing coils between them, the longest reach.
+    barrels(
+      'lance',
+      box(0.03, 0.05, 1.0, metal, -0.04, 0.035, -0.62),
+      box(0.03, 0.05, 1.0, metal, 0.04, 0.035, -0.62),
+      box(0.05, 0.012, 0.03, glow, 0, 0.035, -0.4),
+      box(0.05, 0.012, 0.03, glow, 0, 0.035, -0.65),
+      box(0.05, 0.012, 0.03, glow, 0, 0.035, -0.9),
     );
     this.cannonMuzzle.position.set(0, 0.02, -0.96);
     this.cannonPort.position.set(0.04, 0.05, -0.04);
@@ -421,6 +443,15 @@ export class Viewmodel {
     }
     this.cockpit.visible = false;
     this.scene.add(this.cockpit);
+
+    // The shield, seen through the glass: a wall of light across the view.
+    this.shieldMat = new THREE.MeshBasicMaterial({ color: '#58d6ff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    this.shield = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 2.2, 1, 1), this.shieldMat);
+    this.shield.position.set(0, 0.05, -1.4);
+    // Its edge, so the pilot sees where cover ends.
+    this.shield.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(3.3, 2.1)), new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.35 })));
+    this.shield.visible = false;
+    this.scene.add(this.shield);
 
     this.flash = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.035, 0),
@@ -477,6 +508,7 @@ export class Viewmodel {
     L.steel.color.set(look.steel);
     L.accent.emissive.set(look.accent);
     this.cool.set(look.cool);
+    this.shieldMat.color.set(look.cool);
     this.warm.set(look.warm);
     this.hot.set(look.hot);
     this.heatMat.emissive.copy(this.cool);
@@ -498,6 +530,11 @@ export class Viewmodel {
   /** Shake the cockpit: a footfall, a hit on the hull. */
   thud(amount: number): void {
     this.rattle.v -= amount;
+  }
+
+  /** Fire stopped by the player's own shield lights it up. */
+  shieldHit(): void {
+    this.shieldFlash = 1;
   }
 
   /** Kick and flash for one shot; a mech's cannon also throws a casing, a hot arm lets off steam. */
@@ -562,8 +599,9 @@ export class Viewmodel {
     stepSpring(this.rattle, 150, 13, dt);
     if (this.cockpit.visible) {
       const online = mech && mech.state === 'boot' ? clamp(mech.stateTime / COMBAT.mech.embark.time, 0, 1) : mech ? 1 : 0;
-      this.panelGlow.emissiveIntensity = online * (mech && mech.health < MECH.health * 0.25 ? 0.6 + 0.6 * Math.sin(performance.now() * 0.012) : 1.2);
-      this.panelGlow.emissive.set(mech && mech.health < MECH.health * 0.25 ? '#ff5a3c' : '#58d6ff');
+      const failing = mech !== null && mech.health < frameOf(mech).health * 0.25;
+      this.panelGlow.emissiveIntensity = online * (failing ? 0.6 + 0.6 * Math.sin(performance.now() * 0.012) : 1.2);
+      this.panelGlow.emissive.set(failing ? '#ff5a3c' : '#58d6ff');
       this.cockpit.position.y = -0.5 * (1 - this.seated) + clamp(this.rattle.x, -0.05, 0.03);
       this.cockpit.rotation.z = clamp(this.rattle.x, -0.05, 0.05) * 0.2;
     }
@@ -579,6 +617,16 @@ export class Viewmodel {
     }
     this.arm.visible = !mech;
     this.cannon.visible = mech !== null;
+    for (const [weapon, g] of Object.entries(this.cannons)) g.visible = mech !== null && weapon === id;
+    this.cannonMuzzle.position.z = CANNON_MUZZLE[id] ?? CANNON_MUZZLE.autocannon;
+    // The shield shimmers while it is up, brighter for a moment where it is hit, and fades as it wears down.
+    const A = mech ? frameOf(mech).ability : null;
+    this.shieldFlash = Math.max(0, this.shieldFlash - dt * 5);
+    this.shield.visible = mech !== null && mech.shieldUp && A?.kind === 'shield';
+    if (this.shield.visible && A?.kind === 'shield') {
+      const left = mech!.shield / A.health;
+      this.shieldMat.opacity = 0.1 + 0.12 * left + 0.03 * Math.sin(performance.now() * 0.009) + 0.3 * this.shieldFlash;
+    }
     if (mode === 'cannon') {
       this.muzzle = this.cannonMuzzle;
       this.kickBack = 0.05;
@@ -598,7 +646,7 @@ export class Viewmodel {
     const calm = 1 - 0.85 * a.ads;
     const moving = (s.grounded && !s.sliding ? Math.min(1, speed / (mech ? 4 : 8)) : 0) * calm;
     // A mech's slow, heavy step, in time with its stride.
-    this.bob = mech ? (mech.stride / MECH.move.strideLength) * Math.PI : this.bob + speed * dt * 1.35;
+    this.bob = mech ? (mech.stride / frameOf(mech).move.strideLength) * Math.PI : this.bob + speed * dt * 1.35;
     this.idle += dt;
 
     // The weapon trails behind fast mouse turns and settles back.

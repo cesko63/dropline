@@ -11,6 +11,7 @@
 
     <div id="hud" aria-hidden="true">
       <div id="vignette"></div>
+      <div id="cloak-edge"></div>
       <div id="labels"></div>
       <div id="scope"><i></i><i></i></div>
       <div id="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
@@ -71,15 +72,16 @@
       <div id="mech" data-kind="charging">
         <div class="label"><span id="mech-label">MECH</span><span id="mech-value">0%</span></div>
         <div class="bar"><div id="meter"></div></div>
+        <div class="hint" id="frame-hint"><b data-key="nextFrame"></b> · FRAME <span id="frame-name">HALBERD</span></div>
       </div>
 
       <div id="drive">
         <div class="label">
-          <span>DASH · <b data-key="jump"></b></span>
+          <span><span id="move-name">DASH</span> · <b data-key="jump"></b></span>
           <span class="pips"><i id="dash-1" class="pip on"></i><i id="dash-2" class="pip on"></i></span>
         </div>
         <div class="bar"><div id="dash"></div></div>
-        <div class="label second"><span>ROCKETS · <b data-key="ads"></b></span><span id="salvo-value">READY</span></div>
+        <div class="label second"><span><span id="ability-name">ROCKETS</span> · <b data-key="ads"></b></span><span id="salvo-value">READY</span></div>
         <div class="bar thin"><div id="salvo"></div></div>
         <div class="hint"><b data-key="use"></b> · CLIMB OUT</div>
       </div>

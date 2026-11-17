@@ -17,7 +17,7 @@
     "strideLength": 3
   },
   "mobility": { "kind": "leap", "charges": 2, "rechargeTime": 5, "up": 12, "forward": 11 },
-  "vent": { "back": 1, "height": 2.9, "radius": 0.55, "mult": 1.6 },
+  "vent": { "back": 1, "height": 3.6, "radius": 0.55, "mult": 1.6 },
   "loadout": ["lance"],
   "ability": { "kind": "cloak", "time": 5, "cooldown": 16, "revealRange": 20 },
   "botRole": "lynx"

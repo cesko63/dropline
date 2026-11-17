@@ -59,6 +59,8 @@ interface Rocket {
   /** Where it is drawn relative to where it really is: starts at the launcher, shrinks to nothing. */
   offset: THREE.Vector3;
   trail: number;
+  /** A flak shell: drawn small, with no smoke trail. */
+  small: boolean;
 }
 
 interface Blast {
@@ -141,7 +143,7 @@ export class Effects {
       mesh.add(new THREE.Mesh(bodyGeo, bodyMat), new THREE.Mesh(tailGeo, tailMat));
       mesh.visible = false;
       scene.add(mesh);
-      this.rockets.push({ id: -1, mesh, pos: new THREE.Vector3(), dir: new THREE.Vector3(), speed: 0, life: 0, offset: new THREE.Vector3(), trail: 0 });
+      this.rockets.push({ id: -1, mesh, pos: new THREE.Vector3(), dir: new THREE.Vector3(), speed: 0, life: 0, offset: new THREE.Vector3(), trail: 0, small: false });
     }
 
     const ballGeo = new THREE.IcosahedronGeometry(1, 2);
@@ -279,7 +281,8 @@ export class Effects {
    * `seenFrom` is where the viewer sees it leave (a muzzle), when that differs
    * from where it really starts.
    */
-  rocket(id: number, from: Vec3, dir: Vec3, speed: number, life: number, seenFrom: THREE.Vector3 | null): void {
+  /** A rocket in flight; `small` is a flak shell: a third the size, and no smoke trail. */
+  rocket(id: number, from: Vec3, dir: Vec3, speed: number, life: number, seenFrom: THREE.Vector3 | null, small = false): void {
     let r = this.rockets.find((x) => x.id < 0);
     if (!r) r = this.rockets[0];
     r.id = id;
@@ -287,6 +290,8 @@ export class Effects {
     r.dir.set(dir.x, dir.y, dir.z);
     r.speed = speed;
     r.life = life;
+    r.small = small;
+    r.mesh.scale.setScalar(small ? 0.35 : 1);
     // The exhaust starts a few meters out, so a launch does not fog the shooter's own view.
     r.trail = -4;
     if (seenFrom) r.offset.copy(seenFrom).sub(r.pos);
@@ -376,6 +381,7 @@ export class Effects {
       r.offset.multiplyScalar(Math.exp(-dt * 9));
       r.mesh.position.copy(r.pos).add(r.offset);
       // A puff of exhaust every meter and a half.
+      if (r.small) continue;
       r.trail += r.speed * dt;
       while (r.trail > 1.5) {
         r.trail -= 1.5;

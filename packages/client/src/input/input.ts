@@ -1,4 +1,4 @@
-import type { InputCmd } from '@dropline/shared';
+import { frameIndex, type InputCmd } from '@dropline/shared';
 import type { Settings } from '../settings/settings';
 import { ACTIONS, type Action } from './bindings';
 import { Pad } from './gamepad';
@@ -267,6 +267,7 @@ export class Input {
       call: this.held('call'),
       redeploy: this.held('respawn'),
       weapon: this.weapon,
+      frame: frameIndex(s.mechFrame),
     };
     if (tick) this.fresh.clear();
     if (this.override) {
