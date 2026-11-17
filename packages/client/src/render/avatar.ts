@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { WEAPONS, lenH, type Actor, type Vec3 } from '@dropline/shared';
+import { PilotAnimator } from './pilot/animate';
+import { buildSkeleton, block, type BoneName, type Skeleton } from './pilot/rig';
+import { suitKit } from './pilot/suits';
 
 /** Per-team look. Allies also carry a chevron overhead, so teams never rest on colour alone. */
 export const TEAM_LOOK = [
   { plate: '#2f86c6', visor: '#58d6ff', tracer: '#8fe6ff' },
-  { plate: '#d2452c', visor: '#ff5a3c', tracer: '#ffb38a' },
+  { plate: '#d2452c', visor: '#ff2a3c', tracer: '#ffb38a' },
 ];
 
 const FLAME = new THREE.MeshBasicMaterial({
@@ -14,7 +17,6 @@ const FLAME = new THREE.MeshBasicMaterial({
   blending: THREE.AdditiveBlending,
   depthWrite: false,
 });
-const GUN = new THREE.MeshStandardMaterial({ color: '#1c2026', roughness: 0.6, metalness: 0.5 });
 const MUZZLE = new THREE.MeshBasicMaterial({
   color: '#ffd9a0',
   transparent: true,
@@ -22,7 +24,8 @@ const MUZZLE = new THREE.MeshBasicMaterial({
   depthWrite: false,
 });
 const WHITE = new THREE.Color('#ffffff');
-const BLACK = new THREE.Color('#000000');
+const FLAME_GEO = new THREE.ConeGeometry(0.07, 0.5, 8);
+const BARREL_GEO = new THREE.BoxGeometry(0.065, 1, 0.065);
 
 /** The barrel the arm extends per weapon id: length (meters), thickness. Anything else draws it in. */
 const BARREL_SHAPE: Record<string, [number, number]> = {
@@ -31,10 +34,14 @@ const BARREL_SHAPE: Record<string, [number, number]> = {
   longshot: [0.62, 0.8],
 };
 const NO_BARREL: [number, number] = [0.02, 1];
-/** Where the barrel leaves the housing, along the arm (the arm hangs down its own -Y). */
-const BARREL_Y = -0.66;
+/** Where the barrel leaves the housing, in the right forearm's space (the forearm hangs down its own -Y). */
+const BARREL_AT = new THREE.Vector3(0, -0.26, -0.075);
+
+/** Each Corps pilot's own shoulder patch: a unit colour. */
+const PATCHES = ['#c9a227', '#b5482f', '#d9d4c5', '#4f8a5b', '#8a5fb0', '#3f7fc0', '#d07a2a', '#9aa63a'];
 
 let noticeTexture: THREE.CanvasTexture | null = null;
+let haloTexture: THREE.CanvasTexture | null = null;
 
 /** The "!" shown over a bot that has just spotted someone. Drawn once, shared by all. */
 function noticeMark(): THREE.CanvasTexture {
@@ -63,14 +70,33 @@ function noticeMark(): THREE.CanvasTexture {
   return noticeTexture;
 }
 
+/** A soft round glow, shared by every suit light's halo. */
+function haloMap(): THREE.CanvasTexture {
+  if (haloTexture) return haloTexture;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.25, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  haloTexture = new THREE.CanvasTexture(c);
+  haloTexture.colorSpace = THREE.SRGBColorSpace;
+  return haloTexture;
+}
+
 const damp = (current: number, target: number, rate: number, dt: number): number =>
   current + (target - current) * (1 - Math.exp(-rate * dt));
 
 const tmp = new THREE.Vector3();
 
 /**
- * Placeholder pilot built from boxes with procedural animation. It stands in
- * until real rigged models exist; the model faces -Z like the camera.
+ * A pilot: the faction's suit on the shared skeleton (render/pilot), animated
+ * from movement state. Team 0 wears the Corps suit, team 1 is a Z.E.R.O frame;
+ * both have the same proportions, so they match the same hitbox. The model
+ * faces -Z like the camera.
  *
  * The suit carries its weapons: a housing on the right forearm that extends
  * one barrel at a time, and a launcher pod on the right shoulder that swings
@@ -81,25 +107,25 @@ export class Avatar {
   /** Aiming laser of a marksman; lives in world space, so the game adds it to the scene. */
   readonly laser: THREE.Mesh;
   private readonly body = new THREE.Group();
-  private readonly upper = new THREE.Group();
-  private readonly armor: THREE.MeshStandardMaterial;
-  private readonly plate: THREE.MeshStandardMaterial;
-  private readonly legL: THREE.Group;
-  private readonly legR: THREE.Group;
-  private readonly armL: THREE.Group;
-  private readonly armR: THREE.Group;
-  private readonly gun = new THREE.Group();
+  private readonly bones: Skeleton;
+  private readonly anim: PilotAnimator;
+  private readonly skin: THREE.MeshStandardMaterial;
+  private readonly lights: THREE.MeshBasicMaterial;
+  private readonly halo: THREE.SpriteMaterial;
+  private readonly haloOpacity: number;
+  private readonly baseEmissive: THREE.Color;
+  /** Z.E.R.O lights breathe; Corps lights hold steady. */
+  private readonly pulse: number;
   private readonly barrel: THREE.Mesh;
+  private readonly gunMat: THREE.MeshStandardMaterial;
   private readonly muzzle = new THREE.Object3D();
   private readonly muzzleFlash: THREE.Mesh;
-  private readonly pod = new THREE.Group();
   private readonly podMuzzle = new THREE.Object3D();
   private readonly vent = new THREE.Object3D();
-  private readonly suitGlow: THREE.MeshStandardMaterial;
   private readonly flames: THREE.Mesh[] = [];
   private readonly mark: THREE.Sprite;
   private readonly laserMat: THREE.MeshBasicMaterial;
-  private phase = 0;
+  private readonly owned: (THREE.Material | THREE.BufferGeometry)[] = [];
   private heading = 0;
   private hit = 0;
   private shot = 0;
@@ -110,83 +136,89 @@ export class Avatar {
   private barrelLen = 0.02;
   private barrelThick = 1;
   private podUp = 0;
+  private glowT = Math.random() * 10;
+  private lightLevel = 1;
 
-  constructor(team: number, ally: boolean) {
+  constructor(team: number, ally: boolean, variant = 0) {
     const look = TEAM_LOOK[team];
-    this.armor = new THREE.MeshStandardMaterial({ color: '#2c323b', roughness: 0.55, metalness: 0.45 });
-    this.plate = new THREE.MeshStandardMaterial({ color: look.plate, roughness: 0.5, metalness: 0.3 });
-    const visor = new THREE.MeshStandardMaterial({ color: '#0b1a22', emissive: look.visor, emissiveIntensity: 2.2 });
+    const kit = suitKit(team);
+    const machine = team === 1;
+    this.bones = buildSkeleton(this.body);
+    this.anim = new PilotAnimator(this.bones, this.body);
+    // Z.E.R.O plates carry a faint crimson cast, so a black frame never sinks into shadow.
+    this.baseEmissive = new THREE.Color(machine ? '#3a0408' : '#000000').multiplyScalar(machine ? 0.4 : 0);
+    this.skin = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      flatShading: true,
+      roughness: kit.roughness,
+      metalness: kit.metalness,
+      emissive: this.baseEmissive.clone(),
+    });
+    this.lights = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+    this.haloOpacity = machine ? 0.85 : 0.5;
+    this.halo = new THREE.SpriteMaterial({
+      map: haloMap(),
+      color: kit.colors.glow,
+      transparent: true,
+      opacity: this.haloOpacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    this.pulse = machine ? 0.22 : 0;
+    this.gunMat = new THREE.MeshStandardMaterial({ color: kit.colors.gun, roughness: 0.5, metalness: 0.55, flatShading: true });
+    this.owned.push(this.skin, this.lights, this.halo, this.gunMat);
 
-    const part = (w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-      mesh.position.set(x, y, z);
-      mesh.castShadow = true;
-      return mesh;
-    };
-    /** A limb that swings from its top end. */
-    const limb = (w: number, len: number, d: number, x: number, y: number): THREE.Group => {
-      const pivot = new THREE.Group();
-      pivot.position.set(x, y, 0);
-      pivot.add(part(w, len, d, this.armor, 0, -len / 2, 0));
-      return pivot;
-    };
-    this.legL = limb(0.18, 0.9, 0.2, -0.14, 0.9);
-    this.legR = limb(0.18, 0.9, 0.2, 0.14, 0.9);
-    this.armL = limb(0.13, 0.62, 0.14, -0.34, 1.5);
-    this.armR = limb(0.13, 0.62, 0.14, 0.34, 1.5);
+    for (const name of Object.keys(kit.bones) as BoneName[]) {
+      const parts = kit.bones[name]!;
+      if (parts.body) {
+        const mesh = new THREE.Mesh(parts.body, this.skin);
+        mesh.castShadow = true;
+        this.bones[name].add(mesh);
+      }
+      if (parts.glow) this.bones[name].add(new THREE.Mesh(parts.glow, this.lights));
+    }
+    for (const h of kit.halos) {
+      const sprite = new THREE.Sprite(this.halo);
+      sprite.position.set(h.at[0], h.at[1], h.at[2]);
+      sprite.scale.setScalar(h.size);
+      this.bones[h.bone].add(sprite);
+    }
+    if (!machine) {
+      // A Corps suit is personal: each pilot wears their unit's patch on the left arm.
+      const patchMat = new THREE.MeshStandardMaterial({ color: PATCHES[variant % PATCHES.length], roughness: 0.8, flatShading: true });
+      const patchGeo = block(0.008, 0.06, 0.07, 0.002);
+      const patch = new THREE.Mesh(patchGeo, patchMat);
+      patch.position.set(-0.064, -0.16, 0);
+      this.bones.upperArmL.add(patch);
+      this.owned.push(patchMat, patchGeo);
+    }
 
-    // The weapon is part of the right forearm, so raising the arm points it: a
-    // housing around the wrist, and a barrel that reaches past the fist.
-    this.suitGlow = new THREE.MeshStandardMaterial({ color: '#0b1a22', emissive: look.visor, emissiveIntensity: 1.6 });
-    this.barrel = part(0.065, 1, 0.065, GUN);
+    // The weapon is part of the right forearm, so raising the arm points it.
+    this.barrel = new THREE.Mesh(BARREL_GEO, this.gunMat);
+    this.barrel.castShadow = true;
     const barrelRoot = new THREE.Group();
-    barrelRoot.position.set(0, BARREL_Y, -0.03);
+    barrelRoot.position.copy(BARREL_AT);
     barrelRoot.add(this.barrel);
-    this.gun.add(
-      part(0.2, 0.32, 0.21, GUN, 0, -0.5, -0.03),
-      part(0.21, 0.05, 0.22, this.plate, 0, -0.36, -0.03),
-      part(0.03, 0.22, 0.02, this.suitGlow, 0.05, -0.5, -0.14),
-      barrelRoot,
-    );
-    this.vent.position.set(-0.11, -0.5, -0.03);
-    this.muzzle.position.set(0, BARREL_Y, -0.03);
+    this.vent.position.set(-0.1, -0.14, -0.02);
+    this.muzzle.position.copy(BARREL_AT);
+    this.bones.foreArmR.add(barrelRoot, this.vent, this.muzzle);
+    this.podMuzzle.position.set(0, 0, -0.2);
+    this.bones.pod.add(this.podMuzzle);
+    this.bones.pod.rotation.x = 1.15;
     this.muzzleFlash = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), MUZZLE.clone());
     this.muzzleFlash.visible = false;
-    this.gun.add(this.vent, this.muzzle);
-    this.armR.add(this.gun);
+    this.owned.push(this.muzzleFlash.geometry, this.muzzleFlash.material as THREE.Material);
 
-    // The launcher pod on the right shoulder. Folded, it points at the sky behind the head.
-    this.pod.position.set(0.33, 1.8, 0.1);
-    this.pod.add(
-      part(0.22, 0.18, 0.38, GUN),
-      part(0.23, 0.04, 0.22, this.plate, 0, 0.1, 0.02),
-      part(0.07, 0.07, 0.02, this.suitGlow, -0.055, 0, -0.195),
-      part(0.07, 0.07, 0.02, this.suitGlow, 0.055, 0, -0.195),
-      part(0.08, 0.22, 0.08, this.armor, 0, -0.16, 0.1),
-    );
-    this.podMuzzle.position.set(0, 0, -0.26);
-    this.pod.add(this.podMuzzle);
-    this.pod.rotation.x = 1.15;
-
-    this.upper.add(
-      part(0.52, 0.62, 0.3, this.armor, 0, 1.22, 0),
-      part(0.56, 0.2, 0.34, this.plate, 0, 1.46, 0),
-      part(0.26, 0.28, 0.28, this.armor, 0, 1.7, 0),
-      part(0.22, 0.08, 0.03, visor, 0, 1.72, -0.15),
-      part(0.34, 0.4, 0.16, this.armor, 0, 1.28, 0.22),
-      this.armL,
-      this.armR,
-      this.pod,
-    );
-    for (const x of [-0.1, 0.1]) {
-      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.5, 8), FLAME);
+    for (const at of kit.thrusters) {
+      const flame = new THREE.Mesh(FLAME_GEO, FLAME);
       flame.rotation.x = Math.PI;
-      flame.position.set(x, 0.86, 0.22);
+      flame.position.set(at[0], at[1] - 0.25, at[2]);
       flame.visible = false;
       this.flames.push(flame);
-      this.upper.add(flame);
+      this.bones.chest.add(flame);
     }
-    this.body.add(this.upper, this.legL, this.legR);
+
     this.root.add(this.body);
     // The flash moves between the barrel and the pod, so it hangs on neither.
     this.root.add(this.muzzleFlash);
@@ -196,11 +228,13 @@ export class Avatar {
       chevron.rotation.x = Math.PI;
       chevron.position.y = 2.2;
       this.root.add(chevron);
+      this.owned.push(chevron.geometry, chevron.material as THREE.Material);
     }
     this.mark = new THREE.Sprite(new THREE.SpriteMaterial({ map: noticeMark(), depthTest: false, transparent: true }));
     this.mark.position.y = 2.45;
     this.mark.visible = false;
     this.root.add(this.mark);
+    this.owned.push(this.mark.material);
 
     this.laserMat = new THREE.MeshBasicMaterial({
       color: '#ffd23f',
@@ -211,15 +245,18 @@ export class Avatar {
     this.laser = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.laserMat);
     this.laser.visible = false;
     this.laser.frustumCulled = false;
+    this.owned.push(this.laser.geometry, this.laserMat);
   }
 
-  /** White flash when hit. */
+  /** White flash when hit, and a flinch. */
   flash(): void {
     this.hit = 1;
+    this.anim.hit();
   }
 
   fireFlash(): void {
     this.shot = 1;
+    this.anim.shot();
   }
 
   /** Pop the "!" over the head. */
@@ -269,152 +306,100 @@ export class Avatar {
     const [len, thick] = BARREL_SHAPE[this.weapon] ?? NO_BARREL;
     this.barrelLen = damp(this.barrelLen, len, 14, dt);
     this.barrelThick = damp(this.barrelThick, thick, 14, dt);
-    this.barrel.scale.set(this.barrelThick, this.barrelLen, 1);
+    this.barrel.scale.set(this.barrelThick, this.barrelLen, this.barrelThick);
     this.barrel.position.y = -this.barrelLen / 2;
     this.barrel.visible = this.barrelLen > 0.05;
-    this.muzzle.position.y = BARREL_Y - this.barrelLen;
+    this.muzzle.position.y = BARREL_AT.y - this.barrelLen;
     this.podUp = damp(this.podUp, this.shoulder && a.alive ? 1 : 0, 9, dt);
 
-    // Death: fall backwards, lie there, then clear away.
+    this.root.position.set(pos.x, pos.y, pos.z);
+    const speed = lenH(s.vel);
+    let turnRate = 0;
     if (!a.alive) {
       if (this.dead < 0) this.dead = 0;
       this.dead += dt;
       this.mark.visible = false;
       this.laser.visible = false;
       this.muzzleFlash.visible = false;
-      for (const flame of this.flames) flame.visible = false;
+      // Lie there, then clear away.
       this.root.visible = this.dead < 2.4;
-      const fall = Math.min(1, this.dead / 0.35);
-      this.body.rotation.x = -1.5 * fall * fall;
-      this.body.position.y = 0.16 * fall;
-      this.legL.rotation.x = damp(this.legL.rotation.x, 0.25, 10, dt);
-      this.legR.rotation.x = damp(this.legR.rotation.x, -0.1, 10, dt);
-      this.armL.rotation.x = damp(this.armL.rotation.x, -0.6, 10, dt);
-      this.armR.rotation.x = damp(this.armR.rotation.x, -0.9, 10, dt);
-      this.tint(dt);
-      return;
+    } else {
+      if (this.dead >= 0) {
+        this.dead = -1;
+        this.heading = s.yaw;
+      }
+      this.root.visible = show;
+      // Face where the pilot looks, except when momentum decides (wallrun, slide).
+      let facing = s.yaw;
+      if ((s.wallrun.active || s.sliding) && speed > 1 && raise < 0.5) facing = Math.atan2(-s.vel.x, -s.vel.z);
+      const turn = Math.atan2(Math.sin(facing - this.heading), Math.cos(facing - this.heading));
+      const step = turn * (1 - Math.exp(-18 * dt));
+      this.heading += step;
+      turnRate = dt > 0 ? step / dt : 0;
+      this.root.rotation.y = this.heading;
     }
-    if (this.dead >= 0) {
-      this.dead = -1;
-      this.body.rotation.set(0, 0, 0);
-      this.body.position.y = 0;
-      this.heading = s.yaw;
-    }
 
-    this.root.visible = show;
-    this.root.position.set(pos.x, pos.y, pos.z);
+    this.anim.update(dt, {
+      s,
+      alive: a.alive,
+      speed,
+      turnRate,
+      lookYaw: Math.atan2(Math.sin(s.yaw - this.heading), Math.cos(s.yaw - this.heading)),
+      aimPitch: s.pitch + a.punchPitch,
+      raise,
+      shoulder: this.shoulder,
+      podUp: this.podUp,
+      venting: a.reload > 0 && !this.shoulder,
+    });
+    // The pod tips back to take new rockets.
+    const reloadTip = a.reload > 0 && this.shoulder ? 0.45 : 0;
+    this.bones.pod.rotation.x = damp(this.bones.pod.rotation.x, this.anim.podPitch + reloadTip * this.podUp, 16, dt);
+    this.bones.pod.position.y = 0.46 + 0.08 * this.podUp;
 
-    const speed = lenH(s.vel);
-    // Face where the pilot looks, except when momentum decides (wallrun, slide).
-    let facing = s.yaw;
-    if ((s.wallrun.active || s.sliding) && speed > 1 && raise < 0.5) facing = Math.atan2(-s.vel.x, -s.vel.z);
-    const turn = Math.atan2(Math.sin(facing - this.heading), Math.cos(facing - this.heading));
-    this.heading += turn * (1 - Math.exp(-18 * dt));
-    this.root.rotation.y = this.heading;
-
-    const running = s.grounded && !s.sliding;
-    const stride = running ? Math.min(1, speed / 8) : 0;
-    this.phase += speed * dt * 1.5;
-    const swing = Math.sin(this.phase) * 0.9 * stride;
-
-    let legL = swing;
-    let legR = -swing;
-    // The arm is carried low while moving and raised (pitched with the view) to shoot.
-    // With the pod in use it stays down: the pod does the pointing.
-    const aimAngle = Math.PI / 2 + s.pitch + a.punchPitch;
-    const lift = this.shoulder ? 0 : raise;
-    let armR = 0.75 + (aimAngle - 0.75) * lift - swing * 0.15 * (1 - lift);
-    // The left arm is free: it swings with the run, and steadies the right forearm while that aims.
-    let armL = 0.2 + swing * 0.5 * (1 - lift) + (aimAngle * 0.6 - 0.2) * lift;
-    let lean = 0;
-    let pitch = running ? -0.12 * stride : 0;
-    let drop = 0;
-
-    if (s.sliding) {
-      pitch = 0.95;
-      drop = -0.55;
-      legL = -1.15;
-      legR = -0.85;
-      armR -= 0.9;
-      armL -= 0.9;
-    } else if (s.wallrun.active) {
-      lean = s.wallrun.side * 0.32;
-      const fast = Math.sin(this.phase * 1.2) * 0.9;
-      legL = fast;
-      legR = -fast;
-    } else if (s.mantle.active) {
-      armL = armR = -2.6;
-      legL = -0.5;
-      legR = 0.2;
-    } else if (!s.grounded) {
-      legL = -0.55;
-      legR = 0.25;
-    } else if (s.crouched) {
-      drop = -0.42;
-      legL = -1.0 + swing * 0.4;
-      legR = -1.0 - swing * 0.4;
-      pitch = 0.25;
-      armR -= 0.25;
-      armL -= 0.25;
-    }
-    // Swapping the coolant cell: the forearm comes up across the chest while it vents.
-    const venting = a.reload > 0 && !this.shoulder;
-    if (venting) armR = 1.25;
-    // The pod follows the view while it is up, and tips back to take new rockets.
-    const podAim = s.pitch + a.punchPitch + (a.reload > 0 && this.shoulder ? 0.45 : 0);
-    this.pod.rotation.x = damp(this.pod.rotation.x, 1.15 + (podAim - 1.15) * this.podUp, 16, dt);
-    this.pod.position.y = 1.8 + 0.06 * this.podUp;
-
-    this.legL.rotation.x = damp(this.legL.rotation.x, legL, 20, dt);
-    this.legR.rotation.x = damp(this.legR.rotation.x, legR, 20, dt);
-    this.armL.rotation.x = damp(this.armL.rotation.x, armL, 20, dt);
-    this.armR.rotation.x = damp(this.armR.rotation.x, armR, 22, dt);
-    // The off hand reaches across to brace the forearm while it aims.
-    this.armL.rotation.z = damp(this.armL.rotation.z, s.mantle.active ? 0 : 0.04 + 0.5 * lift, 14, dt);
-    this.armR.rotation.z = damp(this.armR.rotation.z, venting ? -0.5 : 0, 14, dt);
-    this.body.rotation.z = damp(this.body.rotation.z, lean, 12, dt);
-    this.body.rotation.x = damp(this.body.rotation.x, pitch, 12, dt);
-    this.body.position.y = damp(this.body.position.y, drop, 16, dt);
+    // Suit lights: Z.E.R.O optics breathe; every light dies with its pilot.
+    this.glowT += dt;
+    this.lightLevel = damp(this.lightLevel, a.alive ? 1 : 0, a.alive ? 6 : 2.5, dt);
+    const level = this.lightLevel * (1 - this.pulse + this.pulse * (0.5 + 0.5 * Math.sin(this.glowT * 2.2)));
+    this.lights.color.setScalar(0.08 + 0.92 * level);
+    this.halo.opacity = this.haloOpacity * level;
 
     for (const flame of this.flames) {
-      flame.visible = s.thrusting;
+      flame.visible = s.thrusting && a.alive;
       flame.scale.y = 0.8 + Math.random() * 0.6;
     }
 
-    this.shot = Math.max(0, this.shot - dt * 16);
-    this.muzzleFlash.visible = this.shot > 0;
-    if (this.shot > 0) {
-      this.root.worldToLocal(this.muzzleWorld(this.muzzleFlash.position));
-      this.muzzleFlash.scale.setScalar((0.6 + this.shot * 0.9) * (this.shoulder ? 1.5 : 1));
-      this.muzzleFlash.rotation.y = Math.random() * 6.28;
-      (this.muzzleFlash.material as THREE.MeshBasicMaterial).opacity = this.shot;
-    }
+    if (a.alive) {
+      this.shot = Math.max(0, this.shot - dt * 16);
+      this.muzzleFlash.visible = this.shot > 0;
+      if (this.shot > 0) {
+        this.root.updateMatrixWorld(true);
+        this.root.worldToLocal(this.muzzleWorld(this.muzzleFlash.position));
+        this.muzzleFlash.scale.setScalar((0.6 + this.shot * 0.9) * (this.shoulder ? 1.5 : 1));
+        this.muzzleFlash.rotation.y = Math.random() * 6.28;
+        (this.muzzleFlash.material as THREE.MeshBasicMaterial).opacity = this.shot;
+      }
 
-    this.noticed = Math.max(0, this.noticed - dt);
-    this.mark.visible = this.noticed > 0;
-    if (this.noticed > 0) {
-      // Pop in big, settle, then shrink away.
-      const age = 0.9 - this.noticed;
-      const pop = age < 0.12 ? 0.5 + (age / 0.12) * 0.9 : 1.4 - Math.min(0.4, (age - 0.12) * 4);
-      this.mark.scale.setScalar(0.55 * pop * Math.min(1, this.noticed * 6));
+      this.noticed = Math.max(0, this.noticed - dt);
+      this.mark.visible = this.noticed > 0;
+      if (this.noticed > 0) {
+        // Pop in big, settle, then shrink away.
+        const age = 0.9 - this.noticed;
+        const pop = age < 0.12 ? 0.5 + (age / 0.12) * 0.9 : 1.4 - Math.min(0.4, (age - 0.12) * 4);
+        this.mark.scale.setScalar(0.55 * pop * Math.min(1, this.noticed * 6));
+      }
     }
     this.tint(dt);
   }
 
   private tint(dt: number): void {
-    if (this.hit <= 0 && this.armor.emissive.r === 0) return;
+    if (this.hit <= 0 && this.skin.emissive.equals(this.baseEmissive)) return;
     this.hit = Math.max(0, this.hit - dt * 9);
-    this.armor.emissive.lerpColors(BLACK, WHITE, this.hit * 0.9);
-    this.plate.emissive.copy(this.armor.emissive);
+    this.skin.emissive.lerpColors(this.baseEmissive, WHITE, this.hit * 0.9);
+    this.gunMat.emissive.lerpColors(this.gunMat.emissive.set(0), WHITE, this.hit * 0.9);
   }
 
   dispose(): void {
-    this.root.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.geometry.dispose();
-    });
-    this.laser.geometry.dispose();
-    this.laserMat.dispose();
-    this.armor.dispose();
-    this.plate.dispose();
+    // The suit's geometry is shared by every pilot of the team; only this pilot's own things go.
+    for (const o of this.owned) o.dispose();
   }
 }
