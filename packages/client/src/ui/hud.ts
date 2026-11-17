@@ -214,7 +214,11 @@ export class Hud {
     this.slideFuel.style.transform = `scaleX(${s.slideFuel.toFixed(3)})`;
     this.slideFuel.classList.toggle('burning', s.sliding);
     this.airJump.classList.toggle('on', s.airJumpsUsed < TUNING.jump.airJumps);
-    this.viewMode.set(`${thirdPerson ? 'THIRD' : 'FIRST'} PERSON · ${this.keyOf('toggleView')}`);
+    this.viewMode.set(
+      thirdPerson
+        ? `THIRD PERSON · ${this.keyOf('toggleView')} · SHOULDER · ${this.keyOf('swapShoulder')}`
+        : `FIRST PERSON · ${this.keyOf('toggleView')}`,
+    );
 
     // Health (the mech's hull while in one) and the red edge of the screen: steady
     // when hurt badly, a pulse on each hit.
@@ -273,7 +277,8 @@ export class Hud {
       this.crosshair.style.setProperty('--gap', `${gap}px`);
     }
     this.crosshair.classList.toggle('aimed', me.ads > 0.6);
-    this.crosshair.classList.toggle('off', !me.alive || thirdPerson || scoped);
+    // Over the shoulder the shots leave along the camera's line, so the same crosshair holds.
+    this.crosshair.classList.toggle('off', !me.alive || scoped);
     this.scope.classList.toggle('on', scoped);
 
     // Score.

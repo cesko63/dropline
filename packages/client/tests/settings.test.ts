@@ -47,16 +47,6 @@ describe('settings', () => {
     expect(s.pad).toEqual(defaultPad());
   });
 
-  it('migrates a version 1 object: the mech frame is the Halberd everyone called back then', () => {
-    const s = parseSettings(JSON.stringify({ ...defaultSettings(), version: 1, mechFrame: undefined, fov: 95 }));
-    expect(s.version).toBe(SETTINGS_VERSION);
-    expect(s.mechFrame).toBe('halberd');
-    expect(s.fov).toBe(95);
-    expect(s.keys.nextFrame).toEqual(defaultKeys().nextFrame);
-    expect(parseSettings(JSON.stringify({ ...defaultSettings(), mechFrame: 'lynx' })).mechFrame).toBe('lynx');
-    expect(parseSettings(JSON.stringify({ ...defaultSettings(), mechFrame: 'teapot' })).mechFrame).toBe('halberd');
-  });
-
   it('keeps every stored value in range and of the right type: players edit these', () => {
     const s = parseSettings(
       JSON.stringify({ version: 1, mouseSens: 99, fov: -5, volume: 'loud', invertY: 'yes', aimMode: 'sometimes', deadzone: null, keys: { jump: ['KeyJ', 42, 'Nonsense'], fire: 'Mouse0' } }),

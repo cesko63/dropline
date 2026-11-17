@@ -8,11 +8,14 @@ import {
   TICK_DT,
   WEAPONS,
   createMatch,
+  firstHumanId,
   eyeOf,
+  frameIndex,
   frameOf,
   lerp,
   stepMatch,
   v3,
+  viewOrigin,
   weaponOf,
   type Actor,
   type CollisionWorld,
@@ -36,6 +39,7 @@ import { buildMapMeshes } from './render/mapMesh';
 import { ALLY_ZONE, ENEMY_ZONE, MechAvatar } from './render/mechAvatar';
 import { createEnvironment, createRenderer, type Environment } from './render/scene';
 import { Viewmodel } from './render/viewmodel';
+import type { LoadoutStore } from './settings/loadout';
 import { verticalFov, type Settings, type SettingsStore } from './settings/settings';
 import { Hud } from './ui/hud';
 
@@ -76,11 +80,15 @@ export interface GameOptions {
   /** Open the connection details as soon as a server is joined (`?net=1`). */
   netDebug: boolean;
   settings: SettingsStore;
+  /** The hangar's picks: the side, and the mech frame the next call brings down. */
+  loadout: LoadoutStore;
 }
 
 /** How far the aim slowdown reaches around an enemy's chest, meters, and how far away it still works. */
 const ASSIST_RADIUS = 0.9;
 const ASSIST_RANGE = 70;
+/** The tightest field of view multiplier aiming reaches over the shoulder, before a scope takes the view in. */
+const OUTSIDE_ZOOM = 0.72;
 
 export class Game {
   readonly input: Input;
@@ -96,6 +104,7 @@ export class Game {
   /** The player switched between keyboard and pad, or rebound something: printed keys must follow. */
   onKeysChange: () => void = () => {};
   private readonly settings: SettingsStore;
+  private readonly loadout: LoadoutStore;
   /** Screen shake is scaled by this (the comfort setting). */
   private shakeScale = 1;
   private readonly renderer: THREE.WebGLRenderer;
@@ -116,6 +125,8 @@ export class Game {
   private conn: Connection | null = null;
   /** Actor id of the player's own pilot. */
   private meId = 0;
+  /** The side the player fights for offline (picked in the hangar): 0 the Corps, 1 Z.E.R.O. */
+  side = 0;
   /** Rockets fired from prediction that the server has not announced yet, oldest first. */
   private readonly ownRockets: number[] = [];
   /** Server rocket id to the id it is drawn under, for those that were predicted. */
@@ -152,6 +163,7 @@ export class Game {
     this.netDebug = options.netDebug;
 
     this.settings = options.settings;
+    this.loadout = options.loadout;
     this.input = new Input(canvas, this.settings.value);
     this.input.onPlayingChange = (playing) => {
       this.hud.showOverlay(!playing);
@@ -259,7 +271,8 @@ export class Game {
   /** Start a fresh offline match; each one gets the next seed, so no two play out the same. */
   newMatch(): void {
     this.conn = null;
-    this.show(createMatch(this.map, this.world, { seed: this.seed++, startMeter: this.startMeter }), 0);
+    const opts = { seed: this.seed++, startMeter: this.startMeter, humanTeam: this.side };
+    this.show(createMatch(this.map, this.world, opts), firstHumanId(opts));
   }
 
   /**
@@ -345,6 +358,7 @@ export class Game {
     const input = this.input;
     const me = this.me;
     if (input.consume('toggleView')) this.rig.thirdPerson = !this.rig.thirdPerson;
+    if (input.consume('swapShoulder')) this.rig.shoulder = -this.rig.shoulder;
     if (input.consume('mute')) this.settings.set({ muted: !this.settings.value.muted });
     if (input.consume('netDebug')) this.hud.toggleNet();
     if (input.consume('nextFrame')) this.nextFrame();
@@ -363,8 +377,9 @@ export class Game {
   }
 
   /**
-   * Pick the next mech frame for the next call. Any time on foot; once a mech is
-   * on its way or standing by, the choice waits for the next one.
+   * Pick the next mech frame for the next call, the same pick the hangar makes.
+   * Any time on foot; once a mech is on its way or standing by, the choice waits
+   * for the next one.
    */
   private nextFrame(): void {
     const k = this.match.mechs[this.meId];
@@ -372,9 +387,9 @@ export class Game {
       this.sfx.denied();
       return;
     }
-    const at = FRAME_LIST.findIndex((f) => f.id === this.settings.value.mechFrame);
+    const at = FRAME_LIST.findIndex((f) => f.id === this.loadout.value.mech);
     const F = FRAME_LIST[(at + 1) % FRAME_LIST.length];
-    this.settings.set({ mechFrame: F.id });
+    this.loadout.set({ mech: F.id });
     this.sfx.frameSelect(FRAME_LIST.indexOf(F));
     // The class only ("HEAVY"): the whole line would not fit a small screen.
     this.hud.showBanner(`${F.short} · `, F.blurb.split(':')[0].toUpperCase(), 'good');
@@ -392,6 +407,11 @@ export class Game {
     const paused = this.paused;
     this.sfx.setPaused(paused, document.hidden);
 
+    // Fully aimed through a scope, third person goes in to the scope; otherwise
+    // shots leave over the shoulder the camera looks past (see `viewOrigin`).
+    this.rig.scopeIn = weaponOf(me).scope && me.ads > 0.9 && me.alive && !me.inMech;
+    this.input.shoulder = this.rig.aimShoulder;
+    this.input.frame = frameIndex(this.loadout.value.mech);
     let cmd = this.input.sample(false);
     const conn = this.conn;
     if (conn) {
@@ -453,13 +473,16 @@ export class Game {
     s.yaw = this.input.yaw;
     s.pitch = this.input.pitch;
     const def = weaponOf(me);
-    const zoom = 1 + (def.adsZoom - 1) * me.ads;
+    // Over the shoulder a scope zooms only as far as plain iron sights until the view goes in to it.
+    const adsZoom = this.rig.thirdPerson && !this.rig.scopeIn ? Math.max(def.adsZoom, OUTSIDE_ZOOM) : def.adsZoom;
+    const zoom = 1 + (adsZoom - 1) * me.ads;
     this.input.sensScale = zoom;
     this.input.assist = this.input.device === 'pad' && this.settings.value.aimSlowdown && me.alive ? this.aimAssist(me) : 0;
     const rig = this.rig;
     rig.punchPitch = me.alive ? me.punchPitch : 0;
     rig.punchYaw = me.alive ? me.punchYaw : 0;
     rig.zoom = zoom;
+    rig.aim = me.alive ? me.ads : 0;
     rig.forceThird = !me.alive;
     rig.mech = me.inMech ? frameOf(m.mechs[me.id]) : null;
     rig.update(dt, s, p, cmd.moveX, this.pendingEvents, this.world);
@@ -473,7 +496,7 @@ export class Game {
       const shouldered = a.ads > 0.2 || m.time - a.lastShotTime < RAISE_HOLD || (b !== null && (b.state === 'engage' || b.state === 'notice'));
       this.raise[a.id] += ((shouldered ? 1 : 0) - this.raise[a.id]) * (1 - Math.exp(-14 * dt));
       // A pilot in a mech is out of sight inside it.
-      avatar.update(dt, a, this.drawn[a.id], (a !== me || rig.outside) && !a.inMech, this.raise[a.id]);
+      avatar.update(dt, a, this.drawn[a.id], (a !== me || rig.showsSelf) && !a.inMech, this.raise[a.id]);
       // A marksman's laser runs from its muzzle along its view to whatever it meets.
       if (b && b.charge > 0 && a.alive && !a.inMech) avatar.setLaser(b.charge, b.charge >= BOTS.chargeLock, this.aimPoint(a));
       else avatar.setLaser(0, false, null);
@@ -493,7 +516,7 @@ export class Game {
       }
       const mine = k.id === me.id && me.inMech;
       // The player's own mech turns with the mouse, like their view.
-      avatar.update(dt, k, this.mechDrawn[k.id], mine ? s.yaw : k.yaw, mine ? s.pitch : k.pitch, !mine || rig.outside);
+      avatar.update(dt, k, this.mechDrawn[k.id], mine ? s.yaw : k.yaw, mine ? s.pitch : k.pitch, !mine || rig.showsSelf);
       if (!puff || k.state === 'none' || k.state === 'dropping') continue;
       // Thruster wash under a dash, and smoke from a hull that is nearly gone.
       if (k.dashTime > 0 && (!mine || rig.outside)) {
@@ -508,7 +531,7 @@ export class Game {
     }
     const own = m.mechs[me.id];
     if (me.inMech && own.health < frameOf(own).health * 0.25 && !paused) this.sfx.hullAlarm();
-    this.hud.setFrame(this.settings.value.mechFrame);
+    this.hud.setFrame(this.loadout.value.mech);
 
     const mouse = this.input.takeMouseDelta();
     this.viewmodel.update(dt, me, mouse.dx, mouse.dy, me.inMech ? m.mechs[me.id] : null);
@@ -575,6 +598,7 @@ export class Game {
     eye.x = s.pos.x;
     eye.y = s.pos.y + eyeOf(this.match, me);
     eye.z = s.pos.z;
+    viewOrigin(eye, s.yaw, this.input.shoulder, me.inMech, this.world, eye);
     let best = 0;
     for (const a of this.match.actors) {
       if (a.team === me.team || !a.alive || a.inMech) continue;

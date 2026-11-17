@@ -42,7 +42,8 @@ export interface MatchInfo {
   seats: SeatInfo[];
 }
 
-export type ClientHello = { t: 'hello'; v: number; name: string; token?: string };
+/** `side` is the team the player would rather join (0 Corps, 1 Z.E.R.O); the server honours it while the teams stay even. */
+export type ClientHello = { t: 'hello'; v: number; name: string; token?: string; side?: number };
 
 export type ServerMessage =
   /** `you` is the actor id this player controls; `token` gets the same seat back after a dropped connection. */
@@ -216,8 +217,11 @@ const Btn = {
   Use: 64,
   Call: 128,
   Redeploy: 256,
+  /** Aiming over a shoulder; `ShoulderLeft` picks which one. */
+  Shoulder: 512,
+  ShoulderLeft: 1024,
   /** Two bits from here: the mech frame a call brings down. */
-  FrameShift: 9,
+  FrameShift: 11,
 } as const;
 
 /** One command as the server receives it. */
@@ -244,6 +248,7 @@ export function quantizeInput(cmd: InputCmd): InputCmd {
   cmd.moveX = Math.round(Math.max(-1, Math.min(1, cmd.moveX)) * 127) / 127;
   cmd.moveZ = Math.round(Math.max(-1, Math.min(1, cmd.moveZ)) * 127) / 127;
   cmd.weapon = cmd.weapon >= 0 && cmd.weapon < 8 ? Math.floor(cmd.weapon) : -1;
+  cmd.shoulder = Math.sign(cmd.shoulder) || 0;
   cmd.frame = cmd.frame >= 0 && cmd.frame < FRAME_LIST.length ? Math.floor(cmd.frame) : 0;
   return cmd;
 }
@@ -264,6 +269,8 @@ export function encodeInput(w: Writer, seq: number, epoch: number, viewTick: num
       (cmd.use ? Btn.Use : 0) |
       (cmd.call ? Btn.Call : 0) |
       (cmd.redeploy ? Btn.Redeploy : 0) |
+      (cmd.shoulder !== 0 ? Btn.Shoulder : 0) |
+      (cmd.shoulder < 0 ? Btn.ShoulderLeft : 0) |
       (cmd.frame << Btn.FrameShift),
   );
   w.i8(Math.round(cmd.moveX * 127));
@@ -309,6 +316,7 @@ export function decodeInput(data: ArrayBuffer | Uint8Array): InputMsg | null {
   cmd.use = (b & Btn.Use) !== 0;
   cmd.call = (b & Btn.Call) !== 0;
   cmd.redeploy = (b & Btn.Redeploy) !== 0;
+  cmd.shoulder = b & Btn.Shoulder ? (b & Btn.ShoulderLeft ? -1 : 1) : 0;
   cmd.weapon = weapon;
   cmd.frame = frame;
   return { seq, epoch, viewTick, cmd };

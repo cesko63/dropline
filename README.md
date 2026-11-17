@@ -38,7 +38,9 @@ is there in person.
 
 Both sides play the same, and the lore is why: the machines were built to use
 human gear. They differ in how they look and sound, never in what they can do.
-Offline, you fight for the Corps; online, either team can be human players.
+You pick your side in the **Hangar**: offline you fight for it; online either
+team can be human players, and the server seats you on your side while the teams
+are even.
 
 **Look of the world ("brutalist cyberpunk").** Human ground is reinforced
 concrete, blue power conduits, rusted scaffolding and makeshift barricades.
@@ -82,7 +84,7 @@ bot's role, state and attack token over its head, `?meter=1` starts everyone
 with a full mech meter. Online: `?server=ws://host:port` picks the server (the
 default is port 8787 on the page's own host, or `VITE_SERVER_URL` at build
 time), `?name=Ada` sets the callsign, `?net=1` opens the connection details,
-`?online=1` joins without the start screen.
+`?online=1` joins without the start screen. `?hangar=1` opens the hangar.
 
 ## Controls
 
@@ -100,11 +102,12 @@ time), `?name=Ada` sets the callsign, `?net=1` opens the connection details,
 | R | Vent the arm and swap its coolant cell; reload the shoulder pod |
 | 1 2 3 4, Q, mouse wheel | Switch weapon: 1 to 3 change the arm's barrel, 4 raises the shoulder pod |
 | F | Call your mech to the spot you look at (meter full) |
-| T | Change the mech frame the next call brings: Halberd, Bastion, Lynx |
+| T | Change the mech frame the next call brings: Halberd, Bastion, Lynx (the same pick as in the Hangar) |
 | E | Climb into your mech when beside it; climb out again |
 | Space, in the mech | The frame's move: dash (Halberd), stomp (Bastion), leap (Lynx) |
 | Right mouse, in the mech | The frame's ability: rocket salvo (Halberd), hold up the shield (Bastion), cloak (Lynx) |
 | V | First / third person |
+| X | Swap shoulder (third person) |
 | K | Redeploy at a spawn point |
 | M | Sound on / off |
 | N | Connection details, when online |
@@ -133,15 +136,17 @@ needed: press a button on the start screen, then A on a choice.
 | RB | Raise the shoulder launcher |
 | LB | Climb into your mech, or out of it |
 | D-pad up | Call your mech |
-| D-pad right | Change the mech frame |
+| R3 | Change the mech frame |
 | D-pad down | Redeploy |
 | D-pad left | First / third person |
+| D-pad right | Swap shoulder (third person) |
 | VIEW | Connection details, when online |
 | MENU | Pause; on the pause screen, resume |
 
 On the menus the D-pad or the left stick moves between controls (held, it
 repeats), left and right change a slider, A presses, B goes back, LB and RB
-change the settings tab. The pad rumbles on shots, hits, blasts, a mech's
+change the settings or hangar tab; in the hangar the right stick turns the
+preview and the triggers zoom. The pad rumbles on shots, hits, blasts, a mech's
 footfalls and a death. With aim slowdown on, the view turns at 55% speed while
 the crosshair rests on a visible enemy pilot; it never pulls the aim.
 
@@ -168,6 +173,27 @@ Every field is checked on load. If the stored copy is broken, the last good copy
 comes back and the screen says so. If the browser refuses to store anything, the
 game plays on and says that settings last until the page closes. Menus make
 their own sounds while the match is paused.
+
+## Hangar
+
+The **Hangar** button on the start screen (it names your current side and
+frame) opens a preview of what you deploy with, built from the same models and
+animation as the match:
+
+- **Pilot:** your suit on a turntable, idle, aiming (with a burst now and then)
+  or running. Pick your side, **Corps** or **Z.E.R.O**; the suit, the
+  first-person arm and the mech paint follow it. Both sides play the same.
+- **Mech:** your frame drops onto the stand, kneels, starts up and stands; it
+  can also walk on the spot. Pick the **Halberd**, **Bastion** or **Lynx**
+  (see "Three frames" below); the frame you pick is the one **F** calls in the
+  match. Its numbers come straight from its file in `data/mechs`: a new frame
+  is a JSON file added to `FRAME_LIST` in `shared/src/sim/mech.ts`, and it shows
+  up in the list by itself.
+
+Drag (or the right stick) to turn, the wheel, a pinch or the triggers to zoom,
+double-click or **Reset view** to put it back; arrow keys turn it while it has
+focus. Picks are saved in the browser like the settings (`dropline.loadout`,
+versioned; anything unreadable falls back to Corps and the first frame).
 
 ## Weapons
 
@@ -216,7 +242,8 @@ open lasts 2.8 s (3.0 s before the change), and one who keeps moving lasts 5.0 s
 
 Every pilot has a meter that fills on its own in about two minutes, and faster
 with damage dealt and eliminations. When it is full, **F** calls a mech of the
-frame picked with **T** (shown on the meter, and remembered between visits).
+frame picked in the Hangar, or with **T** during play (shown on the meter, and
+remembered between visits).
 The rules below hold for all three frames; the frames differ in the next section.
 
 - **The drop.** It lands 2.4 seconds later where you were looking (within 45 m,

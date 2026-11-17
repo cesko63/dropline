@@ -86,6 +86,13 @@ describe('wire format', () => {
     expect(decodeInput(data)).toEqual({ seq: 4_000_000_000, epoch: 201, viewTick: 12345.678, cmd });
   });
 
+  it('carries which shoulder the player aims over', () => {
+    for (const shoulder of [0, 1, -1]) {
+      const cmd = quantizeInput({ ...emptyInput(), shoulder });
+      expect(decodeInput(encodeInput(new Writer(), 1, 0, 0, cmd))?.cmd.shoulder).toBe(shoulder);
+    }
+  });
+
   it('refuses commands no real client would send', () => {
     const w = new Writer();
     const ok = encodeInput(w, 1, 0, 0, emptyInput());
@@ -466,6 +473,16 @@ describe('seats', () => {
       expect(p.net.match.actors.map((x) => x.brain === null)).toEqual(sim.room.match.actors.map((x) => x.brain === null));
     }
     expect(sim.room.stats.humans).toBe(3);
+  });
+
+  it('seats a player on the side they picked while the teams are even, and on the short side otherwise', () => {
+    const sim = new Sim(world, map);
+    const a = sim.join({ name: 'Ada', side: 1 });
+    const b = sim.join({ name: 'Bob', side: 1 });
+    const c = sim.join({ name: 'Cy', side: 1 });
+    const d = sim.join({ name: 'Di', side: 7 });
+    sim.run(0.5);
+    expect([a.truth.team, b.truth.team, c.truth.team, d.truth.team]).toEqual([1, 0, 1, 0]);
   });
 
   it('turns away an old build and a ninth player with a reason', () => {

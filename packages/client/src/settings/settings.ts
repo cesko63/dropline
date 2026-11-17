@@ -1,4 +1,3 @@
-import { FRAMES } from '@dropline/shared';
 import { KEY_SLOTS, defaultKeys, defaultPad, mergeTable, type BindTable } from '../input/bindings';
 
 /**
@@ -8,7 +7,7 @@ import { KEY_SLOTS, defaultKeys, defaultPad, mergeTable, type BindTable } from '
  * stored one is broken. Storage that fails is reported, never fatal.
  */
 
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 1;
 export const SETTINGS_KEY = 'dropline.settings';
 export const BACKUP_KEY = 'dropline.settings.backup';
 
@@ -51,9 +50,6 @@ export interface Settings {
   // Bindings
   keys: BindTable;
   pad: BindTable;
-  // Play
-  /** Id of the mech frame the next call brings down. */
-  mechFrame: string;
 }
 
 export function defaultSettings(): Settings {
@@ -79,7 +75,6 @@ export function defaultSettings(): Settings {
     reduceMotion: false,
     keys: defaultKeys(),
     pad: defaultPad(),
-    mechFrame: 'halberd',
   };
 }
 
@@ -108,8 +103,6 @@ export const RANGES = {
  */
 export const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, unknown>> = {
   0: (s) => ({ ...s, version: 1 }),
-  // Version 2 lets the pilot pick a mech frame; until then everyone called the Halberd.
-  1: (s) => ({ ...s, version: 2, mechFrame: 'halberd' }),
 };
 
 const num = (v: unknown, r: { min: number; max: number }, d: number): number =>
@@ -150,7 +143,6 @@ export function parseSettings(raw: string): Settings {
     reduceMotion: bool(s.reduceMotion, d.reduceMotion),
     keys: mergeTable(s.keys, d.keys, KEY_SLOTS),
     pad: mergeTable(s.pad, d.pad, 1),
-    mechFrame: typeof s.mechFrame === 'string' && s.mechFrame in FRAMES ? s.mechFrame : d.mechFrame,
   };
 }
 

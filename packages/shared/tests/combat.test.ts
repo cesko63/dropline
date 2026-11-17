@@ -10,8 +10,10 @@ import {
   WEAPONS,
   canSee,
   createMatch,
+  firstHumanId,
   damageFalloff,
   emptyInput,
+  eyeOf,
   PATH_STRIDE,
   findPath,
   isWalkable,
@@ -19,6 +21,7 @@ import {
   spreadDeg,
   stepMatch,
   v3,
+  VIEW,
   walkableLine,
   weaponOf,
   type Actor,
@@ -171,12 +174,42 @@ describe('weapons', () => {
     expect(spreadDeg(m, me)).toBeGreaterThan(hip + 0.4);
   });
 
+  it('fires from over the shoulder the third-person view looks past', () => {
+    const origin = (shoulder: number) => {
+      const { m, me } = duel();
+      const shot = run(m, 0.05, () => ({ fire: true, yaw: Math.PI, shoulder })).find((e) => e.type === 'shot');
+      if (!shot || shot.type !== 'shot') throw new Error('no shot');
+      return { x: shot.origin.x - me.p.pos.x, y: shot.origin.y - me.p.pos.y - eyeOf(m, me), z: shot.origin.z - me.p.pos.z };
+    };
+    // Facing +Z, the pilot's right is -X.
+    expect(origin(0)).toEqual({ x: 0, y: 0, z: 0 });
+    const right = origin(1);
+    expect(right.x).toBeCloseTo(-VIEW.pilot.side, 5);
+    expect(right.y).toBeCloseTo(VIEW.pilot.lift, 5);
+    expect(right.z).toBeCloseTo(0, 5);
+    expect(origin(-1).x).toBeCloseTo(VIEW.pilot.side, 5);
+  });
+
   it('kicks the view up when firing and lets it settle back', () => {
     const { m, me } = duel();
     run(m, 0.5, () => ({ fire: true, yaw: Math.PI }));
     expect(me.punchPitch).toBeGreaterThan(0.01);
     run(m, 2, () => ({ yaw: Math.PI }));
     expect(me.punchPitch).toBeLessThan(0.001);
+  });
+});
+
+describe('sides', () => {
+  it('puts the player on the side picked in the hangar, with bots filling both teams', () => {
+    for (const humanTeam of [0, 1]) {
+      const opts = { seed: 5, humanTeam };
+      const m = createMatch(map, world, opts);
+      const humans = m.actors.filter((a) => !a.brain);
+      expect(humans.map((a) => a.id)).toEqual([firstHumanId(opts)]);
+      expect(humans[0].team).toBe(humanTeam);
+      expect(humans[0].name).toBe('You');
+      expect(m.actors.filter((a) => a.team === 0).length).toBe(m.actors.filter((a) => a.team === 1).length);
+    }
   });
 });
 

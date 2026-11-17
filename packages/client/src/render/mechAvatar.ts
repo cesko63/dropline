@@ -130,8 +130,11 @@ export class MechAvatar {
   /** Torso origin above the feet when standing: what the parts placed in body coordinates are measured from. */
   private readonly base: number;
 
-  /** `ally` is from the local player's point of view: it picks the landing zone's colour. */
-  constructor(team: number, ally: boolean, frame: MechFrame) {
+  /**
+   * `ally` is from the local player's point of view: it picks the landing zone's
+   * colour and, unless `marker` says otherwise, puts the ally chevron overhead.
+   */
+  constructor(team: number, ally: boolean, frame: MechFrame, marker = ally) {
     this.frame = frame;
     this.ally = ally;
     const S = (this.shape = SHAPES[frame.id] ?? SHAPES.halberd);
@@ -298,7 +301,7 @@ export class MechAvatar {
     }
 
     this.rig.add(this.hips);
-    if (ally) {
+    if (marker) {
       const chevron = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.55, 4), new THREE.MeshBasicMaterial({ color: look.visor }));
       chevron.rotation.x = Math.PI;
       chevron.position.y = frame.body.height + 0.9;

@@ -30,6 +30,7 @@ export class Menu {
   onResume: () => void = () => {};
   onLeave: () => void = () => {};
   onSettings: () => void = () => {};
+  onHangar: () => void = () => {};
 
   private readonly overlay = el('overlay');
   private readonly choose = el('menu');
@@ -40,6 +41,8 @@ export class Menu {
   private readonly status = el('menu-status');
   private readonly controls = el('controls');
   private readonly settingsBox = el('settings');
+  private readonly hangarBox = el('hangar');
+  private readonly hangarSummary = el('hangar-summary');
   private readonly start = el<HTMLButtonElement>('start');
   /** Which of the two first screens was up before the settings opened. */
   private before: 'menu' | 'resume' = 'menu';
@@ -63,6 +66,7 @@ export class Menu {
     el('leave').addEventListener('click', () => this.onLeave());
     el('settings-menu').addEventListener('click', () => this.onSettings());
     el('settings-resume').addEventListener('click', () => this.onSettings());
+    el('hangar-menu').addEventListener('click', () => this.onHangar());
   }
 
   /** True while a match can be resumed from this screen. */
@@ -72,6 +76,26 @@ export class Menu {
 
   /** The settings take the place of the choices and the controls list. */
   showSettings(): void {
+    this.showSub();
+  }
+
+  /** The hangar too; it is only reached from the first screen, before a match. */
+  showHangar(): void {
+    this.showSub();
+  }
+
+  /** Back from the hangar to the choices. */
+  hideHangar(): void {
+    this.hangarBox.hidden = true;
+    this.hideSub('hangar-menu');
+  }
+
+  /** What the player will deploy with, on the hangar button. */
+  setLoadout(text: string): void {
+    this.hangarSummary.textContent = text;
+  }
+
+  private showSub(): void {
     this.before = this.resume.hidden ? 'menu' : 'resume';
     this.choose.hidden = true;
     this.resume.hidden = true;
@@ -82,12 +106,15 @@ export class Menu {
   /** Back from the settings to where the player was. */
   hideSettings(): void {
     this.settingsBox.hidden = true;
+    this.hideSub(this.before === 'menu' ? 'settings-menu' : 'settings-resume');
+  }
+
+  private hideSub(focus: string): void {
     this.controls.hidden = false;
     this.panel().classList.remove('wide');
     if (this.before === 'menu') this.choose.hidden = false;
     else this.resume.hidden = false;
-    const back = el(this.before === 'menu' ? 'settings-menu' : 'settings-resume');
-    back.focus();
+    el(focus).focus();
   }
 
   private panel(): HTMLElement {
@@ -118,6 +145,7 @@ export class Menu {
           [k('use'), 'Climb into your mech, or out of it'],
           ['In the mech', `${k('jump')} dashes, ${k('ads')} fires the rocket salvo`],
           [k('toggleView'), 'First / third person'],
+          [k('swapShoulder'), 'Third person: look over the other shoulder'],
           [k('respawn'), 'Redeploy at a spawn point'],
           ['Menu', 'Pause and settings. Offline this pauses the match'],
         ]
@@ -137,6 +165,7 @@ export class Menu {
           [k('use'), 'Climb into your mech, or out of it'],
           ['In the mech', `${k('jump')} dashes, ${k('ads')} fires the rocket salvo`],
           [k('toggleView'), 'First / third person'],
+          [k('swapShoulder'), 'Third person: look over the other shoulder'],
           [k('respawn'), 'Redeploy at a spawn point'],
           [k('mute'), 'Sound on / off'],
           [k('netDebug'), 'Connection details, when online'],
@@ -194,7 +223,7 @@ export class Menu {
   }
 
   private get settingsOpen(): boolean {
-    return !this.settingsBox.hidden;
+    return !this.settingsBox.hidden || !this.hangarBox.hidden;
   }
 
   /** Take the screen away without the mouse being captured (automated checks). */
@@ -205,6 +234,7 @@ export class Menu {
   private busy(on: boolean): void {
     this.online.disabled = on;
     this.offline.disabled = on;
+    el<HTMLButtonElement>('hangar-menu').disabled = on;
     this.name.disabled = on;
   }
 

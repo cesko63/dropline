@@ -15,6 +15,7 @@ import { createRng, rand, randSigned, type Rng } from './rng';
 import { damageActor, damageMech, damageShield, killActor } from './rules';
 import { TUNING } from './tuning';
 import { WEAPONS, damageFalloff, type WeaponDef } from './weapons';
+import { viewOrigin } from './view';
 import type { CollisionWorld } from './world';
 
 /**
@@ -29,8 +30,10 @@ const IDLE = emptyInput();
 
 export interface MatchOptions {
   seed: number;
-  /** Human players; they take the first actor ids on team 0. Default 1. */
+  /** Human players; they take the first actor ids on `humanTeam`. Default 1. */
   humans?: number;
+  /** The side the humans fight for: 0 the Corps, 1 Z.E.R.O. Default 0. */
+  humanTeam?: number;
   teamSize?: number;
   scoreLimit?: number;
   /** Mech meter everyone starts with, 0..1. Default 0. */
@@ -55,9 +58,13 @@ export const shotRng = (m: MatchState, a: Actor): Rng => a.rng ?? m.rng;
 
 export const weaponOf = (a: Actor): WeaponDef => WEAPONS[a.loadout[a.weapon]];
 
+/** The actor id of the first human in a match made with these options. */
+export const firstHumanId = (opts: MatchOptions): number => (opts.humanTeam === 1 ? (opts.teamSize ?? COMBAT.teamSize) : 0);
+
 export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOptions): MatchState {
   const teamSize = opts.teamSize ?? COMBAT.teamSize;
   const humans = opts.humans ?? 1;
+  const humanTeam = opts.humanTeam === 1 ? 1 : 0;
   const m: MatchState = {
     seed: opts.seed,
     tick: 0,
@@ -85,7 +92,7 @@ export function createMatch(map: MapData, world: CollisionWorld, opts: MatchOpti
     let botName = 0;
     for (let slot = 0; slot < teamSize; slot++) {
       const id = m.actors.length;
-      const human = team === 0 && slot < humans;
+      const human = team === humanTeam && slot < humans;
       const roles = COMBAT.teams[team].bots;
       const role = human ? '' : roles[botSlot++ % roles.length];
       // Bots carry their role's weapon and a launcher for when a mech shows up.
@@ -210,7 +217,7 @@ const right = v3();
 const up = v3();
 const dir = v3();
 
-function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWorld): void {
+function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWorld, shoulder: number): void {
   const p = a.p;
   const yaw = p.yaw + a.punchYaw;
   const pitch = p.pitch + a.punchPitch;
@@ -227,6 +234,8 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
   origin.x = p.pos.x;
   origin.y = p.pos.y + eyeOf(m, a);
   origin.z = p.pos.z;
+  // Seen from over a shoulder, the shot leaves along the camera's line of sight.
+  viewOrigin(origin, p.yaw, shoulder, a.inMech, world, origin);
 
   const cone = Math.tan(spreadDeg(m, a) * DEG);
   const rng = shotRng(m, a);
@@ -365,7 +374,7 @@ export function stepWeapon(m: MatchState, a: Actor, cmd: InputCmd, world: Collis
       if (pressed) m.events.push({ type: 'dry', actor: a.id });
       startReload(m, a, def);
     } else if (a.cooldown <= 0) {
-      fireWeapon(m, a, def, world);
+      fireWeapon(m, a, def, world, cmd.shoulder);
       // Adding the interval (instead of setting it) carries the leftover time, so
       // the rate of fire is exact even when it does not divide into ticks.
       a.cooldown += 60 / def.rpm;
@@ -390,7 +399,7 @@ export function stepMechWeapons(m: MatchState, a: Actor, k: Mech, cmd: InputCmd,
   const before = a.ammo[0];
   stepWeapon(m, a, { ...cmd, ads: false, weapon: -1, fire: cmd.fire && !k.shieldUp }, world, dt);
   // Destroyed by its own blast? Then there is nothing left to work.
-  if (a.inMech) stepAbility(m, a, k, cmd.ads, a.ammo[0] < before, world, dt);
+  if (a.inMech) stepAbility(m, a, k, cmd.ads, a.ammo[0] < before, cmd.shoulder, world, dt);
 }
 
 /**

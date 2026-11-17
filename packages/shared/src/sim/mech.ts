@@ -130,10 +130,17 @@ export interface MechFrame {
   botRole: string;
 }
 
-/** Every frame, in the order the frame choice cycles through. A mech stores its index. */
+/**
+ * Every frame, in the order the hangar lists them and the frame key cycles
+ * through. A mech stores its index. A new frame is a JSON file in /data/mechs
+ * added here.
+ */
 export const FRAME_LIST = [halberd, bastion, lynx] as unknown as MechFrame[];
 
 export const FRAMES: Record<string, MechFrame> = Object.fromEntries(FRAME_LIST.map((f) => [f.id, f]));
+
+/** Every frame's id, in the same order: what the hangar lists and a call's `frame` indexes. */
+export const FRAME_IDS: string[] = FRAME_LIST.map((f) => f.id);
 
 /** Index of a frame by id, or 0 (the Halberd) for an unknown one. */
 export const frameIndex = (id: string): number => Math.max(0, FRAME_LIST.findIndex((f) => f.id === id));

@@ -10,6 +10,7 @@ import type { Rng } from './rng';
 import { addMeter, damageActor, damageMech, destroyMech, enterMech, leaveMech } from './rules';
 import { TUNING } from './tuning';
 import { PROJECTILES } from './weapons';
+import { viewOrigin } from './view';
 import type { CollisionWorld } from './world';
 
 /**
@@ -70,6 +71,7 @@ export function findDropPoint(m: MatchState, world: CollisionWorld, a: Actor, F:
     eye.x = p.pos.x;
     eye.y = p.pos.y + eyeOf(m, a);
     eye.z = p.pos.z;
+    viewOrigin(eye, p.yaw, m.cmds[a.id]?.shoulder ?? 0, a.inMech, world, eye);
     const hit = world.castRay(eye, dir, R.drop.maxRange * 1.5);
     if (hit) {
       let x = hit.point.x;
@@ -311,13 +313,14 @@ export function stepMechs(m: MatchState, world: CollisionWorld, dt: number): voi
 
 /**
  * The aim button of a piloted mech, after its weapon has had its turn: the
- * frame's ability. `fired` says the cannon fired this tick (which ends a cloak).
+ * frame's ability. `fired` says the cannon fired this tick (which ends a cloak);
+ * `shoulder` is the view the pilot aims through (see `viewOrigin`).
  */
-export function stepAbility(m: MatchState, a: Actor, k: Mech, ads: boolean, fired: boolean, world: CollisionWorld, dt: number): void {
+export function stepAbility(m: MatchState, a: Actor, k: Mech, ads: boolean, fired: boolean, shoulder: number, world: CollisionWorld, dt: number): void {
   const A = frameOf(k).ability;
   k.abilityCooldown = Math.max(0, k.abilityCooldown - dt);
   if (A.kind === 'salvo') {
-    stepSalvo(m, a, k, A, ads, world, dt);
+    stepSalvo(m, a, k, A, ads, shoulder, world, dt);
   } else if (A.kind === 'shield') {
     // Held up while the button is, as long as there is shield left; it rests to refill.
     const up = ads && k.abilityCooldown <= 0 && k.shield > 0;
@@ -354,7 +357,7 @@ export function stepAbility(m: MatchState, a: Actor, k: Mech, ads: boolean, fire
  * The rocket salvo: the aim button starts it when it is ready, then the rockets
  * leave one after another toward the point the pilot looks at.
  */
-function stepSalvo(m: MatchState, a: Actor, k: Mech, S: SalvoAbility, fire: boolean, world: CollisionWorld, dt: number): void {
+function stepSalvo(m: MatchState, a: Actor, k: Mech, S: SalvoAbility, fire: boolean, shoulder: number, world: CollisionWorld, dt: number): void {
   if (fire && k.abilityCooldown <= 0 && k.salvoLeft === 0) {
     k.salvoLeft = S.count;
     k.salvoNext = 0;
@@ -376,6 +379,8 @@ function stepSalvo(m: MatchState, a: Actor, k: Mech, S: SalvoAbility, fire: bool
     eye.x = k.pos.x;
     eye.y = k.pos.y + frameOf(k).body.eye;
     eye.z = k.pos.z;
+    // From outside, the aim point is what the crosshair over the shoulder rests on.
+    viewOrigin(eye, k.yaw, shoulder, true, world, eye);
     const rng: Rng = a.rng ?? m.rng;
     const hit = world.castRay(eye, dir, PROJECTILES[S.projectile].speed * PROJECTILES[S.projectile].life);
     const reach = Math.max(8, hit ? hit.dist : 90);

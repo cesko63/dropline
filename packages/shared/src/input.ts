@@ -24,6 +24,12 @@ export interface InputCmd {
   call: boolean;
   /** Give up the current position and start again at a spawn point. Acts once per press. */
   redeploy: boolean;
+  /**
+   * Which view the player aims through: 0 first person, 1 over the right
+   * shoulder, -1 over the left. Shots leave from that view's line of sight
+   * (see `viewOrigin`), so the crosshair is true in either.
+   */
+  shoulder: number;
   /** The mech frame a call brings down, as an index into `FRAME_LIST`. */
   frame: number;
 }
@@ -49,5 +55,6 @@ export const emptyInput = (): InputCmd => ({
   use: false,
   call: false,
   redeploy: false,
+  shoulder: 0,
   frame: 0,
 });

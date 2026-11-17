@@ -4,6 +4,7 @@ export * from './map/types';
 export * from './map/maps';
 export * from './sim/tuning';
 export * from './sim/world';
+export * from './sim/view';
 export * from './sim/movement';
 export * from './sim/rng';
 export * from './sim/weapons';

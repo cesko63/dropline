@@ -28,6 +28,7 @@ export type Action =
   | 'call'
   | 'nextFrame'
   | 'toggleView'
+  | 'swapShoulder'
   | 'respawn'
   | 'mute'
   | 'netDebug'
@@ -64,9 +65,10 @@ export const ACTIONS: Record<Action, ActionInfo> = {
   nextWeapon: { label: 'Next weapon', group: 'Fight', keys: ['KeyQ'], pad: ['Pad3'] },
   use: { label: 'Embark · climb out', group: 'Mech and match', keys: ['KeyE'], pad: ['Pad4'] },
   call: { label: 'Call mech', group: 'Mech and match', keys: ['KeyF'], pad: ['Pad12'] },
-  nextFrame: { label: 'Change mech frame', group: 'Mech and match', keys: ['KeyT'], pad: ['Pad15'] },
+  nextFrame: { label: 'Change mech frame', group: 'Mech and match', keys: ['KeyT'], pad: ['Pad11'] },
   respawn: { label: 'Redeploy', group: 'Mech and match', keys: ['KeyK'], pad: ['Pad13'] },
   toggleView: { label: 'First / third person', group: 'Other', keys: ['KeyV'], pad: ['Pad14'] },
+  swapShoulder: { label: 'Swap shoulder (third person)', group: 'Other', keys: ['KeyX'], pad: ['Pad15'] },
   mute: { label: 'Sound on / off', group: 'Other', keys: ['KeyM'], pad: [] },
   netDebug: { label: 'Connection details', group: 'Other', keys: ['KeyN'], pad: ['Pad8'] },
   confirm: { label: 'Play again', group: 'Other', keys: ['Enter'], pad: ['Pad0'], fixed: true },

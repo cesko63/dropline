@@ -1,8 +1,10 @@
-import { CollisionWorld, NET, mapById } from '@dropline/shared';
+import { CollisionWorld, FRAMES, NET, mapById } from '@dropline/shared';
 import { Game } from './game';
 import { readLayout } from './input/bindings';
 import { Connection, type CloseReason } from './net/connection';
+import { LoadoutStore } from './settings/loadout';
 import { SettingsStore, browserStorage } from './settings/settings';
+import { Hangar, SIDES } from './ui/hangar';
 import { Menu } from './ui/menu';
 import { PadNav } from './ui/padNav';
 import { SettingsScreen } from './ui/settingsScreen';
@@ -30,22 +32,38 @@ async function boot(): Promise<void> {
   // `?meter=1` starts everyone with a full mech meter (offline).
   // `?server=ws://host:port` picks the server; `?online=1` joins it straight
   // away without the start screen (automated checks); `?name=` sets the
-  // callsign; `?net=1` opens the connection details.
+  // callsign; `?net=1` opens the connection details; `?hangar=1` opens the hangar.
   const params = new URLSearchParams(location.search);
   const map = mapById(params.get('map'));
   const world = await CollisionWorld.create(map);
   const seed = Number(params.get('seed')) || (Date.now() & 0x7fffffff);
   const settings = new SettingsStore(browserStorage());
+  const loadout = new LoadoutStore(browserStorage());
   const game = new Game(document.getElementById('view') as HTMLCanvasElement, world, map, {
     seed,
     qa: params.has('qa'),
     startMeter: Math.max(0, Math.min(1, Number(params.get('meter')) || 0)),
     netDebug: params.has('net'),
     settings,
+    loadout,
   });
+  // Offline you play the side picked in the hangar; the match behind the start screen follows it.
+  game.side = loadout.value.side;
+  if (game.side !== 0) game.newMatch();
   const menu = new Menu(params.get('name') ?? '');
   const screen = new SettingsScreen(document.getElementById('settings')!, settings, game.sfx);
-  const nav = new PadNav(document.querySelector('#overlay .panel') as HTMLElement, screen, game.sfx);
+  const hangar = new Hangar(document.getElementById('hangar')!, loadout, game.sfx);
+  const nav = new PadNav(document.querySelector('#overlay .panel') as HTMLElement, screen, game.sfx, hangar);
+  const summary = (): void => menu.setLoadout(`${SIDES[loadout.value.side].short} · ${FRAMES[loadout.value.mech].short}`);
+  summary();
+  loadout.listen((l) => {
+    summary();
+    // Only reachable before a match, so the waiting offline match can be swapped for one on the new side.
+    if (l.side !== game.side && !game.online) {
+      game.side = l.side;
+      game.newMatch();
+    }
+  });
 
   // The controls list and the resume button name the keys of the device in use.
   const controls = (): void => menu.renderControls((a) => game.keyOf(a), game.input.device, settings.value);
@@ -60,7 +78,18 @@ async function boot(): Promise<void> {
     screen.open();
   };
   screen.onClose = () => menu.hideSettings();
-  game.onMenuFrame = (dt) => nav.update(game.input.pad, dt);
+  menu.onHangar = () => {
+    game.sfx.unlock();
+    game.sfx.uiSelect();
+    menu.showHangar();
+    hangar.open();
+  };
+  hangar.onClose = () => menu.hideHangar();
+  game.onMenuFrame = (dt) => {
+    nav.update(game.input.pad, dt);
+    hangar.setDevice(game.input.device);
+    hangar.update(game.input.pad, dt);
+  };
   // Paused on a pad: put the focus on the screen so the D-pad has somewhere to start.
   game.onPlayingChange = (playing) => {
     if (!playing && game.input.device === 'pad') nav.focusFirst();
@@ -75,7 +104,7 @@ async function boot(): Promise<void> {
   const join = (name: string): void => {
     if (conn) return;
     menu.showConnecting(url.replace(/^wss?:\/\//, ''));
-    const c = new Connection(url, name, world, map);
+    const c = new Connection(url, name, world, map, loadout.value.side);
     conn = c;
     // The server plays another map: load it and join again.
     c.onOtherMap = (id) => {
@@ -122,6 +151,7 @@ async function boot(): Promise<void> {
   };
   game.start();
   if (auto) join(menu.callsign());
+  else if (params.has('hangar')) menu.onHangar();
   // Handle for the browser console and automated checks during development.
   if (import.meta.env.DEV) (window as unknown as { dropline: Game }).dropline = game;
 }
