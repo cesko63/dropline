@@ -178,11 +178,12 @@ const ONE = new THREE.Vector3(1, 1, 1);
 const tmpColor = new THREE.Color();
 
 /** Mirrors a side-specific bone name: `thighL` <-> `thighR`. */
-const mirrorBone = (b: BoneName): BoneName =>
-  (b.endsWith('L') ? b.slice(0, -1) + 'R' : b.endsWith('R') ? b.slice(0, -1) + 'L' : b) as BoneName;
+const mirrorBone = <B extends string>(b: B): B =>
+  (b.endsWith('L') ? b.slice(0, -1) + 'R' : b.endsWith('R') ? b.slice(0, -1) + 'L' : b) as B;
 
-export class KitBuilder {
-  private parts = new Map<BoneName, { body: THREE.BufferGeometry[]; glow: THREE.BufferGeometry[] }>();
+/** Builds parts onto bones. `B` is the skeleton's bone names: the pilot's by default, or a mech's. */
+export class KitBuilder<B extends string = BoneName> {
+  private parts = new Map<B, { body: THREE.BufferGeometry[]; glow: THREE.BufferGeometry[] }>();
   private seed = 1;
 
   constructor(
@@ -191,7 +192,7 @@ export class KitBuilder {
   ) {}
 
   /** Add a part to a bone. `color` is a hex string; glowing parts are drawn unlit. */
-  add(bone: BoneName, geo: THREE.BufferGeometry, color: string, at: V3, opts: PartOpts & { glow?: boolean } = {}): this {
+  add(bone: B, geo: THREE.BufferGeometry, color: string, at: V3, opts: PartOpts & { glow?: boolean } = {}): this {
     const g = geo.index ? geo.toNonIndexed() : geo;
     if (g !== geo) geo.dispose();
     g.deleteAttribute('uv');
@@ -220,7 +221,7 @@ export class KitBuilder {
    * Add a part to a left bone and its mirror image to the right one. Positions
    * and rotations are given for the left side.
    */
-  pair(bone: BoneName, geo: THREE.BufferGeometry, color: string, at: V3, opts: PartOpts & { glow?: boolean } = {}): this {
+  pair(bone: B, geo: THREE.BufferGeometry, color: string, at: V3, opts: PartOpts & { glow?: boolean } = {}): this {
     const r = opts.rot ?? [0, 0, 0];
     const mirrored = geo.clone();
     // Mirroring flips the winding; scale -1 on X and swap the faces back.
@@ -232,7 +233,7 @@ export class KitBuilder {
   }
 
   /** Same as `pair` for a part on a centre bone: placed at +x and -x. */
-  sym(bone: BoneName, geo: THREE.BufferGeometry, color: string, at: V3, opts: PartOpts & { glow?: boolean } = {}): this {
+  sym(bone: B, geo: THREE.BufferGeometry, color: string, at: V3, opts: PartOpts & { glow?: boolean } = {}): this {
     const r = opts.rot ?? [0, 0, 0];
     const mirrored = geo.clone();
     mirrored.scale(-1, 1, 1);
@@ -243,7 +244,12 @@ export class KitBuilder {
   }
 
   build(rest: Omit<Kit, 'bones'>): Kit {
-    const bones: Kit['bones'] = {};
+    return { bones: this.merged() as Kit['bones'], ...rest };
+  }
+
+  /** Every bone's parts merged into one body and one glow geometry. Empties the builder. */
+  merged(): Partial<Record<B, BoneMeshes>> {
+    const bones: Partial<Record<B, BoneMeshes>> = {};
     for (const [bone, list] of this.parts) {
       const merge = (geos: THREE.BufferGeometry[]): THREE.BufferGeometry | undefined => {
         if (geos.length === 0) return undefined;
@@ -256,7 +262,7 @@ export class KitBuilder {
       bones[bone] = { body: merge(list.body), glow: merge(list.glow) };
     }
     this.parts.clear();
-    return { bones, ...rest };
+    return bones;
   }
 
   private rand(): number {

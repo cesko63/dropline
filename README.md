@@ -279,8 +279,13 @@ distance when a mech shows up.
 | Ability (right mouse) | Four rockets at the point you look at, every 9 s | Shield wall while held: stops fire from the front, for the mech and anyone behind it; walk speed only, no firing through it | Cloak for 5 s: nearly invisible, and bots cannot see it beyond 20 m; firing ends it, then 16 s to recharge |
 
 - **Each looks different from far off.** The Halberd has its rocket pod on the
-  shoulder; the Bastion is low and broad with a shield slab on its left arm; the
-  Lynx is tall and thin, with a fin on top and jump-jet packs on its back.
+  shoulder and its cockpit in its chest; the Bastion is low and broad, with a
+  shield slab on its left arm and two exhaust stacks on its back; the Lynx
+  stands on long bird-jointed legs, with a fin on top, its cockpit on the nose
+  and jump-jet packs on its back. On every frame the vent glows the same hot
+  orange, so the weak point always reads. Corps mechs are painted grey-blue with
+  yellow hazard stripes and a glass cockpit with the pilot visible inside;
+  Z.E.R.O mechs are matte black, the cockpit armoured shut behind crimson optics.
 - **The shield** holds 1400 and drains slowly while up; it refills once it has
   been down for 2 s. Fire that breaks it puts it out of use for 6 s. A blast in
   front of it is the shield's to take, and it flickers when nearly spent. From
@@ -574,13 +579,20 @@ packages/
 - **Models:** pilots wear real suits built in code (`client/src/render/pilot`):
   the Corps suit and the Z.E.R.O frame share one skeleton and one outline, so
   both match the hitbox, and a pose-driven animator covers every movement state.
-  The first-person arm wears the player's team finish over the same weapon: a
-  drum of three barrels that turns to the weapon in use, an ammo printer behind
-  a side window, and cooling fins over the heat sinks that open to vent.
+  The arm gun is one model in first and third person: a single barrel on the
+  printing and cooling body that rebuilds itself into a short scattergun, a
+  carbine or a telescoping longshot.
   Open `/suits.html` on the dev server to see both suits side by side in every
   state with the hitbox drawn over them, and the arm close up or as in play
-  (the view menu). Mechs and the cockpit are still built from
-  boxes, and smoke, steam and blasts are plain shapes.
+  (the view menu).
+  The three mech frames are built the same way (`client/src/render/mech`), on
+  one mech skeleton, in each side's finish. They kneel with the hatch open while
+  they wait, flicker their lights on as they start up, settle onto each
+  footfall by their weight, throw the cannon arm back by its recoil (lightly for
+  the autocannon, hard for the Lance), rock when hit and fling their arms out on
+  the stomp. Open `/mechs.html` to see all three in every state, in either
+  finish, with the hitbox and vent drawn over them. The first-person cockpit is
+  still built from boxes, and smoke, steam and blasts are plain shapes.
 - **Mech frames are tuned on bot duels.** The numbers above come from bots on
   the test map; how the shield, cloak and leap play between people is untested.
 - **Bots do not wallrun.** They climb, drop and leap, but never run along a
@@ -614,6 +626,10 @@ packages/
    5. Bots off the ground floor (done)
    6. Two more mech frames (done)
    7. Models and animation
+      1. Pilot suits and the arm gun (done)
+      2. The three mech frames (done)
+      3. The cockpit from inside
+      4. Effects: smoke, steam, sparks, blasts and wrecks
    8. Sound and music
    9. Closing pass: teaching, performance, error cards, balance
 6. Deployment
