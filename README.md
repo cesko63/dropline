@@ -100,9 +100,10 @@ time), `?name=Ada` sets the callsign, `?net=1` opens the connection details,
 | R | Vent the arm and swap its coolant cell; reload the shoulder pod |
 | 1 2 3 4, Q, mouse wheel | Switch weapon: 1 to 3 change the arm's barrel, 4 raises the shoulder pod |
 | F | Call your mech to the spot you look at (meter full) |
+| T | Change the mech frame the next call brings: Halberd, Bastion, Lynx |
 | E | Climb into your mech when beside it; climb out again |
-| Space, in the mech | Dash (two charges) |
-| Right mouse, in the mech | Fire the rocket salvo |
+| Space, in the mech | The frame's move: dash (Halberd), stomp (Bastion), leap (Lynx) |
+| Right mouse, in the mech | The frame's ability: rocket salvo (Halberd), hold up the shield (Bastion), cloak (Lynx) |
 | V | First / third person |
 | K | Redeploy at a spawn point |
 | M | Sound on / off |
@@ -124,14 +125,15 @@ needed: press a button on the start screen, then A on a choice.
 | Left stick | Move (analog: a light push walks slowly) |
 | Right stick | Look |
 | L3 | Sprint, until you stop running forward |
-| A | Jump, double jump, hold for thrust; dash in the mech |
+| A | Jump, double jump, hold for thrust; the frame's move in the mech |
 | B | Crouch, slide |
-| RT / LT | Fire / aim (in the mech: cannon / rocket salvo) |
+| RT / LT | Fire / aim (in the mech: cannon / the frame's ability) |
 | X | Vent and swap the coolant cell, reload the pod |
 | Y | Next arm barrel |
 | RB | Raise the shoulder launcher |
 | LB | Climb into your mech, or out of it |
 | D-pad up | Call your mech |
+| D-pad right | Change the mech frame |
 | D-pad down | Redeploy |
 | D-pad left | First / third person |
 | VIEW | Connection details, when online |
@@ -213,7 +215,9 @@ open lasts 2.8 s (3.0 s before the change), and one who keeps moving lasts 5.0 s
 ## The mech
 
 Every pilot has a meter that fills on its own in about two minutes, and faster
-with damage dealt and eliminations. When it is full, **F** calls a Halberd.
+with damage dealt and eliminations. When it is full, **F** calls a mech of the
+frame picked with **T** (shown on the meter, and remembered between visits).
+The rules below hold for all three frames; the frames differ in the next section.
 
 - **The drop.** It lands 2.4 seconds later where you were looking (within 45 m,
   under open sky), or beside you if that spot will not do. A ring on the ground
@@ -222,22 +226,59 @@ with damage dealt and eliminations. When it is full, **F** calls a Halberd.
 - **Getting in.** It kneels and waits. Walk up, press **E**, and one second later
   it is yours. **E** again and you leave through the top hatch with your own
   weapons; the mech waits where you left it.
-- **Driving.** 2600 hull that does not repair itself. It is slow, cannot jump or
-  crouch, and does not fit under low cover. **Space** is a dash in the direction
-  you are moving: two charges, each back after 4.5 seconds, and it rams whatever
-  it runs into.
-- **Weapons.** Left mouse is the HX-40 autocannon. Right mouse fires four rockets
-  from the shoulder pod at the point you look at, then needs 9 seconds.
+- **Driving.** A hull that does not repair itself. It is slow, cannot crouch,
+  and does not fit under low cover. **Space** is the frame's move, **right
+  mouse** its ability, left mouse its cannon.
 - **Bringing one down.** Small arms barely scratch the hull. The Pike takes about
-  eight rockets from the front, or five into the glowing vent on its back, which
-  takes 1.6 times the damage from everything. A mech that dashes and strafes makes
-  rockets miss.
+  eight rockets from the front of a Halberd, or five into the glowing vent on its
+  back, which takes 1.6 times the damage from everything. A mech that keeps
+  moving makes rockets miss.
 - **Losing it.** The pilot is thrown clear, alive and high in the air, the enemy
   team scores 3, and the meter starts again from empty.
 
 Bots do all of this too: they call their mech when the meter fills, walk to it,
 fight from the cockpit, and on foot they switch to the launcher and keep their
 distance when a mech shows up.
+
+### Three frames
+
+| | Halberd | Bastion | Lynx |
+|---|---|---|---|
+| Role | All-rounder | Heavy: holds ground, covers allies | Light: hits from range, hard to pin down |
+| Hull | 2600 | 2680 | 2200 |
+| Speed (walk / run) | 5.2 / 7.4 m/s | 4.3 / 6.1 m/s | 6.6 / 9.4 m/s |
+| Cannon (left mouse) | HX-40 autocannon: fast, accurate | BK-8 Breaker flak: shells that burst beside pilots and mechs, forgiving aim | LR-2 Lance rail: one heavy slug a second, goes straight through shields |
+| Move (Space) | Dash: two charges, rams what it hits | Stomp: hurts and throws off every enemy pilot within 8 m, one charge every 7 s | Leap: jump jets, about 3 m up and 11 m out, two charges |
+| Ability (right mouse) | Four rockets at the point you look at, every 9 s | Shield wall while held: stops fire from the front, for the mech and anyone behind it; walk speed only, no firing through it | Cloak for 5 s: nearly invisible, and bots cannot see it beyond 20 m; firing ends it, then 16 s to recharge |
+
+- **Each looks different from far off.** The Halberd has its rocket pod on the
+  shoulder; the Bastion is low and broad with a shield slab on its left arm; the
+  Lynx is tall and thin, with a fin on top and jump-jet packs on its back.
+- **The shield** holds 1400 and drains slowly while up; it refills once it has
+  been down for 2 s. Fire that breaks it puts it out of use for 6 s. A blast in
+  front of it is the shield's to take, and it flickers when nearly spent. From
+  inside, the wall is drawn across the cockpit glass.
+- **The cloak** leaves an enemy a faint shimmer that grows when the Lynx moves
+  and flickers when it is hit; its name tag and damage smoke are hidden. Its own
+  side sees a ghost. The pilot sees a cold glow round the edge of the view.
+- **Picking a frame** is any time on foot before the call; once a mech is on its
+  way or standing by, the key does nothing until the next one.
+
+Bots call the frame their role is built around: rifles the Halberd, rushers
+the Bastion, marksmen the Lynx. A Bastion bot raises its shield while it cannot
+shoot back or a launcher is aimed at it (never against a Lance), and stomps
+pilots who come close; a Lynx bot leaps to spoil aim and cloaks when its hull
+is down to 70%, holding fire until the cloak runs out.
+
+Balance, from `packages/shared/tests/mech.test.ts` (bots in the cockpits, on the
+test map):
+
+| | Result |
+|---|---|
+| Duels, 40 per pairing | BALANCE_DUELS |
+| One bot mech against four pilots on foot | BALANCE_PILOTS |
+
+Each frame's numbers are in `data/mechs/*.json`, their bot roles in `data/bots.json`.
 
 ## Solid bodies
 
@@ -402,7 +443,8 @@ says is taken on trust except which keys are held and where the view points.
 - **The server checks what it is sent**: message size and rate, every field of
   a command, and it runs one command per tick however many arrive, so sending
   more does not move a pilot faster. A client with the wrong protocol version is
-  told to reload (version 2 since solid bodies: both sides must push alike).
+  told to reload (version 3 since mech frames: commands carry the frame, and
+  snapshots the frame, shield and cloak).
 
 Measured with the tests in `packages/server/tests` (real server code, real
 client code, a simulated line) and with two browser tabs against `pnpm host`,
@@ -436,8 +478,8 @@ data/                 Engine-neutral game data (plain JSON)
   bots.json             Bot senses, per-role behaviour, how far bots climb, drop and leap
   net.json              Netcode: rates, waits, rewind cap, interpolation, limits
   weapons/*.json        One file per weapon
-  projectiles.json      Rockets: speed, blast, damage to pilots and to mechs
-  mechs/halberd.json    The mech: hull, body, movement, dash, vent, weapons
+  projectiles.json      Rockets and flak: speed, blast, damage to pilots and to mechs
+  mechs/*.json          One file per mech frame: hull, body, movement, move, ability, vent, weapon
   maps/spire-nine.json  Spire Nine, the first real map (generated: do not edit by hand)
   maps/gym.json         Test map: boxes and team spawn points
 tools/maps/           Map generators (plain Node scripts)
@@ -447,8 +489,8 @@ packages/
     src/sim/movement.ts   Pilot movement, one fixed tick at a time
     src/sim/match.ts      Weapons, respawns, score: one tick of a match
     src/sim/rules.ts      Damage, kills, score, getting in and out of a mech
-    src/sim/mech.ts       The mech itself: body, movement, dash, hitbox
-    src/sim/mechMatch.ts  Meter, call-in, landing, ramming, the rocket salvo
+    src/sim/mech.ts       The mech frames and the machine itself: body, movement, dash, leap, stomp, hitbox, shield
+    src/sim/mechMatch.ts  Meter, call-in, landing, ramming, stomp, salvo, shield and cloak
     src/sim/projectiles.ts Rockets in flight and their blast
     src/sim/hitscan.ts    Ray against a pilot's head and body
     src/sim/bodies.ts     Solid bodies: pilots pushed out of each other and out of mechs
@@ -512,7 +554,8 @@ packages/
   state with the hitbox drawn over them, and the arm close up or as in play
   (the view menu). Mechs and the cockpit are still built from
   boxes, and smoke, steam and blasts are plain shapes.
-- **One mech frame.** Every pilot calls the same Halberd.
+- **Mech frames are tuned on bot duels.** The numbers above come from bots on
+  the test map; how the shield, cloak and leap play between people is untested.
 - **Bots do not wallrun.** They climb, drop and leap, but never run along a
   wall or chain jumps off one, and they do not cross the 8 m break in the rail
   deck (they take the fallen carriage instead).
@@ -542,7 +585,7 @@ packages/
    3. Settings and gamepad (done)
    4. The first real map: Spire Nine (done)
    5. Bots off the ground floor (done)
-   6. Two more mech frames
+   6. Two more mech frames (done)
    7. Models and animation
    8. Sound and music
    9. Closing pass: teaching, performance, error cards, balance

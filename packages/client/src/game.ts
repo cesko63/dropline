@@ -376,7 +376,8 @@ export class Game {
     const F = FRAME_LIST[(at + 1) % FRAME_LIST.length];
     this.settings.set({ mechFrame: F.id });
     this.sfx.frameSelect(FRAME_LIST.indexOf(F));
-    this.hud.showBanner(`${F.short} · `, F.blurb.toUpperCase(), 'good');
+    // The class only ("HEAVY"): the whole line would not fit a small screen.
+    this.hud.showBanner(`${F.short} · `, F.blurb.split(':')[0].toUpperCase(), 'good');
   }
 
   /** Advance the simulation in fixed ticks, then draw one interpolated frame. */
