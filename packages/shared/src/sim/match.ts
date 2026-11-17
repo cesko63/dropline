@@ -15,6 +15,7 @@ import { createRng, rand, randSigned, type Rng } from './rng';
 import { damageActor, damageMech, killActor } from './rules';
 import { TUNING } from './tuning';
 import { WEAPONS, damageFalloff, type WeaponDef } from './weapons';
+import { viewOrigin } from './view';
 import type { CollisionWorld } from './world';
 
 /**
@@ -214,7 +215,7 @@ const right = v3();
 const up = v3();
 const dir = v3();
 
-function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWorld): void {
+function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWorld, shoulder: number): void {
   const p = a.p;
   const yaw = p.yaw + a.punchYaw;
   const pitch = p.pitch + a.punchPitch;
@@ -231,6 +232,8 @@ function fireWeapon(m: MatchState, a: Actor, def: WeaponDef, world: CollisionWor
   origin.x = p.pos.x;
   origin.y = p.pos.y + eyeOf(a);
   origin.z = p.pos.z;
+  // Seen from over a shoulder, the shot leaves along the camera's line of sight.
+  viewOrigin(origin, p.yaw, shoulder, a.inMech, world, origin);
 
   const cone = Math.tan(spreadDeg(a) * DEG);
   const rng = shotRng(m, a);
@@ -356,7 +359,7 @@ export function stepWeapon(m: MatchState, a: Actor, cmd: InputCmd, world: Collis
       if (pressed) m.events.push({ type: 'dry', actor: a.id });
       startReload(m, a, def);
     } else if (a.cooldown <= 0) {
-      fireWeapon(m, a, def, world);
+      fireWeapon(m, a, def, world, cmd.shoulder);
       // Adding the interval (instead of setting it) carries the leftover time, so
       // the rate of fire is exact even when it does not divide into ticks.
       a.cooldown += 60 / def.rpm;
@@ -431,7 +434,7 @@ export function stepMatch(m: MatchState, world: CollisionWorld, cmds: readonly (
       const k = m.mechs[a.id];
       if (k.state === 'piloted') {
         stepWeapon(m, a, { ...cmd, ads: false, weapon: -1 }, world, dt);
-        if (a.inMech) stepSalvo(m, a, k, cmd.ads, world, dt);
+        if (a.inMech) stepSalvo(m, a, k, cmd.ads, cmd.shoulder, world, dt);
       }
     } else {
       stepWeapon(m, a, cmd, world, dt);

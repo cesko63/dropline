@@ -32,6 +32,8 @@ export class Input {
   assist = 0;
   /** Loadout slot the player wants, or -1 for no change. */
   weapon = -1;
+  /** The view the player aims through (see `InputCmd.shoulder`). Set by the game from the camera. */
+  shoulder = 0;
   locked = false;
   /** Playing with the pad, without the mouse captured. */
   private padPlaying = false;
@@ -267,6 +269,7 @@ export class Input {
       call: this.held('call'),
       redeploy: this.held('respawn'),
       weapon: this.weapon,
+      shoulder: this.shoulder,
     };
     if (tick) this.fresh.clear();
     if (this.override) {

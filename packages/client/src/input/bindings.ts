@@ -27,6 +27,7 @@ export type Action =
   | 'use'
   | 'call'
   | 'toggleView'
+  | 'swapShoulder'
   | 'respawn'
   | 'mute'
   | 'netDebug'
@@ -65,6 +66,7 @@ export const ACTIONS: Record<Action, ActionInfo> = {
   call: { label: 'Call mech', group: 'Mech and match', keys: ['KeyF'], pad: ['Pad12'] },
   respawn: { label: 'Redeploy', group: 'Mech and match', keys: ['KeyK'], pad: ['Pad13'] },
   toggleView: { label: 'First / third person', group: 'Other', keys: ['KeyV'], pad: ['Pad14'] },
+  swapShoulder: { label: 'Swap shoulder (third person)', group: 'Other', keys: ['KeyX'], pad: ['Pad15'] },
   mute: { label: 'Sound on / off', group: 'Other', keys: ['KeyM'], pad: [] },
   netDebug: { label: 'Connection details', group: 'Other', keys: ['KeyN'], pad: ['Pad8'] },
   confirm: { label: 'Play again', group: 'Other', keys: ['Enter'], pad: ['Pad0'], fixed: true },

@@ -13,6 +13,7 @@ import {
   firstHumanId,
   damageFalloff,
   emptyInput,
+  eyeOf,
   PATH_STRIDE,
   findPath,
   isWalkable,
@@ -20,6 +21,7 @@ import {
   spreadDeg,
   stepMatch,
   v3,
+  VIEW,
   walkableLine,
   weaponOf,
   type Actor,
@@ -170,6 +172,22 @@ describe('weapons', () => {
     expect(spreadDeg(me)).toBeCloseTo(hip, 5);
     run(m, 1, () => ({ moveZ: 1, sprint: true, yaw: Math.PI }));
     expect(spreadDeg(me)).toBeGreaterThan(hip + 0.4);
+  });
+
+  it('fires from over the shoulder the third-person view looks past', () => {
+    const origin = (shoulder: number) => {
+      const { m, me } = duel();
+      const shot = run(m, 0.05, () => ({ fire: true, yaw: Math.PI, shoulder })).find((e) => e.type === 'shot');
+      if (!shot || shot.type !== 'shot') throw new Error('no shot');
+      return { x: shot.origin.x - me.p.pos.x, y: shot.origin.y - me.p.pos.y - eyeOf(me), z: shot.origin.z - me.p.pos.z };
+    };
+    // Facing +Z, the pilot's right is -X.
+    expect(origin(0)).toEqual({ x: 0, y: 0, z: 0 });
+    const right = origin(1);
+    expect(right.x).toBeCloseTo(-VIEW.pilot.side, 5);
+    expect(right.y).toBeCloseTo(VIEW.pilot.lift, 5);
+    expect(right.z).toBeCloseTo(0, 5);
+    expect(origin(-1).x).toBeCloseTo(VIEW.pilot.side, 5);
   });
 
   it('kicks the view up when firing and lets it settle back', () => {
