@@ -27,7 +27,7 @@ export const SIDES: SideInfo[] = [
     name: 'United Earth Frontline Corps',
     short: COMBAT.teams[0].name,
     tag: 'Humans, there in person',
-    suit: 'A patched, personal suit: grey-blue plates over an olive undersuit, a jet pack and steady blue lights.',
+    suit: 'A patched, personal suit cut to hard angles: grey-blue plates over an olive undersuit, a twin-thruster jet pack and steady blue lights.',
     colours: [
       ['#707a84', 'Grey-blue plate'],
       ['#525a37', 'Olive undersuit'],

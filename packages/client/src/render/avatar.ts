@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { WEAPONS, lenH, type Actor, type Vec3 } from '@dropline/shared';
+import { ArmGun, GUN_FINISH } from './armGun';
 import { PilotAnimator } from './pilot/animate';
 import { buildSkeleton, block, type BoneName, type Skeleton } from './pilot/rig';
-import { suitKit } from './pilot/suits';
+import { POD_MUZZLE, suitKit } from './pilot/suits';
 
 /** Per-team look. Allies also carry a chevron overhead, so teams never rest on colour alone. */
 export const TEAM_LOOK = [
@@ -25,17 +26,14 @@ const MUZZLE = new THREE.MeshBasicMaterial({
 });
 const WHITE = new THREE.Color('#ffffff');
 const FLAME_GEO = new THREE.ConeGeometry(0.07, 0.5, 8);
-const BARREL_GEO = new THREE.BoxGeometry(0.065, 1, 0.065);
-
-/** The barrel the arm extends per weapon id: length (meters), thickness. Anything else draws it in. */
-const BARREL_SHAPE: Record<string, [number, number]> = {
-  carbine: [0.34, 1],
-  scattergun: [0.2, 2.1],
-  longshot: [0.62, 0.8],
-};
-const NO_BARREL: [number, number] = [0.02, 1];
-/** Where the barrel leaves the housing, in the right forearm's space (the forearm hangs down its own -Y). */
-const BARREL_AT = new THREE.Vector3(0, -0.26, -0.075);
+/**
+ * Where the barrel's collar sits on the right forearm (which hangs down its own
+ * -Y): at the front of the housing, on the barrel line along its top (-Z). The
+ * gun is the first-person model (render/armGun) without its smallest parts,
+ * turned to run down the forearm and scaled up a little to read at range.
+ */
+const GUN_AT = new THREE.Vector3(0, -0.265, -0.075);
+const GUN_SCALE = 1.2;
 
 /** Each Corps pilot's own shoulder patch: a unit colour. */
 const PATCHES = ['#c9a227', '#b5482f', '#d9d4c5', '#4f8a5b', '#8a5fb0', '#3f7fc0', '#d07a2a', '#9aa63a'];
@@ -116,9 +114,8 @@ export class Avatar {
   private readonly baseEmissive: THREE.Color;
   /** Z.E.R.O lights breathe; Corps lights hold steady. */
   private readonly pulse: number;
-  private readonly barrel: THREE.Mesh;
+  private readonly gun: ArmGun;
   private readonly gunMat: THREE.MeshStandardMaterial;
-  private readonly muzzle = new THREE.Object3D();
   private readonly muzzleFlash: THREE.Mesh;
   private readonly podMuzzle = new THREE.Object3D();
   private readonly vent = new THREE.Object3D();
@@ -133,8 +130,6 @@ export class Avatar {
   private dead = -1;
   private weapon = '';
   private shoulder = false;
-  private barrelLen = 0.02;
-  private barrelThick = 1;
   private podUp = 0;
   private glowT = Math.random() * 10;
   private lightLevel = 1;
@@ -166,7 +161,8 @@ export class Avatar {
       toneMapped: false,
     });
     this.pulse = machine ? 0.22 : 0;
-    this.gunMat = new THREE.MeshStandardMaterial({ color: kit.colors.gun, roughness: 0.5, metalness: 0.55, flatShading: true });
+    const finish = GUN_FINISH[machine ? 1 : 0];
+    this.gunMat = new THREE.MeshStandardMaterial({ color: finish.gun, roughness: 0.5, metalness: 0.55, flatShading: true });
     this.owned.push(this.skin, this.lights, this.halo, this.gunMat);
 
     for (const name of Object.keys(kit.bones) as BoneName[]) {
@@ -195,15 +191,17 @@ export class Avatar {
     }
 
     // The weapon is part of the right forearm, so raising the arm points it.
-    this.barrel = new THREE.Mesh(BARREL_GEO, this.gunMat);
-    this.barrel.castShadow = true;
-    const barrelRoot = new THREE.Group();
-    barrelRoot.position.copy(BARREL_AT);
-    barrelRoot.add(this.barrel);
+    const gunPlate = new THREE.MeshStandardMaterial({ color: finish.plate, roughness: 0.6, metalness: 0.4, flatShading: true });
+    const gunDark = new THREE.MeshStandardMaterial({ color: finish.dark, roughness: 0.6, metalness: 0.5, flatShading: true });
+    const gunSteel = new THREE.MeshStandardMaterial({ color: finish.steel, roughness: 0.32, metalness: 0.85, flatShading: true });
+    this.owned.push(gunPlate, gunDark, gunSteel);
+    this.gun = new ArmGun({ gun: this.gunMat, plate: gunPlate, dark: gunDark, steel: gunSteel }, true);
+    this.gun.root.position.copy(GUN_AT);
+    this.gun.root.rotation.x = -Math.PI / 2;
+    this.gun.root.scale.setScalar(GUN_SCALE);
     this.vent.position.set(-0.1, -0.14, -0.02);
-    this.muzzle.position.copy(BARREL_AT);
-    this.bones.foreArmR.add(barrelRoot, this.vent, this.muzzle);
-    this.podMuzzle.position.set(0, 0, -0.2);
+    this.bones.foreArmR.add(this.gun.root, this.vent);
+    this.podMuzzle.position.set(...POD_MUZZLE);
     this.bones.pod.add(this.podMuzzle);
     this.bones.pod.rotation.x = 1.15;
     this.muzzleFlash = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), MUZZLE.clone());
@@ -257,6 +255,7 @@ export class Avatar {
   fireFlash(): void {
     this.shot = 1;
     this.anim.shot();
+    if (!this.shoulder) this.gun.fire();
   }
 
   /** Pop the "!" over the head. */
@@ -266,7 +265,7 @@ export class Avatar {
 
   /** World position of the muzzle in use (the arm's barrel or the shoulder pod), as of the last update. */
   muzzleWorld(out: THREE.Vector3): THREE.Vector3 {
-    return (this.shoulder ? this.podMuzzle : this.muzzle).getWorldPosition(out);
+    return (this.shoulder ? this.podMuzzle : this.gun.muzzle).getWorldPosition(out);
   }
 
   /** Where the arm's housing lets off steam. */
@@ -302,14 +301,7 @@ export class Avatar {
       this.weapon = a.loadout[a.weapon];
       this.shoulder = WEAPONS[this.weapon]?.mount === 'shoulder';
     }
-    // The barrel changes over and the pod swings up or folds away in a moment, not in a frame.
-    const [len, thick] = BARREL_SHAPE[this.weapon] ?? NO_BARREL;
-    this.barrelLen = damp(this.barrelLen, len, 14, dt);
-    this.barrelThick = damp(this.barrelThick, thick, 14, dt);
-    this.barrel.scale.set(this.barrelThick, this.barrelLen, this.barrelThick);
-    this.barrel.position.y = -this.barrelLen / 2;
-    this.barrel.visible = this.barrelLen > 0.05;
-    this.muzzle.position.y = BARREL_AT.y - this.barrelLen;
+    // The pod swings up or folds away in a moment, not in a frame.
     this.podUp = damp(this.podUp, this.shoulder && a.alive ? 1 : 0, 9, dt);
 
     this.root.position.set(pos.x, pos.y, pos.z);
@@ -362,6 +354,8 @@ export class Avatar {
     const level = this.lightLevel * (1 - this.pulse + this.pulse * (0.5 + 0.5 * Math.sin(this.glowT * 2.2)));
     this.lights.color.setScalar(0.08 + 0.92 * level);
     this.halo.opacity = this.haloOpacity * level;
+    // The barrel reshapes itself for each weapon, and draws in while the pod is up.
+    this.gun.update(dt, this.shoulder ? 'none' : this.weapon);
 
     for (const flame of this.flames) {
       flame.visible = s.thrusting && a.alive;
@@ -401,5 +395,6 @@ export class Avatar {
   dispose(): void {
     // The suit's geometry is shared by every pilot of the team; only this pilot's own things go.
     for (const o of this.owned) o.dispose();
+    this.gun.dispose();
   }
 }

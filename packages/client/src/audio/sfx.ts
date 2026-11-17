@@ -408,16 +408,36 @@ export class Sfx {
   }
 
   /**
-   * Changing weapons. The arm draws one barrel in and runs the next out (a servo
-   * and two locks); the shoulder pod swings up on its hinge; a mech readies its cannon.
+   * Changing weapons, in time with what the player sees (render/armGun). The
+   * arm's barrel draws in on a falling servo, the printer whirs as it makes the
+   * next one, and each barrel locks with its own sound: the scattergun with two
+   * heavy clacks and a thump, the carbine with a run of crisp clicks, the
+   * longshot with a rising charge and a deep clank. The shoulder pod swings up
+   * on its hinge; a mech readies its cannon.
    */
-  equip(mount: 'arm' | 'shoulder' | 'cannon'): void {
+  equip(mount: 'arm' | 'shoulder' | 'cannon', weapon = '', duration = 0.4): void {
     const b = this.bus(null, 0.5);
     if (!b) return;
     if (mount === 'arm') {
-      this.tone(b, { type: 'sawtooth', f0: 240, f1: 520, dur: 0.16, gain: 0.05 });
-      this.burst(b, { type: 'bandpass', f0: 2100, q: 6, dur: 0.025, gain: 0.5, at: 0.02 });
-      this.burst(b, { type: 'bandpass', f0: 1500, q: 6, dur: 0.03, gain: 0.55, at: 0.17 });
+      const d = Math.max(0.25, duration);
+      const printAt = d * 0.3;
+      const lockAt = d;
+      this.tone(b, { type: 'sawtooth', f0: 480, f1: 170, dur: printAt, gain: 0.04 });
+      this.burst(b, { type: 'bandpass', f0: 1800, q: 6, dur: 0.025, gain: 0.45, at: printAt - 0.02 });
+      this.burst(b, { type: 'bandpass', f0: 900, f1: 5200, q: 2.5, dur: d * 0.25, gain: 0.22, at: printAt });
+      this.tone(b, { type: 'sine', f0: 900, f1: 1900, dur: d * 0.25, gain: 0.025, at: printAt });
+      if (weapon === 'scattergun') {
+        this.burst(b, { type: 'bandpass', f0: 950, q: 5, dur: 0.045, gain: 0.7, at: lockAt - 0.07 });
+        this.burst(b, { type: 'bandpass', f0: 760, q: 5, dur: 0.05, gain: 0.8, at: lockAt });
+        this.tone(b, { type: 'sine', f0: 130, f1: 60, dur: 0.13, gain: 0.32, at: lockAt });
+      } else if (weapon === 'longshot') {
+        this.tone(b, { type: 'sine', f0: 420, f1: 2400, dur: d * 0.45, gain: 0.05, swell: true, at: d * 0.55 });
+        this.burst(b, { type: 'bandpass', f0: 680, q: 4, dur: 0.07, gain: 0.8, at: lockAt });
+        this.tone(b, { type: 'sine', f0: 95, f1: 48, dur: 0.2, gain: 0.34, at: lockAt });
+      } else {
+        for (const at of [lockAt - 0.06, lockAt - 0.03, lockAt]) this.burst(b, { type: 'bandpass', f0: 2700, q: 7, dur: 0.02, gain: 0.5, at });
+        this.tone(b, { type: 'square', f0: 700, f1: 1500, dur: 0.06, gain: 0.035, at: lockAt - 0.04 });
+      }
     } else if (mount === 'shoulder') {
       this.tone(b, { type: 'sawtooth', f0: 120, f1: 210, dur: 0.34, gain: 0.07 });
       this.burst(b, { type: 'bandpass', f0: 520, q: 4, dur: 0.07, gain: 0.7, at: 0.3 });
