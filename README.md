@@ -106,6 +106,7 @@ time), `?name=Ada` sets the callsign, `?net=1` opens the connection details,
 | Space, in the mech | Dash (two charges) |
 | Right mouse, in the mech | Fire the rocket salvo |
 | V | First / third person |
+| X | Swap shoulder (third person) |
 | K | Redeploy at a spawn point |
 | M | Sound on / off |
 | N | Connection details, when online |
@@ -136,6 +137,7 @@ needed: press a button on the start screen, then A on a choice.
 | D-pad up | Call your mech |
 | D-pad down | Redeploy |
 | D-pad left | First / third person |
+| D-pad right | Swap shoulder (third person) |
 | VIEW | Connection details, when online |
 | MENU | Pause; on the pause screen, resume |
 

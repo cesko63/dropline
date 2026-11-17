@@ -145,6 +145,7 @@ export class Menu {
           [k('use'), 'Climb into your mech, or out of it'],
           ['In the mech', `${k('jump')} dashes, ${k('ads')} fires the rocket salvo`],
           [k('toggleView'), 'First / third person'],
+          [k('swapShoulder'), 'Third person: look over the other shoulder'],
           [k('respawn'), 'Redeploy at a spawn point'],
           ['Menu', 'Pause and settings. Offline this pauses the match'],
         ]
@@ -164,6 +165,7 @@ export class Menu {
           [k('use'), 'Climb into your mech, or out of it'],
           ['In the mech', `${k('jump')} dashes, ${k('ads')} fires the rocket salvo`],
           [k('toggleView'), 'First / third person'],
+          [k('swapShoulder'), 'Third person: look over the other shoulder'],
           [k('respawn'), 'Redeploy at a spawn point'],
           [k('mute'), 'Sound on / off'],
           [k('netDebug'), 'Connection details, when online'],

@@ -10,6 +10,7 @@ import type { Rng } from './rng';
 import { addMeter, damageActor, damageMech, destroyMech, enterMech, leaveMech } from './rules';
 import { TUNING } from './tuning';
 import { PROJECTILES } from './weapons';
+import { viewOrigin } from './view';
 import type { CollisionWorld } from './world';
 
 /**
@@ -69,6 +70,7 @@ export function findDropPoint(m: MatchState, world: CollisionWorld, a: Actor): V
     eye.x = p.pos.x;
     eye.y = p.pos.y + eyeOf(a);
     eye.z = p.pos.z;
+    viewOrigin(eye, p.yaw, m.cmds[a.id]?.shoulder ?? 0, a.inMech, world, eye);
     const hit = world.castRay(eye, dir, R.drop.maxRange * 1.5);
     if (hit) {
       let x = hit.point.x;
@@ -253,7 +255,7 @@ export function stepMechs(m: MatchState, world: CollisionWorld, dt: number): voi
  * The rocket salvo of a piloted mech: `fire` starts it when it is ready, then
  * the rockets leave one after another toward the point the pilot looks at.
  */
-export function stepSalvo(m: MatchState, a: Actor, k: Mech, fire: boolean, world: CollisionWorld, dt: number): void {
+export function stepSalvo(m: MatchState, a: Actor, k: Mech, fire: boolean, shoulder: number, world: CollisionWorld, dt: number): void {
   const S = MECH.salvo;
   k.salvoCooldown = Math.max(0, k.salvoCooldown - dt);
   if (fire && k.salvoCooldown <= 0 && k.salvoLeft === 0) {
@@ -277,6 +279,8 @@ export function stepSalvo(m: MatchState, a: Actor, k: Mech, fire: boolean, world
     eye.x = k.pos.x;
     eye.y = k.pos.y + MECH.body.eye;
     eye.z = k.pos.z;
+    // From outside, the aim point is what the crosshair over the shoulder rests on.
+    viewOrigin(eye, k.yaw, shoulder, true, world, eye);
     const rng: Rng = a.rng ?? m.rng;
     const hit = world.castRay(eye, dir, PROJECTILES[S.projectile].speed * PROJECTILES[S.projectile].life);
     const reach = Math.max(8, hit ? hit.dist : 90);

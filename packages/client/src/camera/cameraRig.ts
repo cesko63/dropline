@@ -1,11 +1,25 @@
 import * as THREE from 'three';
 import { spring, stepSpring } from '../util/spring';
-import { MECH, MoveEvent, TUNING, clamp, eyeHeight, lenH, v3, type CollisionWorld, type PlayerState, type Vec3 } from '@dropline/shared';
+import { MECH, MoveEvent, TUNING, clamp, eyeHeight, lenH, v3, viewOrigin, type CollisionWorld, type PlayerState, type Vec3 } from '@dropline/shared';
 
 const damp = (current: number, target: number, rate: number, dt: number): number =>
   current + (target - current) * (1 - Math.exp(-rate * dt));
 
 const DEG = Math.PI / 180;
+
+/**
+ * Length of the third-person boom behind the shoulder point, meters. Only the
+ * length is free: the camera always sits on the line of sight through that
+ * point, so moving it in and out never moves where the crosshair aims.
+ */
+const BOOM = {
+  pilot: { hip: 2.75, aimed: 1.35, rush: 0.55 },
+  mech: { hip: 8.2, aimed: 5.4, rush: 1.2 },
+  /** Kept this far in front of whatever is behind the camera. */
+  wallGap: 0.3,
+  /** Shorter than this and the camera would sit inside the pilot: it is hidden instead. */
+  hideOwnBelow: 0.55,
+} as const;
 
 /** First and third person camera with the motion cues that sell speed and weight. */
 export class CameraRig {
@@ -21,6 +35,12 @@ export class CameraRig {
   forceThird = false;
   /** The view is a mech's cockpit: higher, steadier, with a longer boom outside. */
   mech = false;
+  /** Third person looks over this shoulder: 1 right, -1 left. */
+  shoulder = 1;
+  /** Fully aimed with a scope: the view goes in to the scope even in third person. */
+  scopeIn = false;
+  /** 0..1 how far the weapon is aimed; the boom closes in with it. */
+  aim = 0;
   /** Reduce motion: no widening at speed or on kills, no lean into strafes, half the wallrun tilt. */
   calm = false;
   private readonly joltRoll = spring();
@@ -38,10 +58,31 @@ export class CameraRig {
   private readonly carryFrom = new THREE.Vector3();
   private readonly carryOffset = new THREE.Vector3();
   private carrying = false;
+  /** Boom length the camera wants (aim and speed), and the length it has room for. */
+  private boomWant: number = BOOM.pilot.hip;
+  private boom: number = BOOM.pilot.hip;
+  private wasOutside = false;
+  private wasShoulder = 1;
+  private readonly fwd = v3();
+  private readonly eyeAt = v3();
+  private readonly origin = v3();
 
   /** True when the camera is outside the pilot this frame. */
   get outside(): boolean {
-    return this.thirdPerson || this.forceThird;
+    return (this.thirdPerson && !this.scopeIn) || this.forceThird;
+  }
+
+  /**
+   * The view the player aims through, for `InputCmd.shoulder`: the shoulder
+   * while playing in third person, 0 in first person or through a scope.
+   */
+  get aimShoulder(): number {
+    return this.thirdPerson && !this.scopeIn ? this.shoulder : 0;
+  }
+
+  /** The camera is far enough behind the pilot to show the pilot's own body. */
+  get showsSelf(): boolean {
+    return this.outside && this.boom > BOOM.hideOwnBelow;
   }
 
   /** Knock the view when the pilot is hit; `side` is -1 (from the left) .. 1 (from the right). */
@@ -83,6 +124,12 @@ export class CameraRig {
   /** `events` are the MoveEvent flags raised since the previous frame. */
   update(dt: number, s: PlayerState, pos: Vec3, moveX: number, events: number, world: CollisionWorld): void {
     const mech = this.mech;
+    // Into the scope and back out, first to third person, one shoulder to the
+    // other: the camera glides there rather than cutting.
+    const outside = this.outside;
+    if (outside !== this.wasOutside || (outside && this.shoulder !== this.wasShoulder)) this.carry();
+    this.wasOutside = outside;
+    this.wasShoulder = this.shoulder;
     const eyeTarget = mech ? MECH.body.eye : eyeHeight(s);
     this.eye = this.carrying ? eyeTarget : damp(this.eye, eyeTarget, 14, dt);
 
@@ -128,30 +175,39 @@ export class CameraRig {
     }
 
     const cam = this.camera;
-    cam.rotation.set(s.pitch + this.punchPitch + joltPitch + shakePitch, s.yaw + this.punchYaw + shakeYaw, this.roll + joltRoll + shakeRoll, 'YXZ');
+    const pitch = s.pitch + this.punchPitch + joltPitch + shakePitch;
+    const yaw = s.yaw + this.punchYaw + shakeYaw;
+    cam.rotation.set(pitch, yaw, this.roll + joltRoll + shakeRoll, 'YXZ');
     const eyeY = this.smoothY + this.eye + this.dip.x;
 
-    if (!this.outside) {
+    if (!outside) {
       cam.position.set(pos.x, eyeY, pos.z);
     } else {
-      // Over-the-shoulder boom, pulled in when the level is in the way.
-      const back = mech ? 9.5 : 3.8;
-      const side = mech ? 2.6 : 0.75;
-      const cp = Math.cos(s.pitch);
-      const fx = -Math.sin(s.yaw) * cp;
-      const fy = Math.sin(s.pitch);
-      const fz = -Math.cos(s.yaw) * cp;
-      const rx = Math.cos(s.yaw);
-      const rz = -Math.sin(s.yaw);
-      const pivot = v3(pos.x, eyeY + (mech ? 1.3 : 0.25), pos.z);
-      const dir = v3(-fx * back + rx * side, -fy * back, -fz * back + rz * side);
-      const length = Math.hypot(dir.x, dir.y, dir.z);
-      dir.x /= length;
-      dir.y /= length;
-      dir.z /= length;
-      const hit = world.castRay(pivot, dir, length + 0.3);
-      const dist = hit ? Math.max(0.35, hit.dist - 0.3) : length;
-      cam.position.set(pivot.x + dir.x * dist, pivot.y + dir.y * dist, pivot.z + dir.z * dist);
+      // Over the shoulder: the camera sits on the line of sight through the
+      // shoulder point, the same point the shots leave from, so the middle of
+      // the screen is where they go. Aiming draws it in close; speed lets it
+      // trail a little further back.
+      const B = mech ? BOOM.mech : BOOM.pilot;
+      const eye = this.eyeAt;
+      eye.x = pos.x;
+      eye.y = eyeY;
+      eye.z = pos.z;
+      const origin = viewOrigin(eye, s.yaw, this.shoulder, mech, world, this.origin);
+      const top = mech ? MECH.move.sprintSpeed : TUNING.ground.sprintSpeed;
+      const speed = this.calm ? 0 : clamp((lenH(s.vel) - top * 0.6) / (top * 0.8), 0, 1);
+      const want = B.hip + (B.aimed - B.hip) * this.aim + B.rush * speed * (1 - this.aim);
+      this.boomWant = this.carrying ? want : damp(this.boomWant, want, 7, dt);
+
+      const cp = Math.cos(pitch);
+      const back = this.fwd;
+      back.x = Math.sin(yaw) * cp;
+      back.y = -Math.sin(pitch);
+      back.z = Math.cos(yaw) * cp;
+      const hit = world.castRay(origin, back, this.boomWant + BOOM.wallGap);
+      const room = hit ? Math.max(0, hit.dist - BOOM.wallGap) : this.boomWant;
+      // In at once when something comes between, back out at an easy pace.
+      this.boom = room < this.boom || this.carrying ? room : damp(this.boom, room, 6, dt);
+      cam.position.set(origin.x + back.x * this.boom, origin.y + back.y * this.boom, origin.z + back.z * this.boom);
     }
 
     // Gliding between bodies: start from the old place and close the gap fast.

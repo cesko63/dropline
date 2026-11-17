@@ -57,5 +57,5 @@ export function stepOwn(m: MatchState, world: CollisionWorld, a: Actor, cmd: Inp
   seat(a, k);
   if (!driven) return;
   stepWeapon(m, a, { ...cmd, ads: false, weapon: -1 }, world, dt);
-  stepSalvo(m, a, k, cmd.ads, world, dt);
+  stepSalvo(m, a, k, cmd.ads, cmd.shoulder, world, dt);
 }

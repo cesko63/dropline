@@ -13,6 +13,7 @@ import {
   lerp,
   stepMatch,
   v3,
+  viewOrigin,
   weaponOf,
   type Actor,
   type CollisionWorld,
@@ -79,6 +80,8 @@ export interface GameOptions {
 /** How far the aim slowdown reaches around an enemy's chest, meters, and how far away it still works. */
 const ASSIST_RADIUS = 0.9;
 const ASSIST_RANGE = 70;
+/** The tightest field of view multiplier aiming reaches over the shoulder, before a scope takes the view in. */
+const OUTSIDE_ZOOM = 0.72;
 
 export class Game {
   readonly input: Input;
@@ -346,6 +349,7 @@ export class Game {
     const input = this.input;
     const me = this.me;
     if (input.consume('toggleView')) this.rig.thirdPerson = !this.rig.thirdPerson;
+    if (input.consume('swapShoulder')) this.rig.shoulder = -this.rig.shoulder;
     if (input.consume('mute')) this.settings.set({ muted: !this.settings.value.muted });
     if (input.consume('netDebug')) this.hud.toggleNet();
     // Online the server starts the next match by itself.
@@ -374,6 +378,10 @@ export class Game {
     const paused = this.paused;
     this.sfx.setPaused(paused, document.hidden);
 
+    // Fully aimed through a scope, third person goes in to the scope; otherwise
+    // shots leave over the shoulder the camera looks past (see `viewOrigin`).
+    this.rig.scopeIn = weaponOf(me).scope && me.ads > 0.9 && me.alive && !me.inMech;
+    this.input.shoulder = this.rig.aimShoulder;
     let cmd = this.input.sample(false);
     const conn = this.conn;
     if (conn) {
@@ -435,13 +443,16 @@ export class Game {
     s.yaw = this.input.yaw;
     s.pitch = this.input.pitch;
     const def = weaponOf(me);
-    const zoom = 1 + (def.adsZoom - 1) * me.ads;
+    // Over the shoulder a scope zooms only as far as plain iron sights until the view goes in to it.
+    const adsZoom = this.rig.thirdPerson && !this.rig.scopeIn ? Math.max(def.adsZoom, OUTSIDE_ZOOM) : def.adsZoom;
+    const zoom = 1 + (adsZoom - 1) * me.ads;
     this.input.sensScale = zoom;
     this.input.assist = this.input.device === 'pad' && this.settings.value.aimSlowdown && me.alive ? this.aimAssist(me) : 0;
     const rig = this.rig;
     rig.punchPitch = me.alive ? me.punchPitch : 0;
     rig.punchYaw = me.alive ? me.punchYaw : 0;
     rig.zoom = zoom;
+    rig.aim = me.alive ? me.ads : 0;
     rig.forceThird = !me.alive;
     rig.mech = me.inMech;
     rig.update(dt, s, p, cmd.moveX, this.pendingEvents, this.world);
@@ -455,7 +466,7 @@ export class Game {
       const shouldered = a.ads > 0.2 || m.time - a.lastShotTime < RAISE_HOLD || (b !== null && (b.state === 'engage' || b.state === 'notice'));
       this.raise[a.id] += ((shouldered ? 1 : 0) - this.raise[a.id]) * (1 - Math.exp(-14 * dt));
       // A pilot in a mech is out of sight inside it.
-      avatar.update(dt, a, this.drawn[a.id], (a !== me || rig.outside) && !a.inMech, this.raise[a.id]);
+      avatar.update(dt, a, this.drawn[a.id], (a !== me || rig.showsSelf) && !a.inMech, this.raise[a.id]);
       // A marksman's laser runs from its muzzle along its view to whatever it meets.
       if (b && b.charge > 0 && a.alive && !a.inMech) avatar.setLaser(b.charge, b.charge >= BOTS.chargeLock, this.aimPoint(a));
       else avatar.setLaser(0, false, null);
@@ -468,7 +479,7 @@ export class Game {
       const avatar = this.mechAvatars[k.id];
       const mine = k.id === me.id && me.inMech;
       // The player's own mech turns with the mouse, like their view.
-      avatar.update(dt, k, this.mechDrawn[k.id], mine ? s.yaw : k.yaw, mine ? s.pitch : k.pitch, !mine || rig.outside);
+      avatar.update(dt, k, this.mechDrawn[k.id], mine ? s.yaw : k.yaw, mine ? s.pitch : k.pitch, !mine || rig.showsSelf);
       if (!puff || k.state === 'none' || k.state === 'dropping') continue;
       // Thruster wash under a dash, and smoke from a hull that is nearly gone.
       if (k.dashTime > 0 && (!mine || rig.outside)) {
@@ -547,6 +558,7 @@ export class Game {
     eye.x = s.pos.x;
     eye.y = s.pos.y + eyeOf(me);
     eye.z = s.pos.z;
+    viewOrigin(eye, s.yaw, this.input.shoulder, me.inMech, this.world, eye);
     let best = 0;
     for (const a of this.match.actors) {
       if (a.team === me.team || !a.alive || a.inMech) continue;
