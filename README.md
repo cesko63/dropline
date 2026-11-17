@@ -275,7 +275,7 @@ test map):
 
 | | Result |
 |---|---|
-| Duels, 40 per pairing | Halberd 17 to Bastion 23, Halberd 21 to Lynx 19, Bastion 24 to Lynx 16 |
+| Duels, 40 per pairing | Halberd 17 to Bastion 23, Halberd 21 to Lynx 19, Bastion 25 to Lynx 15 |
 | One bot mech against four pilots on foot | Halberd 13 s and 1.8 kills, Bastion 12 s and 1.4, Lynx 19 s and 2.3 |
 
 Each frame's numbers are in `data/mechs/*.json`, their bot roles in `data/bots.json`.

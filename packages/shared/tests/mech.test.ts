@@ -918,7 +918,7 @@ describe('mech balance, played by scripts over several seeds', () => {
         }
         console.log(`${FRAME_LIST[i].name} against ${FRAME_LIST[j].name}: ${first} to ${second} over ${seeds.length} duels`);
         // No frame beats another in more than two duels out of three.
-        // (Measured: Halberd 17 to Bastion 23, Halberd 21 to Lynx 19, Bastion 24 to Lynx 16.)
+        // (Measured: Halberd 17 to Bastion 23, Halberd 21 to Lynx 19, Bastion 25 to Lynx 15.)
         expect(first + second).toBeGreaterThan(seeds.length * 0.9);
         expect(Math.max(first, second)).toBeLessThanOrEqual(seeds.length * 0.65);
       }
@@ -952,7 +952,7 @@ describe('mech balance, played by scripts over several seeds', () => {
         kills.push(me.kills);
       }
       console.log(`bot ${FRAME_LIST[f].name} against four pilots: ${mean(life).toFixed(0)} s, ${mean(kills).toFixed(1)} kills`);
-      // (Measured: Halberd 13 s and 1.8 kills, Bastion 12 s and 1.4, Lynx 18 s and 2.3.)
+      // (Measured: Halberd 13 s and 1.8 kills, Bastion 12 s and 1.4, Lynx 19 s and 2.3.)
       expect(mean(life)).toBeGreaterThan(8);
       expect(mean(life)).toBeLessThan(30);
       expect(mean(kills)).toBeGreaterThan(0.8);
