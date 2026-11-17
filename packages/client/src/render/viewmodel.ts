@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { COMBAT, MECH, WEAPONS, clamp, lenH, type Actor, type Mech } from '@dropline/shared';
 import { spring, stepSpring } from '../util/spring';
+import { ArmGun, GUN_FINISH } from './armGun';
 import { block, rod } from './pilot/rig';
 
 /** Where the suit's arm sits at the hip, raised to aim, and lowered while the shoulder pod is in use. */
@@ -9,14 +10,8 @@ const ARM_AIM = new THREE.Vector3(0.1, -0.14, -0.52);
 const ARM_STOWED = new THREE.Vector3(0.3, -0.43, -0.46);
 /** Height of the firing barrel's axis on the arm: along the top of the housing, where the player can see it. */
 const BARREL_Y = 0.05;
-/** The barrel drum: three barrels round its axis, the one in use turned to the top. */
-const DRUM_R = 0.05;
-const DRUM_Z = -0.19;
-/** Where the barrels leave the drum's front face, in drum space. */
-const DRUM_FACE = -0.075;
-const BARREL_ORDER = ['carbine', 'scattergun', 'longshot'];
-/** A drawn-in barrel still shows this much of itself in the drum's face. */
-const STUB = 0.16;
+/** Where the barrel's collar sits, against the hinge plate at the front of the housing. */
+const GUN_Z = -0.183;
 /** The arm is turned a little toward the middle of the view, so its length shows. */
 const ARM_YAW = 0.1;
 /** Where the coolant cell sits in its port on top of the housing. */
@@ -35,53 +30,21 @@ const CELL_IN = 0.85;
 
 /**
  * The arm's finish per team. The weapon is the same gear on both (the machines
- * were built to use it); the Corps wear it over an olive sleeve with blue
- * lights, Z.E.R.O on a black frame with crimson ones. Heat runs from the
- * team's light colour through orange to its hottest colour.
+ * were built to use it) in the team's gun finish (GUN_FINISH, shared with the
+ * pilots seen in third person); the Corps wear it over an olive sleeve and a
+ * glove, Z.E.R.O on a black frame. No lights: heat shows as the metal itself
+ * does, dark when cold, a dull red as it warms and orange at its hottest.
  */
+const HEAT = { cool: '#000000', warm: '#6e1a06', hot: '#ff6a14' };
 const ARM_LOOK = [
-  {
-    plate: '#727c86',
-    gun: '#30353c',
-    dark: '#1d2126',
-    sleeve: '#525a37',
-    glove: '#424a2d',
-    steel: '#8b929c',
-    accent: '#5fe0ff',
-    cool: '#58d6ff',
-    warm: '#ff9a3c',
-    hot: '#ff3b1f',
-  },
-  {
-    plate: '#353a43',
-    gun: '#1d2025',
-    dark: '#0d0e11',
-    sleeve: '#3c414a',
-    glove: '#2a2e36',
-    steel: '#6d747e',
-    accent: '#ff2236',
-    cool: '#ff2236',
-    warm: '#ff9a3c',
-    hot: '#fff0d6',
-  },
+  { ...GUN_FINISH[0], sleeve: '#4a5034', glove: '#3a4029' },
+  { ...GUN_FINISH[1], sleeve: '#33373e', glove: '#24272d' },
 ];
 const HALF_PI = Math.PI / 2;
 
 const damp = (current: number, target: number, rate: number, dt: number): number =>
   current + (target - current) * (1 - Math.exp(-rate * dt));
 const smooth = (t: number): number => t * t * (3 - 2 * t);
-
-/** One barrel on the drum. Built along -Z from the drum's face; `ext` 0 is drawn in to a stub. */
-interface Barrel {
-  group: THREE.Group;
-  /** Position round the drum: the drum turns by -slot * 120 degrees to bring it to the top. */
-  slot: number;
-  length: number;
-  ext: number;
-  /** Kick per shot: backwards (meters) and muzzle climb (radians). */
-  kickBack: number;
-  kickUp: number;
-}
 
 /** Something thrown clear of the weapon: a mech's spent casing, a pilot's spent coolant cell. */
 interface Debris {
@@ -106,9 +69,9 @@ const tmp = new THREE.Vector3();
  * built-in weapon and the launcher pod on the shoulder, in a mech the cannon arm
  * and the cockpit. The arm and pod wear the player's team finish (`setTeam`).
  *
- * The arm is a heavy housing carrying a drum of three barrels. Switching weapons
- * draws the barrel in, turns the drum to bring the next one to the top and
- * extends it. There is no magazine: an ammo printer behind a side window makes
+ * The arm is a heavy housing with one barrel (render/armGun), which its ammo
+ * printer reshapes for each weapon: switching draws the barrel in, prints the
+ * next one and runs it out. There is no magazine: an ammo printer behind a side window makes
  * the rounds, the heat they leave shows on the heat sinks under the cooling
  * fins, and a reload throws out the spent coolant cell, opens the fins to vent
  * the housing and seats a fresh cell.
@@ -123,10 +86,10 @@ export class Viewmodel {
   /** Carries the arm on foot and the cannon in a mech. */
   private readonly rig = new THREE.Group();
   private readonly arm = new THREE.Group();
-  /** The barrel drum; it turns to change weapons and slides back on its pistons when it fires. */
-  private readonly drum = new THREE.Group();
-  private drumTurn = 0;
+  /** The barrel; it slides back on its pistons when it fires. The same model pilots carry in third person. */
+  private readonly gun: ArmGun;
   private recoil = 0;
+
   /** The ammo printer's coils, seen through the window on the side facing the player. */
   private readonly coils = new THREE.Group();
   private coilSpin = 0;
@@ -143,20 +106,16 @@ export class Viewmodel {
     sleeve: new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0.1, flatShading: true }),
     glove: new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0.05, flatShading: true }),
     steel: new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.85, flatShading: true }),
-    accent: new THREE.MeshStandardMaterial({ color: '#06121a', emissiveIntensity: 1.6 }),
   };
   private readonly cool = new THREE.Color();
   private readonly warm = new THREE.Color();
   private readonly hot = new THREE.Color();
   private team = -1;
-  private readonly barrels: Record<string, Barrel> = {};
-  private readonly armMuzzle = new THREE.Object3D();
   private readonly cell = new THREE.Group();
   /** Where steam leaves the housing. */
   private readonly vents = new THREE.Object3D();
   /** One material for everything on the arm that shows heat: the strip, the slats and the cell. */
   private readonly heatMat: THREE.MeshStandardMaterial;
-  private barrelId = '';
   private heat = 0;
   private pulse = 0;
   private cellOut = false;
@@ -174,7 +133,7 @@ export class Viewmodel {
   private readonly cannonPort = new THREE.Object3D();
 
   /** The muzzle the current weapon fires from. */
-  private muzzle: THREE.Object3D = this.armMuzzle;
+  private muzzle: THREE.Object3D;
   private kickBack = 0;
   private kickUp = 0;
   private mode: 'arm' | 'pod' | 'cannon' = 'arm';
@@ -208,7 +167,7 @@ export class Viewmodel {
     const glow = new THREE.MeshStandardMaterial({ color: '#30140a', emissive: '#ff7a2f', emissiveIntensity: 1.3 });
     // The mech's cannon keeps the frame's own finish; the pilot's arm and pod wear the suit's (`look`).
     const sleeve = new THREE.MeshStandardMaterial({ color: '#3a414c', roughness: 0.7, metalness: 0.2 });
-    this.heatMat = new THREE.MeshStandardMaterial({ color: '#0a1820', emissiveIntensity: 0.8 });
+    this.heatMat = new THREE.MeshStandardMaterial({ color: '#1c1e20', roughness: 0.6, metalness: 0.6, emissiveIntensity: 0.8 });
 
     const box = (w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number, rx = 0, ry = 0): THREE.Mesh => {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -249,7 +208,7 @@ export class Viewmodel {
       part(block(0.13, 0.11, 0.32, 0.014), L.gun, 0, 0, -0.01),
       part(block(0.02, 0.092, 0.27, 0.006), L.plate, 0.072, 0.004, -0.005),
       part(block(0.02, 0.092, 0.13, 0.006), L.plate, -0.072, 0.004, 0.085),
-      part(block(0.02, 0.012, 0.12, 0.003), L.accent, 0.083, 0.03, -0.02),
+      part(block(0.02, 0.012, 0.12, 0.003), L.steel, 0.083, 0.03, -0.02),
       // Hinge plate and knuckles where the drum is carried.
       part(block(0.13, 0.11, 0.022, 0.006), L.dark, 0, 0, -0.172),
       part(rod(0.013, 0.03, 8), L.steel, 0.05, -0.05, -0.172, 0, 0, HALF_PI),
@@ -317,69 +276,33 @@ export class Viewmodel {
       this.arm.add(rodPart);
     }
 
-    // The drum: three barrels round its axis; changing weapons turns it.
-    this.drum.position.set(0, BARREL_Y - DRUM_R, DRUM_Z);
-    this.drum.add(
-      tube(0.07, 0.07, L.gun, 0, 0, -0.035, 12),
-      tube(0.075, 0.012, L.plate, 0, 0, -0.068, 12),
-      tube(0.03, 0.02, L.dark, 0, 0, -0.08, 8),
-    );
-    this.arm.add(this.drum);
-
-    const barrel = (id: string, length: number, kickBack: number, kickUp: number, parts: THREE.Mesh[]): void => {
-      const slot = BARREL_ORDER.indexOf(id);
-      const angle = HALF_PI + (slot * Math.PI * 2) / 3;
-      const group = new THREE.Group();
-      group.position.set(Math.cos(angle) * DRUM_R, Math.sin(angle) * DRUM_R, DRUM_FACE);
-      group.add(...parts);
-      group.scale.z = STUB;
-      this.drum.add(group);
-      this.barrels[id] = { group, slot, length, ext: 0, kickBack, kickUp };
-    };
-    // Carbine: a compact barrel in a short shroud with a muzzle brake.
-    barrel('carbine', 0.32, 0.035, 0.05, [
-      tube(0.022, 0.16, L.gun, 0, 0, -0.08, 8),
-      tube(0.013, 0.32, L.dark, 0, 0, -0.16, 8),
-      part(block(0.036, 0.032, 0.045, 0.006), L.gun, 0, 0, -0.3),
-      part(block(0.006, 0.004, 0.12, 0.001), L.accent, 0, 0.023, -0.08),
-    ]);
-    // Scattergun: one wide bore with a flared mouth.
-    barrel('scattergun', 0.19, 0.085, 0.16, [
-      tube(0.031, 0.17, L.gun, 0, 0, -0.085, 10),
-      tube(0.036, 0.012, L.accent, 0, 0, -0.12, 10),
-      tube(0.039, 0.032, L.plate, 0, 0, -0.17, 10),
-      tube(0.025, 0.01, bore, 0, 0, -0.187, 10),
-    ]);
-    // Longshot: a long precision rail with a lit core and a braced muzzle.
-    barrel('longshot', 0.6, 0.07, 0.11, [
-      part(block(0.01, 0.032, 0.58, 0.003), L.gun, -0.017, 0, -0.29),
-      part(block(0.01, 0.032, 0.58, 0.003), L.gun, 0.017, 0, -0.29),
-      tube(0.006, 0.56, L.accent, 0, 0, -0.29, 6),
-      part(block(0.05, 0.045, 0.025, 0.006), L.plate, 0, 0, -0.3),
-      part(block(0.052, 0.048, 0.04, 0.008), L.plate, 0, 0, -0.58),
-    ]);
-    this.arm.add(this.armMuzzle);
+    // The barrel, on its collar at the front of the housing, along the top.
+    this.gun = new ArmGun({ gun: L.gun, plate: L.plate, dark: L.dark, steel: L.steel });
+    this.gun.root.position.set(0, BARREL_Y, GUN_Z);
+    this.arm.add(this.gun.root);
+    this.muzzle = this.gun.muzzle;
     this.arm.scale.setScalar(0.78);
     this.arm.visible = false;
     this.rig.add(this.arm);
 
-    // --- The launcher pod on the right shoulder: two tubes, on an arm that leads
-    // back and down to the shoulder it is hinged on.
+    // --- The launcher pod on the right shoulder: two round tubes clamped
+    // together, on an arm that leads back and down to the shoulder it is hinged on.
     this.pod.add(
-      box(0.21, 0.15, 0.4, L.gun, 0, 0, 0),
-      box(0.22, 0.03, 0.26, L.plate, 0, 0.08, 0.02),
-      box(0.215, 0.03, 0.3, L.dark, 0, -0.065, 0),
-      box(0.085, 0.085, 0.06, L.dark, -0.052, 0, -0.215),
-      box(0.085, 0.085, 0.06, L.dark, 0.052, 0, -0.215),
-      box(0.07, 0.07, 0.56, L.sleeve, 0.09, -0.19, 0.36, 0.55, 0.22),
+      tube(0.042, 0.4, L.gun, -0.048, 0, 0, 8),
+      tube(0.042, 0.4, L.gun, 0.048, 0, 0, 8),
+      tube(0.05, 0.05, L.dark, -0.048, 0, -0.185, 8),
+      tube(0.05, 0.05, L.dark, 0.048, 0, -0.185, 8),
+      box(0.065, 0.045, 0.3, L.plate, 0, 0.042, 0.02),
+      box(0.2, 0.1, 0.05, L.dark, 0, 0, 0.08),
+      box(0.06, 0.06, 0.56, L.sleeve, 0.09, -0.19, 0.36, 0.55, 0.22),
     );
-    [-0.052, 0.052].forEach((x, i) => {
+    [-0.048, 0.048].forEach((x, i) => {
       const mat = new THREE.MeshStandardMaterial({ color: '#1a0d06', emissive: '#ffb347', emissiveIntensity: 1.4 });
       const muzzle = new THREE.Object3D();
-      muzzle.position.set(x, 0, -0.27);
+      muzzle.position.set(x, 0, -0.23);
       // Each tube's mouth glows while it holds a rocket, and so does its light on
       // the side of the pod that faces the player, who sees the pod from behind.
-      this.pod.add(box(0.055, 0.055, 0.012, mat, x, 0, -0.247), box(0.012, 0.045, 0.09, mat, -0.108, 0.01, 0.06 - i * 0.13), muzzle);
+      this.pod.add(tube(0.03, 0.01, mat, x, 0, -0.212, 8), box(0.012, 0.04, 0.09, mat, -0.097, 0, 0.06 - i * 0.13), muzzle);
       this.tubeMats.push(mat);
       this.podMuzzles.push(muzzle);
     });
@@ -475,10 +398,9 @@ export class Viewmodel {
     L.sleeve.color.set(look.sleeve);
     L.glove.color.set(look.glove);
     L.steel.color.set(look.steel);
-    L.accent.emissive.set(look.accent);
-    this.cool.set(look.cool);
-    this.warm.set(look.warm);
-    this.hot.set(look.hot);
+    this.cool.set(HEAT.cool);
+    this.warm.set(HEAT.warm);
+    this.hot.set(HEAT.hot);
     this.heatMat.emissive.copy(this.cool);
     this.spentMat.emissive.copy(this.hot);
     this.hands[0].visible = t === 0;
@@ -514,6 +436,7 @@ export class Viewmodel {
     }
     if (this.mode === 'arm') {
       this.recoil = 1;
+      this.gun.fire();
       if (this.heat > 0.55) this.steam(1);
       return;
     }
@@ -587,11 +510,9 @@ export class Viewmodel {
       this.kickBack = 0.11;
       this.kickUp = 0.2;
     } else {
-      this.muzzle = this.armMuzzle;
-      if (id in this.barrels) this.barrelId = id;
-      const b = this.barrels[this.barrelId];
-      this.kickBack = b ? b.kickBack : 0;
-      this.kickUp = b ? b.kickUp : 0;
+      this.muzzle = this.gun.muzzle;
+      this.kickBack = this.gun.kickBack;
+      this.kickUp = this.gun.kickUp;
     }
 
     const speed = lenH(s.vel);
@@ -669,7 +590,7 @@ export class Viewmodel {
       roll += 0.5 * show;
       tip += 0.16 * show;
     }
-    // Changing barrels: a short dip while the drum turns. A mech's cannon rises into view instead.
+    // Changing barrels: a short dip while the printer reshapes it. A mech's cannon rises into view instead.
     if (changing > 0) {
       if (mech) {
         y -= 0.32 * changing * changing;
@@ -684,7 +605,7 @@ export class Viewmodel {
     const r = this.rig.rotation;
     r.set(damp(r.x, tip, 18, dt), damp(r.y, turn, 14, dt), damp(r.z, roll, 10, dt));
 
-    if (!mech) this.updateArm(dt, a, mode === 'arm', reloading, changing);
+    if (!mech) this.updateArm(dt, a, mode === 'arm', reloading);
     this.updatePod(dt, a, shoulder, up, k, reloading, calm);
 
     this.flashT = Math.max(0, this.flashT - dt * 18);
@@ -716,34 +637,25 @@ export class Viewmodel {
     }
   }
 
-  /** The drum and its barrels, the printer, the heat it shows, the fins and the coolant cell. */
-  private updateArm(dt: number, a: Actor, active: boolean, reloading: number, changing: number): void {
+  /** The barrel, the printer, the heat it shows, the fins and the coolant cell. */
+  private updateArm(dt: number, a: Actor, active: boolean, reloading: number): void {
     const def = WEAPONS[a.loadout[a.weapon]];
-    // One barrel draws in over the first half of the change while the drum turns
-    // the next one to the top, and it comes out over the second half.
-    for (const id in this.barrels) {
-      const b = this.barrels[id];
-      const out = active && id === this.barrelId && changing <= 0.5;
-      b.ext = damp(b.ext, out ? 1 : 0, 6.5 / Math.max(0.2, def.equipTime), dt);
-      b.group.scale.z = STUB + (1 - STUB) * b.ext;
+    // The barrel draws in while the shoulder pod is the weapon.
+    this.gun.update(dt, active ? a.loadout[a.weapon] : 'none');
+    // A barrel locking in knocks the arm, a short shove back and a dip, and the breech blows off steam.
+    if (this.gun.justLocked) {
+      this.back.v += 0.7;
+      this.climb.v -= 0.6;
+      this.steam(3);
     }
-    const current = this.barrels[this.barrelId];
-    const turnTo = current ? (-current.slot * Math.PI * 2) / 3 : 0;
-    // The shortest way round, so a change never spins the drum a full turn.
-    const diff = Math.atan2(Math.sin(turnTo - this.drumTurn), Math.cos(turnTo - this.drumTurn));
-    this.drumTurn += diff * (1 - Math.exp(-(9 / Math.max(0.2, def.equipTime)) * dt));
-    // Seating a fresh cell gives the drum a small turn and click back.
-    const click = reloading >= CELL_IN ? (1 - smooth(clamp((reloading - CELL_IN) / 0.1, 0, 1))) * 0.25 : 0;
-    this.drum.rotation.z = this.drumTurn + click;
-    // A shot slides the drum back on its pistons.
+    // A shot slides the barrel back on its pistons.
     this.recoil = Math.max(0, this.recoil - dt * 14);
     const slide = 0.016 * this.recoil * this.recoil;
-    this.drum.position.z = DRUM_Z + slide;
+    this.gun.root.position.z = GUN_Z + slide;
     for (const r of this.pistonRods) r.position.z = -0.175 + slide;
-    const reach = current ? current.length * (STUB + (1 - STUB) * current.ext) : 0;
-    this.armMuzzle.position.set(0, BARREL_Y, DRUM_Z + slide + DRUM_FACE - reach);
-    // The printer's coils turn slowly, and fast while it makes rounds: after a shot and through a reload.
-    this.coilSpin = damp(this.coilSpin, 1.5 + 30 * this.pulse + (reloading >= 0 ? 14 : 0), 6, dt);
+    // The printer's coils turn slowly, and fast while it makes rounds: after a
+    // shot, through a reload, and fastest while it prints a new barrel.
+    this.coilSpin = damp(this.coilSpin, 1.5 + 30 * this.pulse + (reloading >= 0 ? 14 : 0) + 60 * this.gun.printing, 6, dt);
     this.coils.rotation.z += this.coilSpin * dt;
 
     // Heat: every shot fills the cell, so the rounds left are how much it can still take.

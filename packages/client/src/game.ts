@@ -748,7 +748,10 @@ export class Game {
         if (e.actor === me.id) this.sfx.dry(weaponOf(me).mount === 'arm');
         break;
       case 'equip':
-        if (e.actor === me.id) this.sfx.equip(weaponOf(me).mount ?? 'cannon');
+        if (e.actor === me.id) {
+          const w = weaponOf(me);
+          this.sfx.equip(w.mount ?? 'cannon', w.id, w.equipTime);
+        }
         break;
       case 'notice': {
         const a = m.actors[e.actor];
