@@ -585,6 +585,18 @@ packages/
 - **Models:** pilots wear real suits built in code (`client/src/render/pilot`):
   the Corps suit and the Z.E.R.O frame share one skeleton and one outline, so
   both match the hitbox, and a pose-driven animator covers every movement state.
+  Legs follow the way the pilot travels, not just where they look: a strafe is
+  a side-step with the hips turned into it, backing off steps backward, and the
+  body leans into speed, into a burst or a stop, and into turns.
+  Dead pilots are physics ragdolls (`client/src/render/pilot/ragdoll.ts`):
+  eleven jointed pieces held in a human range, with the muscles letting go over
+  a moment (legs first, neck last). The body keeps the speed and limb swing it
+  died with and takes the blow that killed it, so a sprinter tumbles on, a
+  slide skids out, a pilot on a ledge goes over it. Killed in the air, the jet
+  pack runs on without its pilot for a few seconds, firing in bursts that throw
+  the body around before it dies in a cough of smoke. The pool spreads where
+  the body comes to rest, the death camera follows it, and bodies lie 15 s
+  before sinking away. Open `/deaths.html` to watch each kind of death.
   The arm gun is one model in first and third person: a single barrel on the
   printing and cooling body that rebuilds itself into a short scattergun, a
   carbine or a telescoping longshot.

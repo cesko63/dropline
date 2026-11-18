@@ -539,10 +539,11 @@ export class Effects {
   /**
    * A pilot going down at `chest`, falling toward `back`: a last burst of what
    * they bleed and a pool spreading under them. A Z.E.R.O frame's lights die
-   * in sparks and a wisp of smoke.
+   * in sparks and a wisp of smoke. `pool` false leaves the pool for later,
+   * when a ragdoll has come to rest (`bleedOut`).
    */
-  downed(chest: Vec3, back: Vec3, team: number): void {
-    this.gore.down(chest, back, team);
+  downed(chest: Vec3, back: Vec3, team: number, pool = true): void {
+    this.gore.down(chest, back, team, pool);
     if (team !== 1) return;
     this.burst(chest, null, 18, '#ff2a3c', 6);
     col.setRGB(0.12, 0.12, 0.13);
@@ -564,6 +565,29 @@ export class Effects {
     this.sparkShower(core, null, 40, 10, HOT.spark, HOT.sparkCool, 0.03);
     col.setRGB(0.07, 0.07, 0.075);
     this.billow(core, 6, 0.3, 2, 0.5, 3, 1.8, col, { alpha: 0.6, rise: 0.6 });
+  }
+
+  /** A dead pilot come to rest at `hips`: the pool spreads out from under them. */
+  bleedOut(hips: Vec3, team: number): void {
+    this.gore.pool(hips, team);
+  }
+
+  /**
+   * A dead pilot's jet pack firing on its own at `pos`, exhaust along `dir`
+   * (unit): a short tongue of fire and a smoke trail; each new `burst` coughs
+   * out sparks as it catches.
+   */
+  runawayJet(pos: Vec3, dir: Vec3, burst: boolean): void {
+    this.flames(pos, 1, 0.05, 3, 0.16, 0.12, { normal: dir, rise: 0 });
+    col.setRGB(0.3, 0.29, 0.28);
+    this.billow(pos, 1, 0.05, 1.2, 0.18, 3, 1.1, col, { alpha: 0.35, rise: 0.4, normal: dir });
+    if (burst) this.sparkShower(pos, dir, 10, 6, HOT.spark, HOT.sparkCool, 0.025);
+  }
+
+  /** A runaway jet pack dying at `pos`: a last cough of black smoke. */
+  jetOut(pos: Vec3): void {
+    col.setRGB(0.1, 0.1, 0.1);
+    this.billow(pos, 4, 0.15, 1, 0.3, 3, 1.6, col, { alpha: 0.5, rise: 0.5 });
   }
 
   /** Dust kicked up from the ground: it rolls outward and settles. `reach` is how far it spreads. */

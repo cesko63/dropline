@@ -495,11 +495,16 @@ export class Gore {
   }
 
   /** A pilot going down at `chest`: a last burst, and a pool that spreads where the body lies (`back` is the way it falls). */
-  down(chest: Vec3, back: Vec3, team: number): void {
+  down(chest: Vec3, back: Vec3, team: number, pool = true): void {
     const fluid = this.fluid(team);
     this.drops(chest, UP, fluid, 14, 3, 1.2, 0.04);
     this.mist(chest, null, fluid, 3, 0.3, 0.6);
-    this.poolBelow(v.set(chest.x + back.x * 0.9, chest.y, chest.z + back.z * 0.9), fluid, rand(1.2, 1.6), 3.5, 0.6);
+    if (pool) this.poolBelow(v.set(chest.x + back.x * 0.9, chest.y, chest.z + back.z * 0.9), fluid, rand(1.2, 1.6), 3.5, 0.6);
+  }
+
+  /** A pool spreading from under a body that lies with its hips at `hips`. */
+  pool(hips: Vec3, team: number): void {
+    this.poolBelow(v.set(hips.x, hips.y + 0.3, hips.z), this.fluid(team), rand(1.2, 1.6), 3.5, 0.2);
   }
 
   /**

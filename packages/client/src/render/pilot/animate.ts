@@ -8,6 +8,9 @@ export interface AnimInput {
   alive: boolean;
   /** Horizontal speed, m/s. */
   speed: number;
+  /** Horizontal velocity against the body's heading, m/s: ahead and to the right. */
+  fwd: number;
+  side: number;
   /** Signed turn rate of the body this frame, rad/s. */
   turnRate: number;
   /** View yaw less the body's heading, radians; the head and chest turn toward it. */
@@ -27,6 +30,8 @@ export interface AnimInput {
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
 const mix = (a: number, b: number, t: number): number => a + (b - a) * t;
 const ease = (rate: number, dt: number): number => 1 - Math.exp(-rate * dt);
+/** An angle brought into -π..π. */
+const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 /** Leg length from hip to ankle with the thigh swung `a` forward and the knee bent `b`. */
 const reach = (a: number, b: number): number => THIGH_LEN * Math.cos(a) + SHIN_LEN * Math.cos(a - b);
 const REST_REACH = THIGH_LEN + SHIN_LEN;
@@ -56,6 +61,14 @@ export class PilotAnimator {
   private wasMantling = false;
   private lastVy = 0;
   private deadT = -1;
+  /** Way of travel against the heading, as a smoothed unit vector (ahead, right). */
+  private dirF = 1;
+  private dirS = 0;
+  /** Smoothed acceleration against the heading, m/s². */
+  private accF = 0;
+  private accS = 0;
+  private lastFwd = 0;
+  private lastSide = 0;
   /** Pod angle in chest space, for the avatar to read. */
   podPitch = 1.15;
 
@@ -107,6 +120,26 @@ export class PilotAnimator {
     this.flip = Math.max(0, this.flip - dt * 2.6);
     this.mantleT += dt;
     this.jet += ((s.thrusting ? 1 : 0) - this.jet) * ease(10, dt);
+    if (dt > 0) {
+      this.accF += (clamp((inp.fwd - this.lastFwd) / dt, -40, 40) - this.accF) * ease(6, dt);
+      this.accS += (clamp((inp.side - this.lastSide) / dt, -40, 40) - this.accS) * ease(6, dt);
+    }
+    this.lastFwd = inp.fwd;
+    this.lastSide = inp.side;
+    // The way of travel turns smoothly, and holds while standing so a stop does not snap the legs round.
+    if (inp.speed > 0.6) {
+      const k = ease(10, dt);
+      this.dirF += (inp.fwd / inp.speed - this.dirF) * k;
+      this.dirS += (inp.side / inp.speed - this.dirS) * k;
+    }
+    const travel = Math.atan2(this.dirS, this.dirF);
+    // Backing off, the legs step backward; otherwise the hips turn toward the
+    // way of travel (the chest stays on the view) and the legs swing along what is left.
+    const backward = Math.cos(travel) < -0.26;
+    const hipTurn = clamp(wrap(backward ? travel - Math.PI : travel) * 0.6, -0.75, 0.75);
+    const legWay = travel - hipTurn;
+    const ahead = Math.cos(legWay);
+    const across = Math.sin(legWay);
 
     const breath = Math.sin(this.time * 1.7);
     const running = s.grounded && !s.sliding && !s.mantle.active;
@@ -144,13 +177,18 @@ export class PilotAnimator {
     let hipsTwist = 0;
     let chestTwist = 0;
 
-    // Stride: thighs swing, knees fold on the forward swing, arms counter-swing.
+    // Stride: thighs swing the way of travel, knees fold on the swing through,
+    // arms counter-swing. Sideways the swing is shorter: a side-step, not a lunge.
     const swingA = g * (0.55 + 0.2 * sprint);
     const fold = g * (0.9 + 0.45 * sprint);
     const stride = (sin: number, cos: number): [number, number] => [
-      swingA * sin + 0.08 * g,
+      swingA * sin * ahead + 0.08 * g,
       0.06 + g * 0.25 + fold * Math.max(0, cos),
     ];
+    /** The thighs' sideways swing (+ is out to the right) for the stride in progress. */
+    let sideL = 0;
+    let sideR = 0;
+    let turnHips = 0;
 
     if (s.sliding) {
       // Lead leg out in front, the other folded under, leaning back, a hand trailing.
@@ -253,8 +291,13 @@ export class PilotAnimator {
     } else if (s.crouched) {
       // A deep combat crouch, hunched forward with the hips sat back, so the
       // head stays over the crouched hitbox (1 m tall, its head sphere at 0.85 m).
-      const [sa, sb] = [0.25 * g * sinL, 0.3 * g * Math.max(0, cosL)];
-      const [ra, rb] = [-0.25 * g * sinL, 0.3 * g * Math.max(0, -cosL)];
+      const [sa, sb] = [0.25 * g * sinL * ahead, 0.3 * g * Math.max(0, cosL)];
+      const [ra, rb] = [-0.25 * g * sinL * ahead, 0.3 * g * Math.max(0, -cosL)];
+      sideL = 0.2 * g * sinL * across;
+      sideR = -0.2 * g * sinL * across;
+      turnHips = hipTurn * 0.6 * g;
+      lean = -0.008 * inp.fwd;
+      roll = -0.008 * inp.side;
       legLa = 1.35 + sa;
       legLb = 2.45 + sb;
       legRa = 1.35 + ra;
@@ -268,6 +311,13 @@ export class PilotAnimator {
       // Standing, walking, running, sprinting.
       [legLa, legLb] = stride(sinL, cosL);
       [legRa, legRb] = stride(-sinL, -cosL);
+      sideL = 0.75 * swingA * sinL * across;
+      sideR = -0.75 * swingA * sinL * across;
+      turnHips = hipTurn * g;
+      // Lean into the run and into a burst of speed, back against a stop, and
+      // into a turn the way a runner leans into a bend.
+      lean = clamp(-0.012 * inp.fwd - 0.012 * this.accF, -0.26, 0.14);
+      roll = clamp(-0.012 * inp.side - 0.012 * this.accS + clamp(inp.turnRate * inp.speed * 0.012, -0.18, 0.18), -0.24, 0.24);
       const idle = 1 - g;
       t.thighL.z = -0.05 * idle;
       t.thighR.z = 0.05 * idle;
@@ -277,7 +327,7 @@ export class PilotAnimator {
       legRa -= 0.02 * breath * idle;
       spine += -0.1 * g - 0.12 * sprint;
       chest += -0.03 * g;
-      const armSwing = g * (0.5 + 0.35 * sprint);
+      const armSwing = g * (0.5 + 0.35 * sprint) * (0.45 + 0.55 * Math.abs(ahead));
       armLx = 0.05 - armSwing * sinL;
       armRx = 0.05 + armSwing * sinL;
       elbowL = elbowR = 0.2 + g * (0.45 + 0.6 * sprint);
@@ -300,13 +350,19 @@ export class PilotAnimator {
     }
 
     t.thighL.x = legLa;
+    t.thighL.z += sideL;
+    t.thighR.z += sideR;
+    // The hips turn toward the way of travel; the spine takes the turn back out so the chest stays on the view.
+    t.hips.y -= turnHips;
+    t.spine.y += turnHips * 0.6;
+    chestTwist += turnHips * 0.4;
     t.shinL.x = -legLb;
     t.footL.x = footL ?? clamp(legLb - legLa, -0.7, 1.2) * (running ? 1 - 0.4 * g : 1);
     t.thighR.x = legRa;
     t.shinR.x = -legRb;
     t.footR.x = footR ?? clamp(legRb - legRa, -0.7, 1.2) * (running ? 1 - 0.4 * g : 1);
     // On the ground, the hips sit as low as the longer leg reaches.
-    if (ground) drop = Math.max(reach(legLa, legLb), reach(legRa, legRb)) - REST_REACH;
+    if (ground) drop = Math.max(reach(legLa, legLb) * Math.cos(sideL), reach(legRa, legRb) * Math.cos(sideR)) - REST_REACH;
     t.hips.y += hipsTwist;
 
     // The head and chest turn toward the view when the body faces elsewhere (a slide, a wallrun).

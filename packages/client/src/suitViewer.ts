@@ -14,6 +14,11 @@ type State =
   | 'idle'
   | 'walk'
   | 'sprint'
+  | 'strafe L'
+  | 'strafe R'
+  | 'backpedal'
+  | 'run diagonal'
+  | 'back diagonal'
   | 'crouch'
   | 'crouch walk'
   | 'slide'
@@ -24,7 +29,7 @@ type State =
   | 'jetpack'
   | 'mantle'
   | 'death';
-const STATES: State[] = ['idle', 'walk', 'sprint', 'crouch', 'crouch walk', 'slide', 'wallrun L', 'wallrun R', 'jump', 'double jump', 'jetpack', 'mantle', 'death'];
+const STATES: State[] = ['idle', 'walk', 'sprint', 'strafe L', 'strafe R', 'backpedal', 'run diagonal', 'back diagonal', 'crouch', 'crouch walk', 'slide', 'wallrun L', 'wallrun R', 'jump', 'double jump', 'jetpack', 'mantle', 'death'];
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const renderer = createRenderer(canvas);
@@ -210,6 +215,16 @@ function drive(p: Pilot, dt: number): void {
   // Running "forward" along -Z; the body turns to match when momentum decides facing.
   s.vel.x = 0;
   s.vel.z = -speed;
+  // The other ways a pilot runs while looking ahead.
+  const way: Partial<Record<State, [number, number]>> = {
+    'strafe L': [-5.5, 0],
+    'strafe R': [5.5, 0],
+    backpedal: [0, 4.5],
+    'run diagonal': [4.2, -4.2],
+    'back diagonal': [-3.4, 3.4],
+  };
+  const w = way[st];
+  if (w) [s.vel.x, s.vel.z] = w;
   if (st === 'jump' || st === 'double jump') {
     // Jump, (jump again at the top), fall, land, stand a beat, repeat.
     if (s.grounded) {

@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
 import { WEAPONS, lenH, type Actor, type Vec3 } from '@dropline/shared';
 import { ArmGun, GUN_FINISH } from './armGun';
 import { PilotAnimator } from './pilot/animate';
-import { buildSkeleton, block, type BoneName, type Skeleton } from './pilot/rig';
+import type { CorpseParts } from './pilot/ragdoll';
+import { BONES, buildSkeleton, block, type BoneName, type Skeleton } from './pilot/rig';
 import { POD_MUZZLE, suitKit } from './pilot/suits';
 import { Wounds } from './pilot/wounds';
 
@@ -129,6 +131,12 @@ export class Avatar {
   private dead = -1;
   /** Torn apart: nothing is left to lie there. */
   private gibbed = false;
+  /** The body went to a ragdoll, which draws it from here on. */
+  private ragdolled = false;
+  /** Each bone's world position as of the last update, and how fast it was moving. */
+  private readonly boneAt = {} as Record<BoneName, THREE.Vector3>;
+  private readonly boneVel = {} as Record<BoneName, THREE.Vector3>;
+  private tracked = false;
   private weapon = '';
   private shoulder = false;
   private podUp = 0;
@@ -140,6 +148,10 @@ export class Avatar {
     const kit = suitKit(team);
     const machine = team === 1;
     this.bones = buildSkeleton(this.body);
+    for (const b of BONES) {
+      this.boneAt[b] = new THREE.Vector3();
+      this.boneVel[b] = new THREE.Vector3();
+    }
     this.anim = new PilotAnimator(this.bones, this.body);
     // Z.E.R.O plates carry a faint crimson cast, so a black frame never sinks into shadow.
     const emissive = new THREE.Color(machine ? '#3a0408' : '#000000').multiplyScalar(machine ? 0.4 : 0);
@@ -278,6 +290,58 @@ export class Avatar {
     return this.bones;
   }
 
+  /**
+   * The pilot dies as a ragdoll: a copy of the body as it stands this moment
+   * (wounds and all), with where every bone was and how fast it moved, for
+   * the ragdoll to carry on from. This pilot's own model is hidden until it
+   * respawns. `vel` stands in for the bones' speed before they have any.
+   */
+  corpse(team: number, vel: Vec3): CorpseParts {
+    this.ragdolled = true;
+    this.root.visible = false;
+    this.root.updateMatrixWorld(true);
+    const lights = this.lights.clone();
+    const halo = this.halo.clone();
+    const owned: { dispose(): void }[] = [lights, halo];
+    const originals: THREE.Object3D[] = [];
+    this.body.traverse((o) => originals.push(o));
+    const body = this.body.clone(true);
+    const copyOf = new Map<THREE.Object3D, THREE.Object3D>();
+    let i = 0;
+    body.traverse((o) => {
+      copyOf.set(originals[i++], o);
+      if (o instanceof THREE.Sprite && o.material === this.halo) o.material = halo;
+      if (!(o instanceof THREE.Mesh)) return;
+      if (o.material === this.lights) o.material = lights;
+      // Wounds are cleaned off this pilot at respawn; the body keeps its own.
+      if (o.geometry instanceof DecalGeometry) {
+        o.geometry = new THREE.BufferGeometry().copy(o.geometry);
+        owned.push(o.geometry);
+      }
+    });
+    const bones = {} as Skeleton;
+    const pose = {} as Record<BoneName, THREE.Matrix4>;
+    const speed = {} as Record<BoneName, THREE.Vector3>;
+    for (const b of BONES) {
+      bones[b] = copyOf.get(this.bones[b])!;
+      pose[b] = this.bones[b].matrixWorld.clone();
+      speed[b] = this.tracked ? this.boneVel[b].clone() : new THREE.Vector3(vel.x, vel.y, vel.z);
+    }
+    return {
+      body,
+      bones,
+      pose,
+      vel: speed,
+      flames: this.flames.map((f) => copyOf.get(f)!),
+      lights,
+      halo,
+      haloOpacity: this.haloOpacity,
+      flicker: this.pulse > 0,
+      team,
+      owned,
+    };
+  }
+
   /** Which way the body falls when it goes down: its back, flat on the ground. */
   fallDir(out: THREE.Vector3): THREE.Vector3 {
     return out.set(Math.sin(this.heading), 0, Math.cos(this.heading));
@@ -339,11 +403,13 @@ export class Avatar {
       this.laser.visible = false;
       this.muzzleFlash.visible = false;
       // Lie there, then clear away.
-      this.root.visible = this.dead < 2.4 && !this.gibbed;
+      this.root.visible = this.dead < 2.4 && !this.gibbed && !this.ragdolled;
     } else {
       if (this.dead >= 0) {
         this.dead = -1;
         this.gibbed = false;
+        this.ragdolled = false;
+        this.tracked = false;
         this.wounds.clear();
         this.heading = s.yaw;
       }
@@ -362,6 +428,8 @@ export class Avatar {
       s,
       alive: a.alive,
       speed,
+      fwd: -(s.vel.x * Math.sin(this.heading) + s.vel.z * Math.cos(this.heading)),
+      side: s.vel.x * Math.cos(this.heading) - s.vel.z * Math.sin(this.heading),
       turnRate,
       lookYaw: Math.atan2(Math.sin(s.yaw - this.heading), Math.cos(s.yaw - this.heading)),
       aimPitch: s.pitch + a.punchPitch,
@@ -408,7 +476,19 @@ export class Avatar {
         const pop = age < 0.12 ? 0.5 + (age / 0.12) * 0.9 : 1.4 - Math.min(0.4, (age - 0.12) * 4);
         this.mark.scale.setScalar(0.55 * pop * Math.min(1, this.noticed * 6));
       }
+      if (dt > 0) this.track(dt);
     }
+  }
+
+  /** Note where every bone is, and how fast it got there, for a ragdoll to carry on from. */
+  private track(dt: number): void {
+    this.root.updateMatrixWorld(true);
+    for (const b of BONES) {
+      tmp.setFromMatrixPosition(this.bones[b].matrixWorld);
+      if (this.tracked) this.boneVel[b].subVectors(tmp, this.boneAt[b]).divideScalar(dt).clampLength(0, 30);
+      this.boneAt[b].copy(tmp);
+    }
+    this.tracked = true;
   }
 
   dispose(): void {

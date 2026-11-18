@@ -37,6 +37,7 @@ import { Avatar, TEAM_LOOK } from './render/avatar';
 import { Effects } from './render/effects';
 import { buildMapMeshes } from './render/mapMesh';
 import { ALLY_ZONE, ENEMY_ZONE, MechAvatar } from './render/mechAvatar';
+import { Ragdolls } from './render/pilot/ragdoll';
 import { createEnvironment, createRenderer, type Environment } from './render/scene';
 import { Viewmodel } from './render/viewmodel';
 import type { LoadoutStore } from './settings/loadout';
@@ -115,6 +116,7 @@ export class Game {
   private readonly scene = new THREE.Scene();
   private readonly env: Environment;
   private readonly fx: Effects;
+  private readonly ragdolls: Ragdolls;
   private readonly viewmodel = new Viewmodel();
   private readonly hud = new Hud();
   private avatars: Avatar[] = [];
@@ -126,6 +128,9 @@ export class Game {
   private raise: number[] = [];
   /** The way the last blow to each pilot came, for the body it tears apart. */
   private hitDir: THREE.Vector3[] = [];
+  /** Where the last blow to each pilot landed, and its damage: the push the ragdoll takes. */
+  private hitAt: THREE.Vector3[] = [];
+  private hitPower: number[] = [];
   private readonly cmds: InputCmd[] = [];
   /** The line to the server while playing online, else null. */
   private conn: Connection | null = null;
@@ -152,6 +157,8 @@ export class Game {
   private readonly burn = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   private readonly tmp = new THREE.Vector3();
   private readonly woundAt = new THREE.Vector3();
+  /** Where the death camera looks from: the player's own body as it falls. */
+  private readonly deathCam = v3();
   private readonly eye = v3();
   private readonly aim = v3();
   private readonly at = v3();
@@ -166,6 +173,14 @@ export class Game {
     this.env = createEnvironment(this.scene, map.env);
     this.scene.add(buildMapMeshes(map, this.renderer));
     this.fx = new Effects(this.scene, this.env, world);
+    this.ragdolls = new Ragdolls(this.scene, map.boxes, {
+      settled: (at, team) => this.fx.bleedOut(at, team),
+      jet: (at, dir, burst) => {
+        this.fx.runawayJet(at, dir, burst);
+        if (burst && Math.random() < 0.5) this.sfx.leap(at);
+      },
+      jetOut: (at) => this.fx.jetOut(at),
+    });
     this.hud.debug = options.qa;
     this.seed = options.seed;
     this.startMeter = options.startMeter;
@@ -336,7 +351,10 @@ export class Game {
     this.mechDrawn = this.match.mechs.map((k) => ({ ...k.pos }));
     this.raise = this.match.actors.map(() => 0);
     this.hitDir = this.match.actors.map(() => new THREE.Vector3(0, 1, 0));
+    this.hitAt = this.match.actors.map(() => new THREE.Vector3());
+    this.hitPower = this.match.actors.map(() => 0);
     this.fx.clear();
+    this.ragdolls.clear();
     this.hud.reset(this.match, me);
     this.input.yaw = me.p.yaw;
     this.input.pitch = 0;
@@ -495,7 +513,11 @@ export class Game {
     rig.aim = me.alive ? me.ads : 0;
     rig.forceThird = !me.alive;
     rig.mech = me.inMech ? frameOf(m.mechs[me.id]) : null;
-    rig.update(dt, s, p, cmd.moveX, this.pendingEvents, this.world);
+    this.ragdolls.update(paused ? 0 : dt);
+    // Dead, the camera follows the body wherever it goes.
+    const body = me.alive ? null : this.ragdolls.hipsOf(me.id, this.tmp);
+    const view = body ? Object.assign(this.deathCam, { x: body.x, y: body.y - 0.9, z: body.z }) : p;
+    rig.update(dt, s, view, cmd.moveX, this.pendingEvents, this.world);
     this.pendingEvents = 0;
     const cam = rig.camera;
     this.sfx.setListener(cam.position.x, cam.position.y, cam.position.z, s.yaw);
@@ -702,8 +724,25 @@ export class Game {
     }
     if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
     dir.normalize();
+    this.hitAt[victim].copy(at);
+    this.hitPower[victim] = amount;
     this.fx.wound(at, dir, this.match.actors[victim].team, amount, head);
     this.avatars[victim].wound(at, dir, amount);
+  }
+
+  /**
+   * A pilot killed by something that leaves them in one piece goes limp as a
+   * ragdoll, pushed by the blow that killed them; killed in the air, their jet
+   * pack runs on without them.
+   */
+  private dropBody(victim: Actor, chest: Vec3): void {
+    const body = this.avatars[victim.id];
+    this.fx.downed(chest, body.fallDir(this.tmp), victim.team, false);
+    const s = victim.p;
+    const power = Math.min(45, 12 + this.hitPower[victim.id] * 0.5);
+    const blow = this.hitPower[victim.id] > 0 ? { at: this.hitAt[victim.id], dir: this.hitDir[victim.id], power } : null;
+    this.hitPower[victim.id] = 0;
+    this.ragdolls.spawn(victim.id, body.corpse(victim.team, s.vel), blow, !s.grounded && !s.mantle.active);
   }
 
   /** 1 beside the player's view, falling to 0 at `range` meters. */
@@ -864,7 +903,7 @@ export class Game {
         chest.z = victim.p.pos.z;
         const body = this.avatars[victim.id];
         if (tearsApart(e.weapon)) this.fx.gib(body.gib(), victim.team, this.hitDir[victim.id]);
-        else this.fx.downed(chest, body.fallDir(this.tmp), victim.team);
+        else this.dropBody(victim, chest);
         if (killer === me) {
           this.hud.showBanner('ELIMINATED ', victim.name);
           this.rig.kick(3);

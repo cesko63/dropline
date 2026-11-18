@@ -20,6 +20,13 @@ const OVERLAP_SHRINK = 0.006;
 
 let rapierReady: Promise<void> | null = null;
 
+/** The physics engine, loaded once for every world that needs it (the client's ragdolls use it too). */
+export function physicsReady(): Promise<void> {
+  rapierReady ??= RAPIER.init();
+  return rapierReady;
+}
+export { RAPIER };
+
 /**
  * Static collision world built from map data. Only answers queries (casts and
  * overlaps); nothing is simulated here. Runs unchanged in the browser and Node.
@@ -47,8 +54,7 @@ export class CollisionWorld {
   }
 
   static async create(map: MapData): Promise<CollisionWorld> {
-    rapierReady ??= RAPIER.init();
-    await rapierReady;
+    await physicsReady();
     return new CollisionWorld(map);
   }
 
