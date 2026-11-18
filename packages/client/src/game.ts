@@ -24,10 +24,12 @@ import {
   type MatchEvent,
   type MatchInfo,
   type MatchState,
+  type Mech,
   type MechAbility,
   type PlayerState,
   type Vec3,
 } from '@dropline/shared';
+import { Ambience } from './audio/ambience';
 import { PilotFoley } from './audio/pilotFoley';
 import { Sfx } from './audio/sfx';
 import { SurfaceSounds, type Surface } from './audio/surfaces';
@@ -55,8 +57,10 @@ const IMPACT_SPARK = '#ffcf8a';
 const CRIT_SPARK = '#ffd23f';
 /** Ids for rockets drawn from prediction, well clear of the server's own. */
 const LOCAL_ROCKETS = 1_000_000;
-/** The final-moments music starts once a team has this share of the score limit. */
-const FINAL_MOMENTS = 0.8;
+/** Points short of the score limit at which a side is close to winning: the HUD says so and the final-moments music starts. */
+const NEAR_WIN = 10;
+/** Mechs farther off than this are not heard idling: their footfalls and guns carry, their reactors do not. */
+const MECH_HEARD_WITHIN = 30;
 
 /**
  * Where an event comes from. Offline everything is `sim`. Online the player's
@@ -125,6 +129,7 @@ export class Game {
   private readonly hud = new Hud();
   private avatars: Avatar[] = [];
   private foley: PilotFoley[] = [];
+  private readonly ambience: Ambience;
   private readonly surfaces: SurfaceSounds;
   private mechAvatars: MechAvatar[] = [];
   private prev: Vec3[] = [];
@@ -155,6 +160,11 @@ export class Game {
   private deployed = false;
   /** How far this match's music has got: nothing yet, the spawn theme, final moments, the end. */
   private musicStage: 'none' | 'spawn' | 'final' | 'end' = 'none';
+  /** The side last ahead on score (-1 before anyone was), and the sides already told they are close to winning. */
+  private leader = -1;
+  private nearWin = [false, false];
+  /** Whether the line to the server was up last frame, for its sound. */
+  private linkUp = true;
   private accumulator = 0;
   private lastTime = 0;
   private pendingEvents = 0;
@@ -192,6 +202,7 @@ export class Game {
       jetOut: (at) => this.fx.jetOut(at),
     });
     this.surfaces = new SurfaceSounds(map, world);
+    this.ambience = new Ambience(this.sfx, world, map.ambience ?? []);
     this.hud.debug = options.qa;
     this.seed = options.seed;
     this.startMeter = options.startMeter;
@@ -371,6 +382,8 @@ export class Game {
     this.hud.reset(this.match, me);
     this.deployed = this.input.playing;
     this.musicStage = 'none';
+    this.leader = -1;
+    this.nearWin = [false, false];
     this.input.yaw = me.p.yaw;
     this.input.pitch = 0;
     this.input.weapon = -1;
@@ -458,7 +471,7 @@ export class Game {
       this.musicStage = 'spawn';
       music.play(this.me.team === 0 ? 'intro-corps' : 'intro-zero');
     }
-    if (this.musicStage === 'spawn' && !m.over && Math.max(...m.score) >= m.scoreLimit * FINAL_MOMENTS) {
+    if (this.musicStage === 'spawn' && !m.over && Math.max(...m.score) >= m.scoreLimit - NEAR_WIN) {
       this.musicStage = 'final';
       music.play('final');
     }
@@ -563,6 +576,7 @@ export class Game {
     this.pendingEvents = 0;
     const cam = rig.camera;
     this.sfx.setListener(cam.position.x, cam.position.y, cam.position.z, s.yaw);
+    this.ambience.update(paused ? 0 : dt, cam.position);
 
     for (const a of m.actors) {
       const avatar = this.avatars[a.id];
@@ -576,7 +590,6 @@ export class Game {
       if (b && b.charge > 0 && a.alive && !a.inMech) avatar.setLaser(b.charge, b.charge >= BOTS.chargeLock, this.aimPoint(a));
       else avatar.setLaser(0, false, null);
     }
-    this.sfx.endFrame();
 
     this.smokeT += dt;
     const puff = this.smokeT > 0.11;
@@ -593,6 +606,7 @@ export class Game {
       const mine = k.id === me.id && me.inMech;
       // The player's own mech turns with the mouse, like their view.
       avatar.update(dt, k, this.mechDrawn[k.id], mine ? s.yaw : k.yaw, mine ? s.pitch : k.pitch, !mine || rig.showsSelf);
+      this.mechHum(k, mine);
       if (paused) continue;
       // What is left of a destroyed one burns out, cooking off now and then.
       if (k.state === 'none') {
@@ -614,6 +628,7 @@ export class Game {
         this.fx.thrust(at, 0.7);
       }
     }
+    this.sfx.endFrame();
     const own = m.mechs[me.id];
     if (me.inMech && own.health < frameOf(own).health * 0.25 && !paused) this.sfx.hullAlarm();
     this.hud.setFrame(this.loadout.value.mech);
@@ -627,9 +642,15 @@ export class Game {
     this.hud.update(dt, m, me, rig.outside, scoped, cam, s.yaw);
     if (conn) {
       this.hud.updateNet(dt, conn.net.stats, conn.status, conn.secondsLeft);
+      const up = conn.status === 'online';
+      if (up !== this.linkUp) {
+        this.linkUp = up;
+        this.sfx.link(up);
+      }
       if (m.over) this.hud.setEndHint(`NEXT MATCH IN ${Math.max(0, Math.ceil(NET.restartSeconds - (performance.now() - this.endedAt) / 1000))}`);
     }
     if (this.hud.inDropZone && !paused) this.sfx.zoneWarn();
+    this.scoreNews(m, me);
 
     this.renderer.clear();
     this.renderer.render(this.scene, cam);
@@ -666,6 +687,33 @@ export class Game {
     }
     for (const e of net.advance(performance.now(), dt)) this.onEvent(e, 'server');
     return cmd;
+  }
+
+  /**
+   * Callouts for the score: a side takes the lead from the other, or comes
+   * within 10 points of winning. Each is said once.
+   */
+  private scoreNews(m: MatchState, me: Actor): void {
+    if (m.over) return;
+    const ally = me.team;
+    const lead = m.score[ally] > m.score[1 - ally] ? ally : m.score[ally] < m.score[1 - ally] ? 1 - ally : -1;
+    if (lead >= 0 && lead !== this.leader) {
+      // The first score of the match is not news; taking it back is.
+      if (this.leader >= 0) {
+        if (lead === ally) this.hud.showCallout('LEAD TAKEN', `${COMBAT.teams[ally].name} ahead`, 'good');
+        else this.hud.showCallout('LEAD LOST', `${COMBAT.teams[1 - ally].name} ahead`, 'bad');
+        this.sfx.callout();
+      }
+      this.leader = lead;
+    }
+    for (const team of [ally, 1 - ally]) {
+      if (this.nearWin[team] || m.score[team] < m.scoreLimit - NEAR_WIN) continue;
+      this.nearWin[team] = true;
+      const left = m.scoreLimit - m.score[team];
+      if (team === ally) this.hud.showCallout(`${left} TO WIN`, 'Victory is close', 'good');
+      else this.hud.showCallout(`ENEMY ${left} TO WIN`, `${COMBAT.teams[team].name} closing in`, 'bad');
+      this.sfx.callout();
+    }
   }
 
   /**
@@ -793,6 +841,19 @@ export class Game {
   private near(pos: Vec3, range: number): number {
     const cam = this.rig.camera.position;
     return Math.max(0, 1 - Math.hypot(pos.x - cam.x, pos.y - cam.y, pos.z - cam.z) / range);
+  }
+
+  /**
+   * A running mech's reactor, heard from the seat or from close by (a cloaked
+   * enemy's is not heard at all), and the hum of a raised shield.
+   */
+  private mechHum(k: Mech, mine: boolean): void {
+    if (k.state !== 'piloted' && k.state !== 'boot') return;
+    const at = mine ? null : k.pos;
+    const hidden = k.cloak > 0 && k.team !== this.me.team;
+    const hum = mine ? 'cockpit-hum' : 'mech-hum';
+    if (!hidden && this.sfx.hears(at, MECH_HEARD_WITHIN)) this.sfx.hold(`${hum}-${k.id}`, hum, at, mine ? 0.25 : 0.6);
+    if (k.shieldUp) this.sfx.hold(`shield-${k.id}`, 'shield-hum', at, mine ? 0.3 : 0.8);
   }
 
   /** Sparks off a raised shield, in its team's light; the wall itself flares there. */
@@ -952,7 +1013,7 @@ export class Game {
         if (tearsApart(e.weapon)) this.fx.gib(body.gib(), victim.team, this.hitDir[victim.id]);
         else this.dropBody(victim, chest);
         if (killer === me) {
-          this.hud.showBanner('ELIMINATED ', victim.name);
+          this.hud.showBanner('ELIMINATED ', victim.name, '', 1);
           this.rig.kick(3);
           this.sfx.kill();
         }
@@ -1082,7 +1143,7 @@ export class Game {
         if (mine && source === 'server') break;
         if (e.heavy) avatar.land(k.landSpeed);
         else avatar.step();
-        this.sfx.mechStep(mine ? null : k.pos, e.heavy);
+        this.sfx.mechStep(mine ? null : k.pos, e.heavy, frameOf(k).id);
         // Dust at the feet, except under the player's own cockpit where it would only fog the view.
         if (!mine || this.rig.outside) this.fx.footfall(k.pos, e.heavy);
         if (mine) {
@@ -1160,7 +1221,7 @@ export class Game {
         this.shake(this.near(e.pos, 55));
         if (killer) this.hud.addKill(killer, owner, killLabel(e.weapon), me, ` · ${frameOf(m.mechs[e.mech]).short}`);
         if (killer === me) {
-          this.hud.showBanner('MECH DESTROYED ', owner.name);
+          this.hud.showBanner('MECH DESTROYED ', owner.name, '', COMBAT.mech.destroyScore);
           this.rig.kick(6);
           this.sfx.kill();
         }
@@ -1217,6 +1278,7 @@ export class Game {
       case 'matchEnd':
         this.endedAt = performance.now();
         this.hud.showEnd(e.winner === me.team, m, me);
+        this.sfx.matchEnd(e.winner === me.team);
         this.musicStage = 'end';
         this.sfx.music.play(e.winner === me.team ? 'victory' : 'defeat');
         break;

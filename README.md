@@ -437,6 +437,18 @@ them:
 - on the ground, no view is longer than the bots can see (75 m)
 - from anywhere, raised perches too, no view reaches into the other team's yard
 
+**What it sounds like.** The halves differ by ear as well as by eye: the
+Corps' city still runs in the south (distant traffic, an air-raid siren now
+and then), while in the north Z.E.R.O's harvester drones and lets out deep
+metal groans. Wind blows over everything and grows stronger up high; under a
+roof it drops away and the rest goes dull. Near the fallen jib, the
+scaffold and the broken ends of the rail deck, steel creaks and grit trickles
+down. A far rumble rolls in from the horizon every so often. Each one-shot
+waits its own random time (sirens 35 to 80 s, creaks 10 to 25 s) and no two
+come within 2 s of each other. The map file lists every source, where it
+sits and how often it plays (`ambience`), and `client/src/audio/ambience.ts`
+plays it.
+
 The map is made by `tools/maps/spire-nine.mjs`; edit that and run
 `pnpm map:spire-nine`, never the JSON. It is 120 by 160 m.
 
@@ -554,7 +566,7 @@ packages/
     src/camera/           First / third person camera, recoil, zoom, shake
     src/render/           Scene, map, pilots, mechs, first-person weapons, cockpit, effects
     src/render/fx/        Particle sprites and the effects' painted textures
-    src/audio/            Sound: the recorded sound bank, effects, pilots' footsteps and movement, music
+    src/audio/            Sound: the recorded sound bank, effects, pilots' footsteps and movement, map ambience, music
     src/ui/               HUD, start screen, settings screen, pad menu navigation
     tests/                Settings, bindings, stick and sound tests
   server/             Dedicated game server (Node, WebSocket)
@@ -583,27 +595,51 @@ packages/
 
 ## Stand-ins
 
-- **Sound:** pilots are recorded (CC0 packs from OpenGameArt, listed in
-  `AUDIO.md`): footsteps that follow the legs and change between concrete and
-  steel, jumps, landings weighed by the fall, the slide's scrape, mantles, the
-  jet pack, the rush of air at speed, the three arm guns (a dry crack close up,
-  the take with the room in it far off), the rocket pod, explosions, rounds
-  striking concrete or steel, reloads and weapon swaps, being hit, and dying.
-  Every sound has 1 to 7 takes picked at random with a little pitch jitter.
-  Mechs, menus, the HUD's alerts and confirmations are still synthesized from
-  filtered noise and short tones (`client/src/audio/sfx.ts`) until their
-  recordings replace them; there is no ambience yet.
+- **Sound:** pilots and mechs are recorded (CC0 packs from OpenGameArt, listed
+  in `AUDIO.md`). Pilots: footsteps that follow the legs and change between
+  concrete and steel, jumps, landings weighed by the fall, the slide's scrape,
+  mantles, the jet pack, the rush of air at speed, the three arm guns (a dry
+  crack close up, the take with the room in it far off), the rocket pod,
+  explosions, rounds striking concrete or steel, reloads and weapon swaps,
+  being hit, and dying. Mechs: footfalls weighed by the frame (the Lynx light
+  and quick, the Bastion low), leg servos, the dash and jump jets, the stomp,
+  the autocannon, flak cannon and rail cannon, flak bursts, belt reloads, the
+  shield coming up, humming, taking fire and shattering, the cloak, the call-in
+  (a roar that deepens for exactly as long as the fall, then the landing),
+  climbing in and the reactor spooling up, the cockpit's hum and a running
+  mech's reactor nearby (a cloaked enemy's is silent), climbing out and
+  ejecting, rams, armour and hull hits, a mech blowing apart and its wreck
+  cooking off. Every sound has 1 to 7 takes picked at random with a little
+  pitch jitter, and the player's own sounds keep voices in reserve so a crowded
+  fight never drowns them out. The menus, the HUD and its alerts are recorded
+  too: a tick as the pointer or the pad reaches a choice, a switch on a press,
+  sweeps as a screen opens and closes, the hit tick (a ping on the head, a
+  heavier thunk on a kill), the mech meter's chimes, a radio squelch on the
+  call, beeps under a falling mech and a failing hull, a sweep on deploy,
+  callouts, static when the line drops and a tone for a win or a loss. Spire
+  Nine's ambience is recorded too: wind, distant traffic and sirens, the
+  harvester's drone and groans, a far rumble, creaking steel and falling grit.
 - **Music** is scored the way modern military shooters score a match, with
   free CC0 tracks (listed in `AUDIO.md`): a dark, slow urban-warfare theme on
   the start screen, hangar and settings; a spawn theme as you drop in, the
   Corps' on heavy stabs and distorted bass, Z.E.R.O's on an industrial
   machine pulse; then no music while the fight goes on, so every shot and
-  footstep stays clear; a tense final-moments loop once either side reaches
-  80% of the score limit; and a short win or loss at the end. A looped track
+  footstep stays clear; a tense final-moments loop once either side is 10
+  points from winning; and a short win or loss at the end. A looped track
   plays its intro once and then loops a span where the music repeats itself
   (found by comparing spectral windows), cross-faded at the seam. The pause
   menu lowers the music without stopping it, a hidden tab silences it, and it
   has its own volume under Sound & comfort.
+- **HUD and menus** follow the look of today's military shooters, in a
+  condensed type (Barlow Condensed, SIL Open Font License, bundled in
+  `assets/fonts`): the score top left, a compass along the top that also marks
+  where your mech is, alerts under it (an enemy mech landing on you, a lost
+  connection, the lead taken or lost, a side 10 points from winning), the kill
+  feed top right, health in four plates bottom left (a lost chunk stays lit,
+  then drains), the weapon bottom right with the mech meter as a ring over it,
+  and kills under the crosshair with the points they scored. The start screen
+  lists its choices down the left over the match, the controls on the right
+  and the keys that work along the bottom.
 - **Models:** pilots wear real suits built in code (`client/src/render/pilot`):
   the Corps suit and the Z.E.R.O frame share one skeleton and one outline, so
   both match the hitbox, and a pose-driven animator covers every movement state.
@@ -669,7 +705,7 @@ packages/
   deck (they take the fallen carriage instead).
 - **Maps are built from boxes.** Spire Nine has its layout, light and dressing
   (concrete, steel, glass, blue conduits, black machine panels, crimson lights,
-  a lit skyline), but no props, decals or models yet, and no ambient sound.
+  a lit skyline), but no props, decals or models yet.
 - **Mechs can land on roofs.** A call-in only needs open sky, so a player's mech
   can come down on the Transit Hall roof or the tower's open third floor. Bots
   only call theirs where it can walk out.
@@ -699,11 +735,11 @@ packages/
       2. The three mech frames (done)
       3. The cockpit from inside (done)
       4. Effects: smoke, steam, sparks, blasts and wrecks (done)
-   8. Sound and music (now)
+   8. Sound and music
       1. Recorded sound and pilots: steps, movement, guns, impacts, hurt (done)
-      2. Mechs: steps, jets, cannons, rockets, shields, call-in, wrecks
-      3. Menus, HUD and alerts
-      4. Ambience for Spire Nine
+      2. Mechs: steps, jets, cannons, rockets, shields, call-in, wrecks (done)
+      3. Menus, HUD and alerts (done)
+      4. Ambience for Spire Nine (done)
       5. Music, with its own volume (done)
    9. Closing pass: teaching, performance, error cards, balance
 6. Deployment

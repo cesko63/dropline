@@ -16,6 +16,15 @@ const FEED_LINES = 5;
 const MECH_KEY = 100;
 /** Seconds an enemy mech's hull stays shown after the player hurt it. */
 const REVEAL_TIME = 4;
+/** Seconds a lost chunk of health stays lit before it drains away. */
+const GHOST_HOLD = 0.35;
+/** Share of the bar the lost chunk drains per second. */
+const GHOST_DRAIN = 0.9;
+/** Compass: pixels per degree, and how far either side of the heading it reads. */
+const COMPASS_PX = 2.4;
+const COMPASS_SPAN = 90;
+/** Seconds a callout (the lead changed, a side is close to winning) stays up. */
+const CALLOUT_TIME = 2.6;
 
 interface HurtWedge {
   el: HTMLElement;
@@ -56,6 +65,11 @@ class Text {
 
 const v = new THREE.Vector3();
 
+/** A quick scale pop with a little overshoot, for a value that just changed. */
+function pop(node: HTMLElement, size: number): void {
+  node.animate([{ transform: `scale(${size})` }, { transform: 'scale(0.95)', offset: 0.6 }, { transform: 'none' }], { duration: 260, easing: 'ease-out' });
+}
+
 export class Hud {
   /** Show every bot's state over its head (the `?qa=1` debug view). */
   debug = false;
@@ -75,6 +89,10 @@ export class Hud {
   private readonly vignette = el('vignette');
   private readonly vitals = el('vitals');
   private readonly health = el('health');
+  private readonly healthGhost = el('health-ghost');
+  /** The health shown by the lost chunk; it trails the real value down. */
+  private ghost = 1;
+  private ghostHold = 0;
   private readonly healthValue = new Text(el('health-value'));
   private readonly weapon = el('weapon');
   private readonly weaponName = new Text(el('weapon-name'));
@@ -89,6 +107,17 @@ export class Hud {
   private readonly barEnemy = el('bar-enemy');
   private readonly feedBox = el('feed');
   private readonly banner = el('banner');
+  private readonly bannerPoints = el('banner-points');
+  private readonly bannerText = el('banner-text');
+  private readonly compassStrip = el('compass-strip');
+  private readonly compassMech = el('compass-mech');
+  private readonly compassDeg = new Text(el('compass-deg'));
+  private lastHeading = -1;
+  private readonly callout = el('callout');
+  private calloutLife = 0;
+  private readonly deathBar = el('death-bar');
+  /** The scores last shown, so a change can pop. */
+  private lastScore = [-1, -1];
   private readonly death = el('death');
   private readonly deathWait = new Text(el('death-wait'));
   private readonly end = el('end');
@@ -156,6 +185,20 @@ export class Hud {
       splatBox.append(node);
       this.splats.push({ el: node, life: 0, peak: 0 });
     }
+    // The compass: a tick every 5 degrees, a number every 15, a letter every 45,
+    // laid out over one and a half turns so the window never runs off its end.
+    const names: Record<number, string> = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
+    for (let d = -180; d <= 540; d += 5) {
+      const mark = document.createElement('i');
+      const deg = ((d % 360) + 360) % 360;
+      mark.style.left = `${((d + 180) * COMPASS_PX).toFixed(1)}px`;
+      if (deg % 15 === 0) {
+        const name = names[deg];
+        mark.className = name ? 'major' : 'minor';
+        mark.textContent = name ?? String(deg);
+      }
+      this.compassStrip.append(mark);
+    }
     for (let i = 0; i < DAMAGE_NUMBERS; i++) {
       const node = document.createElement('span');
       node.className = 'dmg';
@@ -197,6 +240,11 @@ export class Hud {
     }
     this.reveal = m.mechs.map(() => 0);
     this.warn.classList.remove('on');
+    this.callout.classList.remove('on');
+    this.calloutLife = 0;
+    this.ghost = 1;
+    this.ghostHold = 0;
+    this.lastScore = [-1, -1];
     this.hurt = 0;
     this.death.classList.remove('on');
     this.end.classList.remove('on');
@@ -249,6 +297,16 @@ export class Hud {
     const points = inMech ? mech.health : me.health;
     const hp = Math.max(0, points) / (inMech ? frameOf(mech).health : COMBAT.health);
     this.health.style.transform = `scaleX(${hp.toFixed(3)})`;
+    // A lost chunk stays lit for a moment, then drains down to the new value.
+    if (hp >= this.ghost) {
+      this.ghost = hp;
+      this.ghostHold = 0;
+    } else if (this.ghostHold < GHOST_HOLD) {
+      this.ghostHold += dt;
+    } else {
+      this.ghost = Math.max(hp, this.ghost - GHOST_DRAIN * dt);
+    }
+    this.healthGhost.style.transform = `scaleX(${this.ghost.toFixed(3)})`;
     this.healthValue.set(String(Math.ceil(Math.max(0, points))));
     this.vitalsLabel.set(inMech ? 'HULL' : 'HEALTH');
     this.vitals.classList.toggle('low', hp < (inMech ? 0.25 : 0.35));
@@ -310,13 +368,28 @@ export class Hud {
     this.crosshair.classList.toggle('off', !me.alive || scoped);
     this.scope.classList.toggle('on', scoped);
 
-    // Score.
-    this.scoreAlly.set(String(m.score[me.team]));
-    this.scoreEnemy.set(String(m.score[1 - me.team]));
+    // Score: a number that changes pops.
+    const scores = [m.score[me.team], m.score[1 - me.team]];
+    scores.forEach((value, i) => {
+      if (value === this.lastScore[i]) return;
+      const first = this.lastScore[i] < 0;
+      this.lastScore[i] = value;
+      (i === 0 ? this.scoreAlly : this.scoreEnemy).set(String(value));
+      if (!first) pop(el(i === 0 ? 'score-ally' : 'score-enemy'), 1.45);
+    });
     this.barAlly.style.transform = `scaleX(${Math.min(1, m.score[me.team] / m.scoreLimit).toFixed(3)})`;
     this.barEnemy.style.transform = `scaleX(${Math.min(1, m.score[1 - me.team] / m.scoreLimit).toFixed(3)})`;
 
-    if (!me.alive && !m.over) this.deathWait.set(Math.max(0, me.respawnIn).toFixed(1));
+    if (!me.alive && !m.over) {
+      this.deathWait.set(Math.max(0, me.respawnIn).toFixed(1));
+      this.deathBar.style.transform = `scaleX(${Math.min(1, 1 - me.respawnIn / COMBAT.respawnTime).toFixed(3)})`;
+    }
+
+    this.updateCompass(m, me, viewYaw);
+    if (this.calloutLife > 0) {
+      this.calloutLife -= dt;
+      if (this.calloutLife <= 0) this.callout.classList.remove('on');
+    }
 
     for (const w of this.wedges) {
       if (w.life <= 0) continue;
@@ -347,6 +420,46 @@ export class Hud {
       this.frames = 0;
       this.fpsTime = 0;
     }
+  }
+
+  /**
+   * The compass along the top: the heading under the needle, and the player's
+   * own mech as a diamond on the strip (pinned to the nearer end when it is
+   * behind them).
+   */
+  private updateCompass(m: MatchState, me: Actor, viewYaw: number): void {
+    // Yaw turns the view to the left; the compass reads clockwise from north (-z).
+    const heading = (((-viewYaw * 180) / Math.PI) % 360 + 360) % 360;
+    const shown = Math.round(heading * 2) / 2;
+    if (shown !== this.lastHeading) {
+      this.lastHeading = shown;
+      this.compassStrip.style.transform = `translateX(${(-(shown + 180) * COMPASS_PX).toFixed(1)}px)`;
+      this.compassDeg.set(String(Math.round(shown) % 360).padStart(3, '0'));
+    }
+    const mine = m.mechs[me.id];
+    const show = (mine.state === 'dropping' || mine.state === 'idle') && !me.inMech && !m.over;
+    this.compassMech.classList.toggle('on', show);
+    if (!show) return;
+    const bearing = (Math.atan2(mine.pos.x - me.p.pos.x, -(mine.pos.z - me.p.pos.z)) * 180) / Math.PI;
+    const off = ((bearing - heading + 540) % 360) - 180;
+    const clamped = Math.max(-COMPASS_SPAN, Math.min(COMPASS_SPAN, off));
+    this.compassMech.style.transform = `translateX(${(clamped * COMPASS_PX).toFixed(1)}px) rotate(45deg)`;
+    this.compassMech.classList.toggle('edge', clamped !== off);
+    this.compassMech.classList.toggle('inbound', mine.state === 'dropping');
+  }
+
+  /**
+   * News about the match, in the alert strip at the top: `head` in the side's
+   * colour (`kind` 'good' or 'bad'), `text` after it.
+   */
+  showCallout(head: string, text: string, kind: 'good' | 'bad'): void {
+    el('callout-head').textContent = head;
+    el('callout-text').textContent = text;
+    this.callout.dataset.kind = kind;
+    this.callout.classList.remove('on');
+    void this.callout.offsetWidth;
+    this.callout.classList.add('on');
+    this.calloutLife = CALLOUT_TIME;
   }
 
   /** The frame picked for the next call: its name kicks up when it changes. */
@@ -385,13 +498,17 @@ export class Hud {
     } else if (me.meter >= 1) {
       kind = 'ready';
       this.meterLabel.set(`${picked} READY`);
-      this.meterValue.set(`PRESS ${this.keyOf('call')}`);
+      this.meterValue.set('CALL IT IN');
     } else {
       this.meterLabel.set(picked);
       this.meterValue.set(`${Math.floor(me.meter * 100)}%`);
     }
-    this.meter.style.transform = `scaleX(${Math.max(0, Math.min(1, fill)).toFixed(3)})`;
-    if (kind !== this.lastMeterKind) this.meterBox.dataset.kind = this.lastMeterKind = kind;
+    this.meter.style.setProperty('--fill', Math.max(0, Math.min(1, fill)).toFixed(3));
+    if (kind !== this.lastMeterKind) {
+      // Filling up pops the tile once.
+      if (kind === 'ready') pop(this.meter, 1.2);
+      this.meterBox.dataset.kind = this.lastMeterKind = kind;
+    }
 
     // Cockpit: the jump button's charges and the aim button's ability.
     if (me.inMech) {
@@ -652,23 +769,27 @@ export class Hud {
   /**
    * A short line under the crosshair: the player's own kills, and news about
    * their mech. `kind` colours the emphasised part: '' (red), 'good' or 'warn'.
+   * `points` (a kill's score for the team) pops in above it.
    */
-  showBanner(text: string, name: string, kind = ''): void {
+  showBanner(text: string, name: string, kind = '', points = 0): void {
     this.banner.className = kind;
-    this.banner.replaceChildren(text, Object.assign(document.createElement('b'), { textContent: name }));
+    this.bannerPoints.textContent = points > 0 ? `+${points}` : '';
+    this.bannerText.replaceChildren(text, Object.assign(document.createElement('b'), { textContent: name }));
     this.banner.animate(
       [
-        { opacity: 0, transform: 'translateX(-50%) translateY(8px)' },
-        { opacity: 1, transform: 'translateX(-50%)', offset: 0.12 },
-        { opacity: 1, transform: 'translateX(-50%)', offset: 0.75 },
-        { opacity: 0, transform: 'translateX(-50%) translateY(-6px)' },
+        { opacity: 0, transform: 'translateX(-50%) scale(1.25)' },
+        { opacity: 1, transform: 'translateX(-50%) scale(0.97)', offset: 0.08 },
+        { opacity: 1, transform: 'translateX(-50%)', offset: 0.14 },
+        { opacity: 1, transform: 'translateX(-50%)', offset: 0.78 },
+        { opacity: 0, transform: 'translateX(-50%) translateY(-8px)' },
       ],
-      { duration: 1500, easing: 'ease-out' },
+      { duration: 1600, easing: 'ease-out' },
     );
   }
 
   showDeath(by: string): void {
     el('death-by').textContent = by;
+    this.deathBar.style.transform = 'scaleX(0)';
     this.death.classList.add('on');
   }
 
@@ -680,8 +801,20 @@ export class Hud {
     this.death.classList.remove('on');
     el('end-title').textContent = won ? 'VICTORY' : 'DEFEAT';
     el('end-score').textContent = `${COMBAT.teams[me.team].name} ${m.score[me.team]} · ${m.score[1 - me.team]} ${COMBAT.teams[1 - me.team].name}`;
-    el('end-stats').textContent = `${me.kills} eliminations · ${me.mechKills} mechs destroyed · ${me.deaths} deaths`;
+    const stats: [number, string][] = [
+      [me.kills, 'Eliminations'],
+      [me.mechKills, 'Mechs destroyed'],
+      [me.deaths, 'Deaths'],
+    ];
+    el('end-stats').replaceChildren(
+      ...stats.map(([n, what]) => {
+        const box = document.createElement('div');
+        box.append(Object.assign(document.createElement('b'), { textContent: String(n) }), what);
+        return box;
+      }),
+    );
     this.warn.classList.remove('on');
+    this.callout.classList.remove('on');
     this.prompt.classList.remove('on');
     this.end.classList.toggle('lost', !won);
     this.end.classList.add('on');

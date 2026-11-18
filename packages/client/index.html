@@ -19,45 +19,56 @@
       <div id="hitmarker"><i></i><i></i><i></i><i></i><b></b></div>
       <div id="hurt-dirs"></div>
       <div id="mech-marker"><i></i><span id="mech-marker-text"></span></div>
-      <div id="warn">MECH INCOMING · MOVE</div>
-      <div id="prompt"></div>
-
-      <div id="status">
-        <div id="state">GROUND</div>
-        <div id="fps">-- fps</div>
-        <div id="view-mode">FIRST PERSON · V</div>
-        <div id="muted" hidden>SOUND OFF · <b data-key="mute"></b></div>
-        <div id="net" hidden><i></i><span id="net-text">PING --</span></div>
+      <div id="compass">
+        <div id="compass-strip"></div>
+        <i id="compass-mech"></i>
+        <span id="compass-deg">000</span>
       </div>
 
-      <pre id="net-debug" hidden></pre>
-      <div id="link"><i></i><span id="link-text"></span></div>
+      <div id="alerts">
+        <div id="warn"><i></i>MECH INCOMING · MOVE</div>
+        <div id="link"><i></i><span id="link-text"></span></div>
+        <div id="callout"><b id="callout-head"></b><span id="callout-text"></span></div>
+      </div>
+      <div id="prompt"></div>
 
-      <div id="score">
-        <div class="side ally">
-          <span class="team" id="team-ally">ALLY</span>
-          <span class="num" id="score-ally">0</span>
-          <div class="track"><div id="bar-ally"></div></div>
+      <div id="topleft">
+        <div id="score">
+          <div class="side ally">
+            <i class="chip"></i>
+            <span class="team" id="team-ally">ALLY</span>
+            <div class="track"><div id="bar-ally"></div></div>
+            <span class="num" id="score-ally">0</span>
+          </div>
+          <div class="side enemy">
+            <i class="chip"></i>
+            <span class="team" id="team-enemy">ENEMY</span>
+            <div class="track"><div id="bar-enemy"></div></div>
+            <span class="num" id="score-enemy">0</span>
+          </div>
+          <div class="goal">TEAM SKIRMISH · FIRST TO <span id="score-limit">50</span></div>
         </div>
-        <div class="goal">FIRST TO <span id="score-limit">50</span></div>
-        <div class="side enemy">
-          <span class="num" id="score-enemy">0</span>
-          <span class="team" id="team-enemy">ENEMY</span>
-          <div class="track"><div id="bar-enemy"></div></div>
+
+        <div id="status">
+          <div id="fps">-- fps</div>
+          <div id="view-mode">FIRST PERSON · V</div>
+          <div id="muted" hidden>SOUND OFF · <b data-key="mute"></b></div>
+          <div id="net" hidden><i></i><span id="net-text">PING --</span></div>
         </div>
+
+        <pre id="net-debug" hidden></pre>
       </div>
 
       <div id="feed"></div>
-      <div id="banner"></div>
+      <div id="banner"><span id="banner-points"></span><span id="banner-text"></span></div>
 
       <div id="vitals">
-        <div class="label"><span id="vitals-label">HEALTH</span><span id="health-value">100</span></div>
-        <div class="bar"><div id="health"></div></div>
-      </div>
-
-      <div id="speed">
-        <span id="speed-value">0.0</span>
-        <span class="unit">m/s</span>
+        <div class="label">
+          <span id="state">GROUND</span>
+          <span id="speed"><span id="speed-value">0.0</span><span class="unit">m/s</span></span>
+        </div>
+        <div class="bar"><div id="health-ghost"></div><div id="health"></div></div>
+        <div class="label under"><span id="vitals-label">HEALTH</span><span id="health-value">100</span></div>
       </div>
 
       <div id="thrust">
@@ -71,66 +82,74 @@
       </div>
 
       <div id="mech" data-kind="charging">
-        <div class="label"><span id="mech-label">MECH</span><span id="mech-value">0%</span></div>
-        <div class="bar"><div id="meter"></div></div>
-        <div class="hint" id="frame-hint"><b data-key="nextFrame"></b> · FRAME <span id="frame-name">HALBERD</span></div>
+        <div class="ring" id="meter">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 3h3v5l-2 2v2h-2v6h-2v-5h-2v5H9v-6H7v-2l-2-2V6h3z" /></svg>
+          <b data-key="call" class="ring-key"></b>
+        </div>
+        <div class="info">
+          <span id="mech-label">MECH</span>
+          <span id="mech-value">0%</span>
+          <span class="hint" id="frame-hint"><b data-key="nextFrame"></b> FRAME <span id="frame-name">HALBERD</span></span>
+        </div>
       </div>
 
       <div id="drive">
         <div class="label">
-          <span><span id="move-name">DASH</span> · <b data-key="jump"></b></span>
+          <span><span id="move-name">DASH</span> <b data-key="jump"></b></span>
           <span class="pips"><i id="dash-1" class="pip on"></i><i id="dash-2" class="pip on"></i></span>
         </div>
         <div class="bar"><div id="dash"></div></div>
-        <div class="label second"><span><span id="ability-name">ROCKETS</span> · <b data-key="ads"></b></span><span id="salvo-value">READY</span></div>
+        <div class="label second"><span><span id="ability-name">ROCKETS</span> <b data-key="ads"></b></span><span id="salvo-value">READY</span></div>
         <div class="bar thin"><div id="salvo"></div></div>
-        <div class="hint"><b data-key="use"></b> · CLIMB OUT</div>
+        <div class="hint"><b data-key="use"></b> CLIMB OUT</div>
       </div>
 
       <div id="weapon">
-        <div id="weapon-name">CARBINE</div>
+        <div id="slots"></div>
         <div class="ammo"><span id="ammo">28</span><span class="mag">/ <span id="ammo-mag">28</span></span></div>
+        <div id="weapon-name">CARBINE</div>
         <div class="heat">
           <span id="weapon-state">HEAT</span>
           <div class="bar thin"><div id="reload"></div></div>
         </div>
-        <div id="slots"></div>
       </div>
 
       <div id="death">
-        <p class="cause">ELIMINATED BY <b id="death-by"></b></p>
+        <p class="tag">ELIMINATED BY</p>
+        <p class="cause" id="death-by"></p>
         <p class="wait">REDEPLOY IN <span id="death-wait">3.0</span></p>
+        <div class="bar"><div id="death-bar"></div></div>
       </div>
 
       <div id="end">
         <p class="tag" id="end-score"></p>
         <h2 id="end-title">VICTORY</h2>
-        <p id="end-stats"></p>
+        <div id="end-stats"></div>
         <p class="hint" id="end-hint">ENTER · PLAY AGAIN</p>
       </div>
     </div>
 
     <div id="overlay">
       <div class="panel">
-        <p class="tag">Multiplayer prototype · working title</p>
-        <h1>DROPLINE</h1>
+        <header class="brand">
+          <p class="tag">Multiplayer prototype · working title</p>
+          <h1>DROPLINE</h1>
+        </header>
         <div id="menu">
           <label for="callsign">Callsign</label>
           <input id="callsign" type="text" maxlength="16" autocomplete="off" spellcheck="false" />
           <div class="choices">
-            <button id="play-online" type="button">Deploy online</button>
-            <button id="play-offline" type="button" class="quiet">Practice offline</button>
-          </div>
-          <div class="menu-extras">
-            <button id="hangar-menu" type="button" class="quiet small">Hangar<span id="hangar-summary"></span></button>
-            <button id="settings-menu" type="button" class="quiet small">Settings</button>
+            <button id="play-online" type="button"><span>Deploy online</span><small>Up to 8 pilots on a server</small></button>
+            <button id="play-offline" type="button" class="quiet"><span>Practice offline</span><small>4 v 4 against bots</small></button>
+            <button id="hangar-menu" type="button" class="quiet"><span>Hangar</span><small id="hangar-summary"></small></button>
+            <button id="settings-menu" type="button" class="quiet"><span>Settings</span><small>Controls, sound, display</small></button>
           </div>
         </div>
         <div id="resume" hidden>
-          <button id="start" type="button">Click to resume</button>
           <div class="choices">
-            <button id="settings-resume" type="button" class="quiet small">Settings</button>
-            <button id="leave" type="button" class="quiet small">Leave match</button>
+            <button id="start" type="button">Click to resume</button>
+            <button id="settings-resume" type="button" class="quiet"><span>Settings</span><small>Controls, sound, display</small></button>
+            <button id="leave" type="button" class="quiet"><span>Leave match</span><small>Back to the start screen</small></button>
           </div>
         </div>
         <div id="settings" hidden></div>
@@ -139,8 +158,12 @@
         <p id="lock-error" hidden>
           This window does not allow mouse capture. Open this address in Chrome, Edge or Firefox to play.
         </p>
-        <dl id="controls"></dl>
+        <aside id="manual">
+          <p class="tag">Field manual · controls</p>
+          <dl id="controls"></dl>
+        </aside>
       </div>
+      <footer id="menu-keys"></footer>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

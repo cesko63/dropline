@@ -41,6 +41,32 @@ export interface MapEnv {
   hemiIntensity: number;
 }
 
+/**
+ * A sound the map makes on its own: a loop that plays the whole match, or a
+ * one-shot that repeats after a random wait.
+ */
+export interface MapSound {
+  /** A sound from assets/audio/sounds.json. */
+  sound: string;
+  /** Level at the source. */
+  gain: number;
+  /**
+   * Where it sounds from. A loop is heard from the nearest point, a one-shot
+   * from one picked at random each time. Missing: all around the listener.
+   */
+  at?: number[][];
+  /** Metres over which it fades to half (default 9, as for any sound in the world). */
+  reach?: number;
+  /** Not heard beyond this many metres from its nearest point. */
+  range?: number;
+  /** A one-shot: seconds to wait between plays, at least and at most. Missing: a loop. */
+  every?: [number, number];
+  /** Playback rate, picked between these each time (default 1). */
+  pitch?: [number, number];
+  /** Wind and weather: louder up high, mostly gone under a roof. */
+  exposed?: boolean;
+}
+
 export interface MapData {
   /** Id of the map, as the server announces it and `?map=` picks it. */
   name: string;
@@ -54,4 +80,6 @@ export interface MapData {
    */
   backdrop?: MapBox[];
   env?: MapEnv;
+  /** The map's own sound: wind, the city around it, things that creak and fall. */
+  ambience?: MapSound[];
 }

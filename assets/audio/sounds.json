@@ -124,5 +124,196 @@
     "count": 1,
     "loop": 3.6,
     "pad": 0.05
+  },
+  "mech-step": {
+    "count": 6
+  },
+  "mech-servo": {
+    "count": 3
+  },
+  "mech-thrust": {
+    "count": 4
+  },
+  "mech-leap": {
+    "count": 3
+  },
+  "slam": {
+    "count": 4
+  },
+  "debris": {
+    "count": 5
+  },
+  "autocannon": {
+    "count": 6
+  },
+  "autocannon-far": {
+    "count": 3
+  },
+  "breaker": {
+    "count": 4
+  },
+  "breaker-boom": {
+    "count": 3
+  },
+  "lance": {
+    "count": 5
+  },
+  "flak": {
+    "count": 5
+  },
+  "belt-out": {
+    "count": 3
+  },
+  "belt-in": {
+    "count": 3
+  },
+  "shield-up": {
+    "count": 3
+  },
+  "shield-down": {
+    "count": 3
+  },
+  "shield-hum": {
+    "count": 1,
+    "loop": 4,
+    "pad": 0.05
+  },
+  "shield-hit": {
+    "count": 3
+  },
+  "shield-break": {
+    "count": 3
+  },
+  "power-down": {
+    "count": 1
+  },
+  "power-up": {
+    "count": 1
+  },
+  "cloak-on": {
+    "count": 2
+  },
+  "cloak-off": {
+    "count": 2
+  },
+  "drop-fall": {
+    "count": 1,
+    "loop": 2.5,
+    "pad": 0.05
+  },
+  "hatch-open": {
+    "count": 3
+  },
+  "hatch-close": {
+    "count": 3
+  },
+  "cockpit-hum": {
+    "count": 1,
+    "loop": 4,
+    "pad": 0.05
+  },
+  "mech-hum": {
+    "count": 1,
+    "loop": 4,
+    "pad": 0.05
+  },
+  "armor-hit": {
+    "count": 5
+  },
+  "hull-hit": {
+    "count": 4
+  },
+  "wreck-debris": {
+    "count": 4
+  },
+  "cookoff": {
+    "count": 3
+  },
+  "ui-move": {
+    "count": 2
+  },
+  "ui-select": {
+    "count": 2
+  },
+  "ui-back": {
+    "count": 2
+  },
+  "ui-open": {
+    "count": 1
+  },
+  "ui-close": {
+    "count": 1
+  },
+  "ui-error": {
+    "count": 2
+  },
+  "ui-confirm": {
+    "count": 1
+  },
+  "ui-listen": {
+    "count": 1
+  },
+  "hit-tick": {
+    "count": 2
+  },
+  "hit-head": {
+    "count": 2
+  },
+  "deploy": {
+    "count": 1
+  },
+  "streak-ready": {
+    "count": 1
+  },
+  "radio": {
+    "count": 2
+  },
+  "callout": {
+    "count": 1
+  },
+  "alarm": {
+    "count": 1
+  },
+  "zone-beep": {
+    "count": 1
+  },
+  "glitch": {
+    "count": 2
+  },
+  "match-win": {
+    "count": 1
+  },
+  "match-lose": {
+    "count": 1
+  },
+  "amb-wind": {
+    "count": 1,
+    "loop": 14,
+    "pad": 0.05
+  },
+  "amb-city": {
+    "count": 1,
+    "loop": 12,
+    "pad": 0.05
+  },
+  "amb-harvester": {
+    "count": 1,
+    "loop": 4.5,
+    "pad": 0.05
+  },
+  "amb-siren": {
+    "count": 3
+  },
+  "amb-rumble": {
+    "count": 1
+  },
+  "amb-groan": {
+    "count": 3
+  },
+  "amb-creak": {
+    "count": 3
+  },
+  "amb-debris": {
+    "count": 3
   }
 }

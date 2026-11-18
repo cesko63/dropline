@@ -1,12 +1,46 @@
+/* Barlow Condensed (SIL Open Font License, assets/fonts/barlow-condensed-OFL.txt). */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../../assets/fonts/barlow-condensed-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-weight: 500;
+  font-display: swap;
+  src: url('../../../assets/fonts/barlow-condensed-latin-500-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-weight: 600;
+  font-display: swap;
+  src: url('../../../assets/fonts/barlow-condensed-latin-600-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../../assets/fonts/barlow-condensed-latin-700-normal.woff2') format('woff2');
+}
+
 :root {
-  --ink: #e9eef5;
-  --dim: rgba(233, 238, 245, 0.55);
+  --ink: #f1f3f1;
+  --dim: rgba(241, 243, 241, 0.6);
+  --faint: rgba(241, 243, 241, 0.16);
   --accent: #ff7a2f;
   --cool: #58d6ff;
-  --danger: #ff5a3c;
+  --danger: #ff4d3a;
   --warn: #ffd23f;
-  --panel: rgba(8, 13, 22, 0.78);
-  font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI', system-ui, sans-serif;
+  --panel: rgba(8, 10, 13, 0.78);
+  /* A dark plate that fades out towards the middle of the screen. */
+  --plate-l: linear-gradient(90deg, rgba(8, 10, 13, 0.72), rgba(8, 10, 13, 0.12));
+  --plate-r: linear-gradient(270deg, rgba(8, 10, 13, 0.72), rgba(8, 10, 13, 0.12));
+  font-family: 'Barlow Condensed', 'Bahnschrift', 'DIN Alternate', 'Segoe UI', system-ui, sans-serif;
+  font-weight: 500;
 }
 
 * {
@@ -37,9 +71,30 @@ body {
   inset: 0;
   pointer-events: none;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.75);
+}
+
+/* A key or button named on the HUD, drawn as a keycap. */
+#hud [data-key],
+#prompt b {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 0.35em;
+  border: 1px solid rgba(241, 243, 241, 0.7);
+  border-radius: 3px;
+  background: rgba(8, 10, 13, 0.55);
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-shadow: none;
+  line-height: 1.35;
+}
+
+#hud [data-key]:empty {
+  display: none;
 }
 
 #crosshair,
@@ -59,7 +114,7 @@ body {
 #crosshair b {
   position: absolute;
   background: var(--ink);
-  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
   transition: opacity 0.1s;
 }
 
@@ -72,7 +127,7 @@ body {
 
 #crosshair i:nth-child(1),
 #crosshair i:nth-child(2) {
-  width: 8px;
+  width: 9px;
   height: 2px;
   top: -1px;
 }
@@ -88,7 +143,7 @@ body {
 #crosshair i:nth-child(3),
 #crosshair i:nth-child(4) {
   width: 2px;
-  height: 8px;
+  height: 9px;
   left: -1px;
 }
 
@@ -116,28 +171,28 @@ body {
 
 #hitmarker i {
   position: absolute;
-  width: 10px;
+  width: 11px;
   height: 2px;
   left: -5px;
   top: -1px;
   background: var(--ink);
-  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
 }
 
 #hitmarker i:nth-child(1) {
-  transform: rotate(45deg) translateX(13px);
+  transform: rotate(45deg) translateX(12px);
 }
 
 #hitmarker i:nth-child(2) {
-  transform: rotate(135deg) translateX(13px);
+  transform: rotate(135deg) translateX(12px);
 }
 
 #hitmarker i:nth-child(3) {
-  transform: rotate(225deg) translateX(13px);
+  transform: rotate(225deg) translateX(12px);
 }
 
 #hitmarker i:nth-child(4) {
-  transform: rotate(315deg) translateX(13px);
+  transform: rotate(315deg) translateX(12px);
 }
 
 #hitmarker b {
@@ -157,8 +212,8 @@ body {
 
 #hitmarker.kill i {
   background: var(--danger);
-  height: 4px;
-  top: -2px;
+  height: 3px;
+  top: -1.5px;
 }
 
 /* Where damage came from: a wedge on a ring around the crosshair, pointing at the shooter. */
@@ -241,7 +296,8 @@ body {
 }
 
 #labels .tag {
-  font-size: 10px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--cool);
 }
 
@@ -250,46 +306,119 @@ body {
 }
 
 #labels .dmg {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
 }
 
 #labels .dmg.head {
-  font-size: 19px;
+  font-size: 21px;
   color: var(--warn);
 }
 
-#status {
+/* ---------------------------------------------------------------- top left: score and status */
+
+#topleft {
   position: absolute;
   left: 24px;
   top: 20px;
-  font-size: 12px;
-  line-height: 1.7;
+  width: 260px;
+  display: grid;
+  gap: 10px;
 }
 
-#state {
-  display: inline-block;
-  padding: 2px 10px;
-  border-left: 3px solid var(--accent);
-  background: var(--panel);
+#score {
+  display: grid;
+  gap: 4px;
+}
+
+#score .side {
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto;
+  grid-template-rows: auto 3px;
+  column-gap: 10px;
+  align-items: center;
+  padding: 3px 12px 6px 0;
+  background: var(--plate-l);
+}
+
+#score .chip {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: stretch;
+  background: var(--cool);
+}
+
+#score .enemy .chip {
+  background: var(--danger);
+}
+
+#score .team {
+  grid-column: 2;
+  grid-row: 1;
   font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-#state[data-kind='air'] {
-  border-color: var(--cool);
+#score .num {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  min-width: 2ch;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: right;
+  letter-spacing: 0.02em;
 }
 
-#state[data-kind='special'] {
-  border-color: var(--accent);
-  color: var(--accent);
+#score .ally .num {
+  color: var(--cool);
 }
 
-#fps,
-#view-mode,
-#muted {
+#score .enemy .num {
+  color: var(--danger);
+}
+
+#score .track {
+  grid-column: 2;
+  grid-row: 2;
+  height: 3px;
+  background: var(--faint);
+  overflow: hidden;
+}
+
+#score .track div {
+  height: 100%;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease-out;
+}
+
+#bar-ally {
+  background: var(--cool);
+}
+
+#bar-enemy {
+  background: var(--danger);
+}
+
+#score .goal {
+  padding-left: 14px;
   color: var(--dim);
-  padding-left: 13px;
   font-size: 11px;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+
+#status {
+  padding-left: 14px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--dim);
 }
 
 #muted {
@@ -297,12 +426,6 @@ body {
 }
 
 /* ---------------------------------------------------------------- connection */
-
-#net {
-  color: var(--dim);
-  padding-left: 13px;
-  font-size: 11px;
-}
 
 /* A dot whose shape says as much as its colour: round is fine, square is slow, hollow is bad. */
 #net i {
@@ -330,9 +453,6 @@ body {
 }
 
 #net-debug {
-  position: absolute;
-  left: 24px;
-  top: 150px;
   margin: 0;
   padding: 8px 12px;
   background: var(--panel);
@@ -341,207 +461,227 @@ body {
   letter-spacing: 0;
   text-transform: none;
   color: var(--ink);
+  width: max-content;
 }
 
-#link {
+/* ---------------------------------------------------------------- compass */
+
+#compass {
   position: absolute;
   left: 50%;
-  top: 96px;
-  transform: translateX(-50%) translateY(-8px);
-  padding: 8px 16px;
-  background: var(--panel);
-  border-top: 3px solid var(--warn);
-  font-size: 13px;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.18s ease-out, transform 0.18s ease-out;
-}
-
-#link.on {
-  opacity: 1;
+  top: 12px;
+  width: 432px;
+  height: 46px;
   transform: translateX(-50%);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
 }
 
+#compass-strip {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  height: 26px;
+  will-change: transform;
+}
+
+/* A tick every 5 degrees; numbers and letters under the longer ones. */
+#compass-strip i {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 5px;
+  background: var(--dim);
+}
+
+#compass-strip i.minor,
+#compass-strip i.major {
+  width: auto;
+  height: auto;
+  padding-top: 9px;
+  transform: translateX(-50%);
+  background: linear-gradient(var(--ink), var(--ink)) center top / 1px 7px no-repeat;
+  font-size: 11px;
+  font-style: normal;
+  color: var(--dim);
+}
+
+#compass-strip i.major {
+  background-size: 2px 9px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* The heading, boxed under the middle of the strip. */
+#compass-deg {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  padding: 0 6px;
+  border-top: 2px solid var(--accent);
+  background: rgba(8, 10, 13, 0.6);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* The player's own mech on the strip. */
+#compass-mech {
+  position: absolute;
+  left: calc(50% - 5px);
+  top: 1px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--cool);
+  background: rgba(88, 214, 255, 0.3);
+  display: none;
+}
+
+#compass-mech.on {
+  display: block;
+}
+
+#compass-mech.edge {
+  background: var(--cool);
+}
+
+#compass-mech.inbound {
+  border-color: var(--warn);
+  background: rgba(255, 210, 63, 0.35);
+}
+
+/* ---------------------------------------------------------------- alerts (top middle) */
+
+#alerts {
+  position: absolute;
+  left: 50%;
+  top: 70px;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+#warn,
+#link,
+#callout {
+  display: none;
+  white-space: nowrap;
+}
+
+/* An enemy mech coming down on the player: red, striped, and it pulses. */
+#warn {
+  align-items: center;
+  gap: 12px;
+  padding: 7px 22px;
+  background:
+    repeating-linear-gradient(-45deg, rgba(255, 77, 58, 0.9) 0 6px, transparent 6px 12px) left / 14px 100% no-repeat,
+    repeating-linear-gradient(-45deg, rgba(255, 77, 58, 0.9) 0 6px, transparent 6px 12px) right / 14px 100% no-repeat,
+    rgba(110, 10, 4, 0.88);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+#warn i,
 #link i {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 10px;
-  border: 2px solid var(--warn);
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: link-spin 0.9s linear infinite;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 14px solid currentColor;
 }
 
-@keyframes link-spin {
-  to {
-    transform: rotate(360deg);
+#warn.on {
+  display: flex;
+  animation: alert-in 0.18s ease-out, warn-pulse 0.4s ease-in-out 0.18s infinite;
+}
+
+@keyframes warn-pulse {
+  50% {
+    opacity: 0.6;
   }
 }
 
-#feed div.note {
-  border-color: var(--dim);
+@keyframes alert-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0.6);
+  }
 }
 
-#speed {
-  position: absolute;
-  left: 24px;
-  bottom: 22px;
-  font-size: 44px;
-  line-height: 1;
-}
-
-#speed .unit {
-  font-size: 13px;
-  color: var(--dim);
-  margin-left: 6px;
-}
-
-#thrust {
-  position: absolute;
-  left: 50%;
-  bottom: 30px;
-  width: 240px;
-  transform: translateX(-50%);
-  font-size: 11px;
-}
-
-#thrust .label {
-  display: flex;
-  justify-content: space-between;
+#link {
   align-items: center;
-  margin-bottom: 6px;
-  color: var(--dim);
+  gap: 10px;
+  padding: 7px 18px;
+  background: rgba(60, 46, 4, 0.85);
+  border-left: 4px solid var(--warn);
+  color: var(--warn);
+  font-size: 14px;
+  font-weight: 600;
 }
 
-#thrust .bar {
-  height: 6px;
-  background: rgba(255, 255, 255, 0.14);
-  transform: skewX(-20deg);
-  overflow: hidden;
+#link.on {
+  display: flex;
+  animation: alert-in 0.18s ease-out;
 }
 
-#fuel {
-  height: 100%;
-  width: 100%;
-  background: var(--cool);
-  transform-origin: left;
+#link-text {
+  color: var(--ink);
 }
 
-#fuel.burning {
-  background: var(--accent);
+/* News about the match: a headline in the side's colour over a line of detail. */
+#callout {
+  padding: 6px 30px 7px;
+  text-align: center;
+  background: linear-gradient(90deg, transparent, rgba(8, 10, 13, 0.75) 22% 78%, transparent);
 }
 
-#thrust .label.second {
-  margin-top: 9px;
-}
-
-#thrust .bar.thin {
-  height: 4px;
-}
-
-#slide-fuel {
-  height: 100%;
-  width: 100%;
-  background: var(--ink);
-  transform-origin: left;
-}
-
-#slide-fuel.burning {
-  background: var(--accent);
-}
-
-.pip {
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--dim);
-  transform: rotate(45deg);
-}
-
-.pip.on {
-  background: var(--cool);
-  border-color: var(--cool);
-}
-
-/* ---------------------------------------------------------------- combat HUD */
-
-#score {
-  position: absolute;
-  left: 50%;
-  top: 16px;
-  transform: translateX(-50%);
+#callout.on {
   display: grid;
-  grid-template-columns: 150px auto 150px;
-  align-items: start;
-  gap: 14px;
-  font-size: 11px;
+  animation: callout 2.6s ease-out forwards;
 }
 
-#score .side {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
-  gap: 4px 8px;
-}
-
-#score .enemy {
-  grid-template-columns: auto 1fr;
-}
-
-#score .enemy .team {
-  text-align: right;
-}
-
-#score .team {
-  color: var(--dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#score .num {
-  font-size: 26px;
-  line-height: 1;
-}
-
-#score .ally .num {
+#callout b {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  line-height: 1.1;
   color: var(--cool);
 }
 
-#score .enemy .num {
+#callout[data-kind='bad'] b {
   color: var(--danger);
 }
 
-#score .track {
-  grid-column: 1 / -1;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.14);
-  overflow: hidden;
-}
-
-#score .track div {
-  height: 100%;
-  width: 100%;
-  transform: scaleX(0);
-  transition: transform 0.3s;
-}
-
-#bar-ally {
-  background: var(--cool);
-  transform-origin: right;
-}
-
-#bar-enemy {
-  background: var(--danger);
-  transform-origin: left;
-}
-
-#score .goal {
-  padding-top: 8px;
+#callout span {
+  font-size: 12px;
+  letter-spacing: 0.24em;
   color: var(--dim);
-  font-size: 10px;
-  white-space: nowrap;
 }
+
+@keyframes callout {
+  0% {
+    opacity: 0;
+    transform: scale(1.2);
+    letter-spacing: 0.4em;
+  }
+  8% {
+    opacity: 1;
+    transform: none;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- kill feed */
 
 #feed {
   position: absolute;
@@ -549,19 +689,25 @@ body {
   top: 20px;
   display: grid;
   justify-items: end;
-  gap: 4px;
-  font-size: 12px;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 #feed div {
-  padding: 3px 10px;
-  background: var(--panel);
+  padding: 3px 12px 3px 24px;
+  background: var(--plate-r);
   border-right: 3px solid transparent;
   white-space: nowrap;
 }
 
 #feed div.mine {
   border-color: var(--accent);
+  background: linear-gradient(270deg, rgba(255, 122, 47, 0.32), rgba(8, 10, 13, 0.12));
+}
+
+#feed div.note {
+  border-color: var(--dim);
 }
 
 #feed .ally {
@@ -574,19 +720,44 @@ body {
 
 #feed .how {
   color: var(--dim);
-  font-size: 10px;
-  margin: 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  margin: 0 10px;
 }
 
+/* ---------------------------------------------------------------- under the crosshair */
+
+/* The player's own kills and news about their mech: the points pop above the line. */
 #banner {
   position: absolute;
   left: 50%;
-  top: 62%;
+  top: 57%;
   transform: translateX(-50%);
-  font-size: 15px;
-  letter-spacing: 0.2em;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
   white-space: nowrap;
   opacity: 0;
+}
+
+#banner-points {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--warn);
+  letter-spacing: 0.04em;
+}
+
+#banner-points:empty {
+  display: none;
+}
+
+#banner-text {
+  padding: 2px 18px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  background: linear-gradient(90deg, transparent, rgba(8, 10, 13, 0.55) 20% 80%, transparent);
 }
 
 #banner b {
@@ -594,11 +765,39 @@ body {
   font-weight: 700;
 }
 
+#banner.good b {
+  color: var(--cool);
+}
+
+#banner.warn b {
+  color: var(--warn);
+}
+
+#prompt {
+  position: absolute;
+  left: 50%;
+  top: 64%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  background: linear-gradient(90deg, transparent, rgba(8, 10, 13, 0.75) 15% 85%, transparent);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  display: none;
+}
+
+#prompt.on {
+  display: block;
+  animation: alert-in 0.15s ease-out;
+}
+
+/* ---------------------------------------------------------------- bottom left: health */
+
 #vitals {
   position: absolute;
   left: 24px;
-  bottom: 84px;
-  width: 220px;
+  bottom: 22px;
+  width: 280px;
   font-size: 11px;
 }
 
@@ -610,24 +809,77 @@ body {
   color: var(--dim);
 }
 
-#health-value {
-  font-size: 18px;
+#vitals .label.under {
+  margin: 5px 0 0;
+}
+
+/* What the pilot is doing: a small tag, orange while it is a move. */
+#state {
+  padding: 1px 8px;
+  border-left: 3px solid var(--ink);
+  background: rgba(8, 10, 13, 0.6);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#state[data-kind='air'],
+#state[data-kind='mech'] {
+  border-color: var(--cool);
+}
+
+#state[data-kind='special'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#speed-value {
+  font-size: 22px;
+  font-weight: 600;
   color: var(--ink);
 }
 
+#speed .unit {
+  margin-left: 4px;
+}
+
+/* Health in four plates; a lost chunk stays lit, then drains. */
 #vitals .bar {
-  height: 8px;
-  background: rgba(255, 255, 255, 0.14);
-  transform: skewX(-20deg);
+  position: relative;
+  height: 10px;
+  background: var(--faint);
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
   overflow: hidden;
 }
 
-#health {
-  height: 100%;
-  width: 100%;
-  background: var(--ink);
+#vitals .bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(25% - 3px), rgba(8, 10, 13, 0.95) calc(25% - 3px) 25%);
+}
+
+#health,
+#health-ghost {
+  position: absolute;
+  inset: 0;
   transform-origin: left;
+}
+
+#health {
+  background: var(--ink);
   transition: background-color 0.2s;
+}
+
+#health-ghost {
+  background: #ff9a7a;
+}
+
+#health-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
 }
 
 #vitals.low #health {
@@ -636,49 +888,151 @@ body {
 
 #vitals.low #health-value {
   color: var(--danger);
+  animation: ready-pulse 0.8s ease-in-out infinite;
 }
+
+/* ---------------------------------------------------------------- bottom middle: suit meters */
+
+#thrust,
+#drive {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  width: 220px;
+  transform: translateX(-50%);
+  font-size: 11px;
+}
+
+#thrust .label,
+#drive .label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+#thrust .label.second,
+#drive .label.second {
+  margin-top: 8px;
+}
+
+#thrust .bar,
+#drive .bar {
+  height: 5px;
+  background: var(--faint);
+  clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%);
+  overflow: hidden;
+}
+
+#thrust .bar.thin,
+#drive .bar.thin {
+  height: 3px;
+}
+
+#fuel,
+#slide-fuel,
+#dash,
+#salvo {
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+}
+
+#fuel {
+  background: var(--cool);
+}
+
+#fuel.burning,
+#slide-fuel.burning {
+  background: var(--accent);
+}
+
+#slide-fuel {
+  background: var(--ink);
+}
+
+.pip {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--dim);
+  transform: rotate(45deg);
+}
+
+.pip.on {
+  background: var(--cool);
+  border-color: var(--cool);
+}
+
+/* ---------------------------------------------------------------- bottom right: weapon */
 
 #weapon {
   position: absolute;
   right: 24px;
   bottom: 22px;
-  width: 300px;
-  text-align: right;
+  width: 320px;
+  display: grid;
+  justify-items: end;
   font-size: 11px;
 }
 
-#weapon-name {
+#slots {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+#slots span {
+  padding: 2px 8px;
+  background: rgba(8, 10, 13, 0.5);
+  border-bottom: 2px solid transparent;
   color: var(--dim);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#slots span.on {
+  background: rgba(241, 243, 241, 0.14);
+  color: var(--ink);
+  border-color: var(--accent);
 }
 
 #weapon .ammo {
-  font-size: 44px;
-  line-height: 1.05;
+  font-size: 56px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
 }
 
 #weapon .ammo .mag {
-  font-size: 13px;
+  font-size: 18px;
   color: var(--dim);
-  margin-left: 8px;
+  margin-left: 6px;
 }
 
 #weapon.empty #ammo {
   color: var(--danger);
 }
 
+#weapon-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
 /* The heat of the arm's coolant cell, with what it is doing beside it. */
 #weapon .heat {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
-  margin: 4px 0 8px;
+  margin-top: 5px;
 }
 
 #weapon-state {
   color: var(--dim);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -698,19 +1052,10 @@ body {
 }
 
 #weapon .bar {
-  flex: 0 0 200px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.14);
-  transform: skewX(-20deg);
+  width: 180px;
+  height: 3px;
+  background: var(--faint);
   overflow: hidden;
-}
-
-#weapon.hot #reload {
-  background: var(--danger);
-}
-
-#weapon.venting #reload {
-  background: var(--cool);
 }
 
 #reload {
@@ -721,220 +1066,83 @@ body {
   transform: scaleX(0);
 }
 
-#slots {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  color: var(--dim);
-  font-size: 10px;
+#weapon.hot #reload {
+  background: var(--danger);
 }
 
-#slots span {
-  white-space: nowrap;
-  padding-bottom: 2px;
-  border-bottom: 2px solid transparent;
+#weapon.venting #reload {
+  background: var(--cool);
 }
 
-#slots span.on {
-  color: var(--ink);
-  border-color: var(--accent);
-}
-
-#death,
-#end {
-  position: absolute;
-  left: 50%;
-  top: 34%;
-  transform: translateX(-50%);
-  padding: 16px 28px;
-  background: var(--panel);
-  border-top: 3px solid var(--danger);
-  text-align: center;
-  display: none;
-}
-
-#death.on,
-#end.on {
-  display: block;
-  animation: card-in 0.22s ease-out;
-}
-
-@keyframes card-in {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(10px);
-  }
-}
-
-#death p,
-#end p {
-  margin: 0;
-  white-space: nowrap;
-}
-
-#death .cause {
-  font-size: 16px;
-}
-
-#death .cause b {
-  color: var(--danger);
-}
-
-#death .wait {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--dim);
-}
-
-#end {
-  top: 24%;
-  min-width: 340px;
-  border-color: var(--cool);
-}
-
-#end.lost {
-  border-color: var(--danger);
-}
-
-#end h2 {
-  margin: 4px 0 10px;
-  font-size: 44px;
-  letter-spacing: 0.16em;
-  line-height: 1;
-}
-
-#end #end-stats {
-  font-size: 13px;
-  color: var(--dim);
-}
-
-#end .hint {
-  margin-top: 16px;
-  font-size: 12px;
-  color: var(--accent);
-}
-
-/* ---------------------------------------------------------------- mech HUD */
-
-/* The meter that earns a mech sits above the thrust panel; in the cockpit the
-   dash and rocket readouts take the thrust panel's place. */
-#mech,
-#drive {
-  position: absolute;
-  left: 50%;
-  width: 240px;
-  transform: translateX(-50%);
-  font-size: 11px;
-}
+/* ---------------------------------------------------------------- the mech, as a streak tile over the weapon */
 
 #mech {
-  bottom: 112px;
-}
-
-#drive {
-  bottom: 30px;
-  display: none;
-}
-
-#hud.in-mech #drive {
-  display: block;
-}
-
-#hud.in-mech #thrust,
-#hud.in-mech #mech {
-  display: none;
-}
-
-#mech .label,
-#drive .label {
+  position: absolute;
+  right: 24px;
+  bottom: 152px;
   display: flex;
-  justify-content: space-between;
+  flex-direction: row-reverse;
   align-items: center;
-  margin-bottom: 6px;
+  gap: 12px;
+  --c: var(--ink);
+}
+
+#mech .ring {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(8, 10, 13, 0.55);
   color: var(--dim);
+}
+
+/* The meter as a ring round the frame's icon. */
+#mech .ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(var(--c) calc(var(--fill, 0) * 1turn), var(--faint) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+}
+
+#mech svg {
+  width: 30px;
+  height: 30px;
+  fill: currentColor;
+}
+
+#mech .ring-key {
+  position: absolute;
+  bottom: -9px;
+  font-size: 11px;
+  visibility: hidden;
+}
+
+#mech .info {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
   white-space: nowrap;
 }
 
-#mech .bar,
-#drive .bar {
-  height: 6px;
-  background: rgba(255, 255, 255, 0.14);
-  transform: skewX(-20deg);
-  overflow: hidden;
+#mech-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
 }
 
-#drive .bar.thin {
-  height: 4px;
-}
-
-#drive .label.second {
-  margin-top: 9px;
-}
-
-#meter,
-#dash,
-#salvo {
-  height: 100%;
-  width: 100%;
-  transform-origin: left;
-  background: var(--ink);
-}
-
-#mech[data-kind='ready'] #meter {
-  background: var(--accent);
-}
-
-#mech[data-kind='ready'] .label {
-  color: var(--accent);
-  animation: ready-pulse 1s ease-in-out infinite;
-}
-
-@keyframes ready-pulse {
-  50% {
-    opacity: 0.55;
-  }
-}
-
-#mech[data-kind='inbound'] #meter {
-  background: var(--warn);
-}
-
-#mech[data-kind='inbound'] .label {
-  color: var(--warn);
-}
-
-#mech[data-kind='waiting'] #meter {
-  background: var(--cool);
-}
-
-#mech[data-kind='waiting'] .label {
-  color: var(--cool);
-}
-
-#dash {
-  background: var(--cool);
-}
-
-#salvo {
-  background: var(--dim);
-}
-
-#salvo.ready {
-  background: var(--accent);
-}
-
-#drive .pips {
-  display: flex;
-  gap: 9px;
-  padding-right: 3px;
-}
-
-#drive .hint,
-#mech .hint {
-  margin-top: 9px;
-  text-align: center;
+#mech-value {
+  font-size: 12px;
   color: var(--dim);
+}
+
+#mech .hint {
   font-size: 10px;
+  color: var(--dim);
 }
 
 #frame-name {
@@ -954,15 +1162,108 @@ body {
   }
 }
 
+/* Earned: the tile lights up and breathes until the mech is called. */
+#mech[data-kind='ready'] {
+  --c: var(--accent);
+}
+
+#mech[data-kind='ready'] .ring {
+  color: var(--accent);
+  box-shadow: 0 0 18px rgba(255, 122, 47, 0.55);
+  animation: ready-glow 1.2s ease-in-out infinite;
+}
+
+#mech[data-kind='ready'] .ring-key {
+  visibility: visible;
+}
+
+#mech[data-kind='ready'] #mech-label {
+  color: var(--accent);
+}
+
+@keyframes ready-glow {
+  50% {
+    box-shadow: 0 0 6px rgba(255, 122, 47, 0.25);
+  }
+}
+
+@keyframes ready-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+#mech[data-kind='inbound'] {
+  --c: var(--warn);
+}
+
+#mech[data-kind='inbound'] .ring,
+#mech[data-kind='inbound'] #mech-label {
+  color: var(--warn);
+}
+
+#mech[data-kind='waiting'] {
+  --c: var(--cool);
+}
+
+#mech[data-kind='waiting'] .ring,
+#mech[data-kind='waiting'] #mech-label {
+  color: var(--cool);
+}
+
 /* No changing frames while one is on its way or standing by. */
 #mech[data-kind='inbound'] #frame-hint,
 #mech[data-kind='waiting'] #frame-hint {
   visibility: hidden;
 }
 
+/* ---------------------------------------------------------------- in the cockpit */
+
+#drive {
+  display: none;
+}
+
+#hud.in-mech #drive {
+  display: block;
+}
+
+#hud.in-mech #thrust,
+#hud.in-mech #mech {
+  display: none;
+}
+
+#drive .pips {
+  display: flex;
+  gap: 9px;
+  padding-right: 3px;
+}
+
+#drive .hint {
+  margin-top: 9px;
+  text-align: center;
+  color: var(--dim);
+  font-size: 10px;
+}
+
+#dash {
+  background: var(--cool);
+}
+
+#salvo {
+  background: var(--dim);
+}
+
+#salvo.ready {
+  background: var(--accent);
+}
+
 /* The shield is up, or the cloak is on: the readout says so in the frame's light. */
 #salvo.active {
   background: var(--cool);
+}
+
+#hud.in-mech #vitals .bar {
+  height: 14px;
 }
 
 /* Cloaked: the view takes on a cold shimmer at its edges, so the pilot never forgets. */
@@ -984,14 +1285,6 @@ body {
   50% {
     box-shadow: inset 0 0 140px 40px rgba(120, 220, 255, 0.18);
   }
-}
-
-#hud.in-mech #vitals .bar {
-  height: 12px;
-}
-
-#state[data-kind='mech'] {
-  border-color: var(--cool);
 }
 
 /* The cockpit's crosshair is heavier than a pilot's. */
@@ -1023,7 +1316,7 @@ body {
 }
 
 #labels .tag.mech {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1044,7 +1337,8 @@ body {
   display: grid;
   justify-items: center;
   gap: 5px;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--cool);
   white-space: nowrap;
   will-change: transform;
@@ -1072,63 +1366,165 @@ body {
   background: rgba(255, 210, 63, 0.3);
 }
 
-#prompt {
+/* ---------------------------------------------------------------- death and the end of a match */
+
+#death {
   position: absolute;
   left: 50%;
-  top: 69%;
+  top: 30%;
+  width: 620px;
+  max-width: 100%;
   transform: translateX(-50%);
-  padding: 5px 14px;
-  background: var(--panel);
-  border-left: 3px solid var(--cool);
-  font-size: 13px;
-  white-space: nowrap;
+  padding: 14px 0 18px;
   display: none;
+  justify-items: center;
+  text-align: center;
+  background: linear-gradient(90deg, transparent, rgba(8, 10, 13, 0.78) 20% 80%, transparent);
 }
 
-#prompt.on {
-  display: block;
+#death.on {
+  display: grid;
+  animation: band-in 0.25s ease-out;
 }
 
-#warn {
-  position: absolute;
-  left: 50%;
-  top: 21%;
-  transform: translateX(-50%);
-  padding: 8px 18px;
-  background: rgba(120, 12, 6, 0.88);
-  border: 2px solid var(--danger);
-  color: #fff;
-  font-size: 16px;
+#death p,
+#end p {
+  margin: 0;
+  white-space: nowrap;
+}
+
+#death .tag {
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--dim);
+}
+
+#death .cause {
+  margin: 2px 0 8px;
+  font-size: 34px;
   font-weight: 700;
-  letter-spacing: 0.2em;
-  white-space: nowrap;
-  display: none;
+  letter-spacing: 0.12em;
+  color: var(--danger);
 }
 
-#warn.on {
-  display: block;
-  animation: warn-pulse 0.4s ease-in-out infinite;
+#death .wait {
+  font-size: 12px;
+  color: var(--dim);
 }
 
-@keyframes warn-pulse {
-  50% {
-    opacity: 0.6;
+#death .bar {
+  width: 240px;
+  height: 3px;
+  margin-top: 6px;
+  background: var(--faint);
+  overflow: hidden;
+}
+
+#death-bar {
+  height: 100%;
+  background: var(--ink);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+@keyframes band-in {
+  from {
+    opacity: 0;
+    clip-path: inset(0 50%);
+  }
+  to {
+    clip-path: inset(0 0);
   }
 }
 
-#banner.good b {
-  color: var(--cool);
+/* The result across the whole screen. */
+#end {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 24%;
+  padding: 20px 16px 24px;
+  display: none;
+  justify-items: center;
+  text-align: center;
+  background: linear-gradient(90deg, transparent, rgba(8, 10, 13, 0.86) 22% 78%, transparent);
+  border-block: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, var(--cool), transparent) 1;
 }
 
-#banner.warn b {
-  color: var(--warn);
+#end.lost {
+  border-image: linear-gradient(90deg, transparent, var(--danger), transparent) 1;
+}
+
+#end.on {
+  display: grid;
+  animation: band-in 0.35s ease-out;
+}
+
+#end .tag {
+  font-size: 14px;
+  letter-spacing: 0.3em;
+  color: var(--dim);
+}
+
+#end h2 {
+  margin: 2px 0 14px;
+  font-size: 84px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  line-height: 1;
+  color: var(--cool);
+  animation: title-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+#end.lost h2 {
+  color: var(--danger);
+}
+
+@keyframes title-in {
+  from {
+    letter-spacing: 0.7em;
+    opacity: 0;
+  }
+}
+
+#end-stats {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+#end-stats div {
+  display: grid;
+  min-width: 120px;
+  padding: 8px 14px;
+  background: rgba(241, 243, 241, 0.06);
+  border-top: 2px solid var(--faint);
+  font-size: 11px;
+  color: var(--dim);
+}
+
+#end-stats b {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+#end .hint {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--accent);
 }
 
 @media (prefers-reduced-motion: reduce) {
   #warn.on,
-  #mech[data-kind='ready'] .label,
+  #mech[data-kind='ready'] .ring,
+  #vitals.low #health-value,
   #frame-name.changed,
-  #hud.cloaked #cloak-edge {
+  #hud.cloaked #cloak-edge,
+  #callout.on,
+  #end h2 {
     animation: none;
   }
 }
@@ -1136,78 +1532,160 @@ body {
 /* Small windows: drop what is not needed to fight. */
 @media (max-width: 900px), (max-height: 520px) {
   #drive .hint,
-  #mech .hint {
-    display: none;
-  }
-
-  #mech,
-  #drive,
-  #thrust {
-    width: 200px;
-  }
-
-  #vitals {
-    width: 180px;
-  }
-
-  #score {
-    grid-template-columns: 96px auto 96px;
-  }
-
+  #mech .hint,
+  #status,
   #slots,
-  #view-mode {
+  #score .goal {
     display: none;
+  }
+
+  #topleft {
+    width: 200px;
+    left: 16px;
+    top: 12px;
   }
 
   #feed {
-    top: 70px;
+    right: 16px;
+    top: 12px;
+  }
+
+  #compass {
+    width: 264px;
+    top: 8px;
+  }
+
+  #alerts {
+    top: 60px;
+  }
+
+  #vitals {
+    width: 200px;
+    left: 16px;
+    bottom: 14px;
+  }
+
+  #thrust,
+  #drive {
+    width: 170px;
+    bottom: 16px;
+  }
+
+  #weapon {
+    right: 16px;
+    bottom: 14px;
+    width: 200px;
+  }
+
+  #weapon .ammo {
+    font-size: 40px;
+  }
+
+  #mech {
+    right: 16px;
+    bottom: 104px;
+  }
+
+  #mech .ring {
+    width: 46px;
+    height: 46px;
+  }
+
+  #end h2 {
+    font-size: 56px;
+  }
+
+  #end-stats div {
+    min-width: 90px;
   }
 }
 
-/* ---------------------------------------------------------------- start overlay */
+/* ---------------------------------------------------------------- start screen */
 
+/* The match stays in view behind the menu: dark on the left where the choices
+   are, lighter towards the right. */
 #overlay {
   position: fixed;
   inset: 0;
   display: grid;
-  place-items: center;
-  padding: 16px;
-  background: radial-gradient(ellipse at center, rgba(7, 11, 18, 0.55), rgba(7, 11, 18, 0.9));
-  backdrop-filter: blur(3px);
+  grid-template-rows: minmax(0, 1fr) auto;
+  background: linear-gradient(90deg, rgba(5, 7, 10, 0.95) 0%, rgba(5, 7, 10, 0.82) 36%, rgba(5, 7, 10, 0.45) 70%, rgba(5, 7, 10, 0.65) 100%);
+  backdrop-filter: blur(2px);
 }
 
 #overlay.hidden {
   display: none;
 }
 
-#controls[hidden] {
-  display: none;
+#overlay [hidden] {
+  display: none !important;
 }
 
 .panel {
-  width: min(540px, 100%);
-  transition: width 0.18s ease-out;
-  max-height: 100%;
   overflow: auto;
-  padding: 28px 32px;
-  background: var(--panel);
-  border-top: 3px solid var(--accent);
+  padding: clamp(20px, 7vh, 72px) clamp(16px, 5vw, 72px) 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  grid-auto-rows: min-content;
+  align-content: start;
+  column-gap: clamp(24px, 6vw, 96px);
+}
+
+.panel > * {
+  grid-column: 1;
+}
+
+.brand,
+#settings,
+#hangar {
+  grid-column: 1 / -1;
+}
+
+#manual {
+  grid-column: 2;
+  grid-row: 2 / span 4;
+  justify-self: end;
+  align-self: start;
+  width: min(520px, 100%);
+  padding: 16px 20px;
+  background: rgba(8, 10, 13, 0.6);
+  border-top: 2px solid var(--faint);
+  animation: menu-in 0.35s ease-out 0.15s backwards;
+}
+
+#manual .tag {
+  margin-bottom: 10px;
 }
 
 .tag {
   margin: 0;
-  font-size: 11px;
-  letter-spacing: 0.2em;
+  font-size: 12px;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--dim);
 }
 
+.brand {
+  margin-bottom: clamp(16px, 4vh, 36px);
+  animation: menu-in 0.3s ease-out;
+}
+
 h1 {
-  margin: 4px 0 18px;
-  font-size: 52px;
+  margin: 0;
+  font-size: clamp(48px, 9vh, 88px);
   font-weight: 700;
-  letter-spacing: 0.14em;
-  line-height: 1;
+  letter-spacing: 0.16em;
+  line-height: 0.95;
+}
+
+/* A short accent line under the name. */
+h1::after {
+  content: '';
+  display: block;
+  width: 64px;
+  height: 4px;
+  margin-top: 12px;
+  background: var(--accent);
 }
 
 #menu,
@@ -1217,14 +1695,9 @@ h1 {
   margin-bottom: 20px;
 }
 
-#menu[hidden],
-#resume[hidden] {
-  display: none;
-}
-
 #menu label {
-  font-size: 11px;
-  letter-spacing: 0.2em;
+  font-size: 12px;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--dim);
 }
@@ -1232,23 +1705,104 @@ h1 {
 #menu input {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid rgba(233, 238, 245, 0.25);
-  background: rgba(7, 11, 18, 0.6);
+  border: 0;
+  border-bottom: 2px solid var(--faint);
+  background: rgba(241, 243, 241, 0.06);
   color: var(--ink);
   font: inherit;
-  font-size: 16px;
-  letter-spacing: 0.1em;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  transition: border-color 0.12s ease-out, background 0.12s ease-out;
 }
 
 #menu input:focus-visible {
-  border-color: var(--cool);
+  border-color: var(--accent);
+  background: rgba(241, 243, 241, 0.1);
   outline: none;
 }
 
+/* The main choices: a column of big entries that light up white under the pointer. */
 .choices {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.panel .choices button {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: 1px;
+  padding: 10px 16px 11px 18px;
+  text-align: left;
+  background: linear-gradient(90deg, rgba(241, 243, 241, 0.08), rgba(241, 243, 241, 0.02));
+  color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--faint);
+  font-size: 24px;
+  letter-spacing: 0.12em;
+  transition: background 0.14s ease-out, color 0.14s ease-out, transform 0.14s ease-out, box-shadow 0.14s ease-out;
+  animation: menu-in 0.3s ease-out backwards;
+}
+
+.panel .choices button:nth-child(2) {
+  animation-delay: 0.04s;
+}
+
+.panel .choices button:nth-child(3) {
+  animation-delay: 0.08s;
+}
+
+.panel .choices button:nth-child(4) {
+  animation-delay: 0.12s;
+}
+
+.panel .choices button small {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  transition: color 0.14s ease-out;
+}
+
+.panel .choices button small:empty {
+  display: none;
+}
+
+/* The first choice is the one to take. */
+.panel .choices button:not(.quiet) {
+  background: linear-gradient(90deg, rgba(255, 122, 47, 0.95), rgba(255, 122, 47, 0.6));
+  color: #140a04;
+  box-shadow: inset 3px 0 0 #ffd0b3;
+}
+
+.panel .choices button:not(.quiet) small {
+  color: rgba(20, 10, 4, 0.7);
+}
+
+.panel .choices button:hover,
+.panel .choices button:focus-visible {
+  background: linear-gradient(90deg, #f1f3f1, rgba(241, 243, 241, 0.82));
+  color: #0b0d10;
+  box-shadow: inset 6px 0 0 var(--accent);
+  transform: translateX(6px);
+  outline: none;
+}
+
+.panel .choices button:hover small,
+.panel .choices button:focus-visible small {
+  color: rgba(11, 13, 16, 0.65);
+}
+
+.panel .choices button:active {
+  transform: translateX(6px) scale(0.985);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
 }
 
 .panel button {
@@ -1259,8 +1813,8 @@ h1 {
   color: #120a05;
   font: inherit;
   font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.18em;
+  font-size: 16px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   cursor: pointer;
   transition: background 0.12s ease-out, transform 0.12s ease-out;
@@ -1287,67 +1841,47 @@ h1 {
   background: rgba(233, 238, 245, 0.1);
 }
 
-.panel button:disabled {
-  opacity: 0.5;
+.panel button:disabled,
+.panel .choices button:disabled {
+  opacity: 0.45;
   cursor: default;
+  transform: none;
 }
 
-#resume #leave,
 .panel button.small {
   padding: 9px;
-  font-size: 12px;
-}
-
-.menu-extras {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.panel .menu-extras button {
-  width: auto;
-  padding: 8px 18px;
+  font-size: 13px;
 }
 
 #hangar-summary {
-  margin-left: 10px;
   color: var(--dim);
-  font-weight: 400;
-  letter-spacing: 0.12em;
 }
 
-#hangar-summary:empty {
-  display: none;
-}
-
-#menu-status {
+#menu-status,
+#lock-error {
   margin: -8px 0 20px;
   padding: 10px 12px;
   border-left: 3px solid var(--cool);
   background: rgba(88, 214, 255, 0.1);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.4;
 }
 
 #menu-status[data-kind='error'] {
   border-color: var(--danger);
-  background: rgba(255, 90, 60, 0.12);
+  background: rgba(255, 77, 58, 0.12);
 }
 
 #lock-error {
-  margin: -8px 0 20px;
-  padding: 10px 12px;
-  border-left: 3px solid var(--accent);
+  border-color: var(--accent);
   background: rgba(255, 122, 47, 0.12);
-  font-size: 13px;
-  line-height: 1.45;
 }
 
 dl {
   margin: 0;
   display: grid;
-  gap: 6px;
-  font-size: 13px;
+  gap: 5px;
+  font-size: 15px;
 }
 
 dl div {
@@ -1357,10 +1891,11 @@ dl div {
 }
 
 dt {
-  color: var(--cool);
+  color: var(--ink);
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 dd {
@@ -1368,23 +1903,99 @@ dd {
   color: var(--dim);
 }
 
-@media (max-width: 480px) {
-  h1 {
-    font-size: 38px;
-  }
-  .choices {
-    grid-template-columns: 1fr;
+/* The keys that work on these screens, along the bottom. */
+#menu-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 12px clamp(16px, 5vw, 72px);
+  border-top: 1px solid var(--faint);
+  background: rgba(0, 0, 0, 0.4);
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+#menu-keys b {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 0 7px;
+  border: 1px solid rgba(241, 243, 241, 0.6);
+  border-radius: 3px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 960px) {
+  .panel {
+    grid-template-columns: minmax(0, 1fr);
   }
 
+  #manual {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: stretch;
+    width: auto;
+  }
+}
+
+/* Short windows (a phone on its side): the choices sit two by two and the name shrinks. */
+@media (max-height: 560px) {
+  .brand {
+    margin-bottom: 12px;
+  }
+
+  h1 {
+    font-size: 40px;
+  }
+
+  h1::after {
+    margin-top: 8px;
+  }
+
+  .panel.wide .brand {
+    display: none;
+  }
+
+  .choices {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .panel .choices button {
+    padding: 8px 12px;
+    font-size: 18px;
+  }
+
+  .panel .choices button small {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
   dl div {
     grid-template-columns: 110px 1fr;
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .brand,
+  #manual,
+  .panel .choices button {
+    animation: none;
+  }
+
+  .panel .choices button:hover,
+  .panel .choices button:focus-visible {
+    transform: none;
+  }
+}
+
 /* ---------------------------------------------------------------- settings */
 
-.panel.wide {
-  width: min(780px, 100%);
+#settings {
+  max-width: 820px;
 }
 
 #settings[hidden] {
@@ -1643,11 +2254,11 @@ body.pad .panel :focus {
 
 /* ---------------------------------------------------------------- HUD size */
 
-#status,
-#score,
+#topleft,
+#compass,
+#alerts,
 #feed,
 #vitals,
-#speed,
 #thrust,
 #mech,
 #drive,
@@ -1657,11 +2268,6 @@ body.pad .panel :focus {
 #death,
 #end {
   zoom: var(--hud-scale, 1);
-}
-
-#hud [data-key] {
-  font-weight: 700;
-  color: var(--ink);
 }
 
 @media (max-width: 640px) {
@@ -1677,8 +2283,8 @@ body.pad .panel :focus {
 
 /* ---------------------------------------------------------------- hangar */
 
-.panel.wide:has(#hangar:not([hidden])) {
-  width: min(940px, 100%);
+#hangar {
+  max-width: 1100px;
 }
 
 #hangar[hidden] {

@@ -71,16 +71,22 @@ async function boot(): Promise<void> {
   settings.listen(controls);
   void readLayout().then(() => game.onKeysChange());
 
+  // Every button on the start screens ticks as the pointer reaches it.
+  document.getElementById('overlay')!.addEventListener('pointerover', (e) => {
+    const button = (e.target as HTMLElement).closest('button');
+    if (button && !button.disabled && !button.contains(e.relatedTarget as Node | null)) game.sfx.uiMove();
+  });
+
   menu.onSettings = () => {
     game.sfx.unlock();
-    game.sfx.uiSelect();
+    game.sfx.uiOpen();
     menu.showSettings();
     screen.open();
   };
   screen.onClose = () => menu.hideSettings();
   menu.onHangar = () => {
     game.sfx.unlock();
-    game.sfx.uiSelect();
+    game.sfx.uiOpen();
     menu.showHangar();
     hangar.open();
   };
@@ -103,6 +109,8 @@ async function boot(): Promise<void> {
 
   const join = (name: string): void => {
     if (conn) return;
+    game.sfx.unlock();
+    game.sfx.uiSelect();
     menu.showConnecting(url.replace(/^wss?:\/\//, ''));
     const c = new Connection(url, name, world, map, loadout.value.side);
     conn = c;
@@ -137,11 +145,14 @@ async function boot(): Promise<void> {
 
   menu.onOnline = join;
   menu.onOffline = () => {
+    game.sfx.unlock();
+    game.sfx.uiSelect();
     menu.showPlaying();
     game.resume();
   };
   menu.onResume = () => game.resume();
   menu.onLeave = () => {
+    game.sfx.uiBack();
     if (conn) {
       conn.close();
     } else {
