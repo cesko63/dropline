@@ -295,7 +295,7 @@ function frame(now: number): void {
       p.avatar.fireFlash();
       p.actor.punchPitch += 0.03;
     }
-    if (hurt) p.avatar.flash();
+    if (hurt) p.avatar.flinch();
     // In first person the viewer is that pilot, so their own body is hidden, as in play.
     const own = opts.view === 'first person' && p === pilots[opts.armTeam];
     p.avatar.update(dt, p.actor, pos, !own, opts.aim || opts.fire || opts.weapon === 3 ? 1 : 0);

@@ -30,7 +30,7 @@ const CLOT = 3;
  * `drop` and `mist` are linear colours for the particles (lit by the sky like
  * smoke); `stain` is what it leaves on the world.
  */
-const FLUIDS = [
+export const FLUIDS = [
   { drop: new THREE.Color(0.3, 0.012, 0.01), mist: new THREE.Color(0.2, 0.014, 0.012), stain: '#4a0505', roughness: 0.3, metalness: 0 },
   { drop: new THREE.Color(0.024, 0.016, 0.009), mist: new THREE.Color(0.035, 0.028, 0.022), stain: '#140d06', roughness: 0.06, metalness: 0.25 },
 ];
@@ -365,6 +365,40 @@ export class Gore {
     }
   }
 
+  /** The burst where a round strikes: a dense puff that blooms out toward the shooter and is gone in a moment. */
+  private puff(pos: Vec3, dir: Vec3, fluid: number, count: number, size: number): void {
+    const c = FLUIDS[fluid].drop;
+    e.r0 = e.r1 = c.r * 1.5;
+    e.g0 = e.g1 = c.g * 1.5;
+    e.b0 = e.b1 = c.b * 1.5;
+    e.delay = 0;
+    e.fadeIn = 0.02;
+    e.drag = 8;
+    e.gravity = 0.4;
+    e.wind = 0;
+    e.spin = 1;
+    e.upright = false;
+    e.stretch = 0;
+    e.bounce = -1;
+    e.hover = 0;
+    e.tile = MIST;
+    for (let i = 0; i < count; i++) {
+      scatter(v, null, 0);
+      v.multiplyScalar(0.6).addScaledVector(n3.set(dir.x, dir.y, dir.z), -0.8).multiplyScalar(rand(0.8, 1.6));
+      e.x = pos.x;
+      e.y = pos.y;
+      e.z = pos.z;
+      e.vx = v.x;
+      e.vy = v.y;
+      e.vz = v.z;
+      e.life = rand(0.22, 0.35);
+      e.size0 = size * rand(0.35, 0.5);
+      e.size1 = size * rand(1.6, 2);
+      e.alpha = rand(0.75, 0.9);
+      this.layer.emit(e);
+    }
+  }
+
   /**
    * A stain on the surface at `pos`, facing `normal`. `along` lays a spray out
    * the way it flew; else it is turned at random. A `grow` of more than 0 is a
@@ -440,7 +474,9 @@ export class Gore {
     const fluid = this.fluid(team);
     const s = Math.min(1.2, Math.max(0.15, damage / 45)) * (head ? 1.4 : 1);
     this.drops(pos, dir, fluid, Math.round(4 + 14 * s), 3 + 4 * s, 0.45, 0.035);
-    this.drops(pos, { x: -dir.x, y: -dir.y + 0.3, z: -dir.z }, fluid, Math.round(1 + 3 * s), 1.6, 0.6, 0.03);
+    // A splash back out of the wound and round the body, on the shooter's side.
+    this.drops(pos, { x: -dir.x, y: -dir.y + 0.4, z: -dir.z }, fluid, Math.round(3 + 7 * s), 2.4, 1.1, 0.032);
+    this.puff(pos, dir, fluid, head ? 3 : 2, 0.2 + 0.2 * s);
     this.mist(pos, dir, fluid, Math.round(1 + 2 * s) + (head ? 2 : 0), 0.14 + 0.12 * s, 0.45);
     if (s > 0.6) this.drops(pos, dir, fluid, 2, 3, 0.6, 0.05, CLOT);
     // The wall behind takes a spray laid along the shot, wider the further it flew.

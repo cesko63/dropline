@@ -4,6 +4,7 @@ import { ArmGun, GUN_FINISH } from './armGun';
 import { PilotAnimator } from './pilot/animate';
 import { buildSkeleton, block, type BoneName, type Skeleton } from './pilot/rig';
 import { POD_MUZZLE, suitKit } from './pilot/suits';
+import { Wounds } from './pilot/wounds';
 
 /** Per-team look. Allies also carry a chevron overhead, so teams never rest on colour alone. */
 export const TEAM_LOOK = [
@@ -24,7 +25,6 @@ const MUZZLE = new THREE.MeshBasicMaterial({
   blending: THREE.AdditiveBlending,
   depthWrite: false,
 });
-const WHITE = new THREE.Color('#ffffff');
 const FLAME_GEO = new THREE.ConeGeometry(0.07, 0.5, 8);
 /**
  * Where the barrel's collar sits on the right forearm (which hangs down its own
@@ -107,11 +107,11 @@ export class Avatar {
   private readonly body = new THREE.Group();
   private readonly bones: Skeleton;
   private readonly anim: PilotAnimator;
+  private readonly wounds: Wounds;
   private readonly skin: THREE.MeshStandardMaterial;
   private readonly lights: THREE.MeshBasicMaterial;
   private readonly halo: THREE.SpriteMaterial;
   private readonly haloOpacity: number;
-  private readonly baseEmissive: THREE.Color;
   /** Z.E.R.O lights breathe; Corps lights hold steady. */
   private readonly pulse: number;
   private readonly gun: ArmGun;
@@ -124,7 +124,6 @@ export class Avatar {
   private readonly laserMat: THREE.MeshBasicMaterial;
   private readonly owned: (THREE.Material | THREE.BufferGeometry)[] = [];
   private heading = 0;
-  private hit = 0;
   private shot = 0;
   private noticed = 0;
   private dead = -1;
@@ -143,13 +142,13 @@ export class Avatar {
     this.bones = buildSkeleton(this.body);
     this.anim = new PilotAnimator(this.bones, this.body);
     // Z.E.R.O plates carry a faint crimson cast, so a black frame never sinks into shadow.
-    this.baseEmissive = new THREE.Color(machine ? '#3a0408' : '#000000').multiplyScalar(machine ? 0.4 : 0);
+    const emissive = new THREE.Color(machine ? '#3a0408' : '#000000').multiplyScalar(machine ? 0.4 : 0);
     this.skin = new THREE.MeshStandardMaterial({
       vertexColors: true,
       flatShading: true,
       roughness: kit.roughness,
       metalness: kit.metalness,
-      emissive: this.baseEmissive.clone(),
+      emissive,
     });
     this.lights = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
     this.haloOpacity = machine ? 0.85 : 0.5;
@@ -167,15 +166,18 @@ export class Avatar {
     this.gunMat = new THREE.MeshStandardMaterial({ color: finish.gun, roughness: 0.5, metalness: 0.55, flatShading: true });
     this.owned.push(this.skin, this.lights, this.halo, this.gunMat);
 
+    const suitParts: THREE.Mesh[] = [];
     for (const name of Object.keys(kit.bones) as BoneName[]) {
       const parts = kit.bones[name]!;
       if (parts.body) {
         const mesh = new THREE.Mesh(parts.body, this.skin);
         mesh.castShadow = true;
         this.bones[name].add(mesh);
+        suitParts.push(mesh);
       }
       if (parts.glow) this.bones[name].add(new THREE.Mesh(parts.glow, this.lights));
     }
+    this.wounds = new Wounds(suitParts, machine ? 1 : 0);
     for (const h of kit.halos) {
       const sprite = new THREE.Sprite(this.halo);
       sprite.position.set(h.at[0], h.at[1], h.at[2]);
@@ -248,10 +250,15 @@ export class Avatar {
     this.owned.push(this.laser.geometry, this.laserMat);
   }
 
-  /** White flash when hit, and a flinch. */
-  flash(): void {
-    this.hit = 1;
+  /** A flinch when hit. */
+  flinch(): void {
     this.anim.hit();
+  }
+
+  /** Blood (or crude) on the suit where a round struck at `at`, flying along `dir`. */
+  wound(at: Vec3, dir: Vec3, damage: number): void {
+    this.root.updateMatrixWorld(true);
+    this.wounds.add(at, dir, damage);
   }
 
   fireFlash(): void {
@@ -337,6 +344,7 @@ export class Avatar {
       if (this.dead >= 0) {
         this.dead = -1;
         this.gibbed = false;
+        this.wounds.clear();
         this.heading = s.yaw;
       }
       this.root.visible = show;
@@ -401,19 +409,12 @@ export class Avatar {
         this.mark.scale.setScalar(0.55 * pop * Math.min(1, this.noticed * 6));
       }
     }
-    this.tint(dt);
-  }
-
-  private tint(dt: number): void {
-    if (this.hit <= 0 && this.skin.emissive.equals(this.baseEmissive)) return;
-    this.hit = Math.max(0, this.hit - dt * 9);
-    this.skin.emissive.lerpColors(this.baseEmissive, WHITE, this.hit * 0.9);
-    this.gunMat.emissive.lerpColors(this.gunMat.emissive.set(0), WHITE, this.hit * 0.9);
   }
 
   dispose(): void {
     // The suit's geometry is shared by every pilot of the team; only this pilot's own things go.
     for (const o of this.owned) o.dispose();
+    this.wounds.clear();
     this.gun.dispose();
   }
 }

@@ -288,6 +288,12 @@ export function dropAtlas(): THREE.CanvasTexture {
  * scattered drops.
  */
 export function stainAtlas(): THREE.CanvasTexture {
+  stains ??= paintStains();
+  return stains;
+}
+let stains: THREE.CanvasTexture | null = null;
+
+function paintStains(): THREE.CanvasTexture {
   const tile = 128;
   const size = tile * 2;
   const noise = makeNoise(71, 16);

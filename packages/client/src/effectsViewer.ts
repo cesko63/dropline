@@ -139,7 +139,8 @@ function shootPilot(height: number, damage: number, head: boolean, heavy: boolea
   fx.tracer(muzzle.copy(SHOOTER), at, heavy ? '#ffb38a' : '#ffe2b0', heavy ? 0.09 : 0.04);
   fx.flash(muzzle, 4);
   fx.wound(at, dir, opts.team, damage, head);
-  pilotAvatar?.flash();
+  pilotAvatar?.flinch();
+  pilotAvatar?.wound(at, dir, damage);
   return dir;
 }
 

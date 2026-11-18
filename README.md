@@ -617,8 +617,10 @@ packages/
   scuffs. A rocket is a fireball rolling up into dark smoke, a flak shell a
   white crack and a puff of black, a mech's death a fireball, burning plates
   and a black column. Pilots bleed: the Corps red blood, a Z.E.R.O frame a
-  dark crude with a few sparks. A hit sprays out the far side onto the wall
-  behind and drips on the floor; a pilot who goes down leaves a spreading pool;
+  dark crude with a few sparks. A hit bursts in a quick puff where it struck,
+  splashes round the body, leaves a stain on the suit that it wears until it
+  respawns, sprays out the far side onto the wall behind and drips on the
+  floor; a pilot who goes down leaves a spreading pool;
   a hit to the player throws splatter across the edges of their view. A
   pilot's own guns leave a body, but a mech's guns, a rocket or a mech's weight
   tear it apart: the suit's own limbs fly from where they were with lumps of

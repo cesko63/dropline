@@ -703,6 +703,7 @@ export class Game {
     if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
     dir.normalize();
     this.fx.wound(at, dir, this.match.actors[victim].team, amount, head);
+    this.avatars[victim].wound(at, dir, amount);
   }
 
   /** 1 beside the player's view, falling to 0 at `range` meters. */
@@ -831,7 +832,7 @@ export class Game {
         break;
       }
       case 'damage': {
-        this.avatars[e.victim].flash();
+        this.avatars[e.victim].flinch();
         this.wound(e.victim, e.attacker, e.pos, e.amount, e.head);
         if (e.attacker === me.id) {
           this.hud.hitmarker(e.head, e.killed);
