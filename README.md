@@ -616,7 +616,14 @@ packages/
   walls and comes to rest; hits leave bullet holes, craters, scorches and
   scuffs. A rocket is a fireball rolling up into dark smoke, a flak shell a
   white crack and a puff of black, a mech's death a fireball, burning plates
-  and a black column. Open `/effects.html` to play each one on its own,
+  and a black column. Pilots bleed: the Corps red blood, a Z.E.R.O frame a
+  dark crude with a few sparks. A hit sprays out the far side onto the wall
+  behind and drips on the floor; a pilot who goes down leaves a spreading pool;
+  a hit to the player throws splatter across the edges of their view. A
+  pilot's own guns leave a body, but a mech's guns, a rocket or a mech's weight
+  tear it apart: the suit's own limbs fly from where they were with lumps of
+  flesh (Corps) or gears, nuts, pistons and cables (Z.E.R.O), bleed as they
+  tumble, splat where they strike and lie 10 s. Open `/effects.html` to play each one on its own,
   against a floor and a wall, by day or night, with what is alive and what it
   costs in the corner.
 - **Mech frames are tuned on bot duels.** The numbers above come from bots on

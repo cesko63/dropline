@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import { COMBAT, FRAMES, TUNING, WEAPONS, frameOf, lenH, spreadDeg, weaponOf, type Actor, type MatchState, type NetStats, type Vec3 } from '@dropline/shared';
 import type { Action } from '../input/bindings';
+import { splatImages } from './splatter';
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 const DEG = Math.PI / 180;
 const HURT_WEDGES = 4;
+const SPLATS = 6;
+/** Seconds a splat stays on the view. */
+const SPLAT_TIME = 1.6;
 const DAMAGE_NUMBERS = 8;
 const FEED_LINES = 5;
 /** Damage numbers on a mech are kept apart from those on its pilot by this offset. */
@@ -19,6 +23,12 @@ interface HurtWedge {
   x: number;
   z: number;
   life: number;
+}
+
+interface Splat {
+  el: HTMLElement;
+  life: number;
+  peak: number;
 }
 
 interface DamageNumber {
@@ -119,6 +129,8 @@ export class Hud {
   private reveal: number[] = [];
   private lastMeterKind = '';
   private readonly wedges: HurtWedge[] = [];
+  private readonly splats: Splat[] = [];
+  private nextSplat = 0;
   private readonly numbers: DamageNumber[] = [];
   private readonly tags: HTMLElement[] = [];
   private readonly tagText: Text[] = [];
@@ -138,6 +150,12 @@ export class Hud {
       wedgeBox.append(node);
       this.wedges.push({ el: node, x: 0, z: 0, life: 0 });
     }
+    const splatBox = el('splatter');
+    for (let i = 0; i < SPLATS; i++) {
+      const node = document.createElement('i');
+      splatBox.append(node);
+      this.splats.push({ el: node, life: 0, peak: 0 });
+    }
     for (let i = 0; i < DAMAGE_NUMBERS; i++) {
       const node = document.createElement('span');
       node.className = 'dmg';
@@ -152,6 +170,10 @@ export class Hud {
     for (const line of this.feed) line.el.remove();
     this.feed.length = 0;
     for (const w of this.wedges) w.life = 0;
+    for (const sp of this.splats) {
+      sp.life = 0;
+      sp.el.style.opacity = '0';
+    }
     for (const n of this.numbers) n.life = 0;
     for (const tag of this.tags) tag.remove();
     this.tags.length = this.tagText.length = 0;
@@ -233,6 +255,13 @@ export class Hud {
     this.hurt = Math.max(0, this.hurt - dt * 2.2);
     const low = me.alive ? Math.max(0, (inMech ? 0.3 : 0.55) - hp) * (inMech ? 1.6 : 1.1) : 0.5;
     this.vignette.style.opacity = Math.min(0.9, low + this.hurt).toFixed(3);
+    for (const sp of this.splats) {
+      if (sp.life <= 0) continue;
+      sp.life = Math.max(0, sp.life - dt);
+      // Holds, then thins away as it runs down the view.
+      sp.el.style.opacity = (sp.peak * Math.min(1, (sp.life / SPLAT_TIME) * 2)).toFixed(3);
+      sp.el.style.translate = `0 ${((1 - sp.life / SPLAT_TIME) * 3).toFixed(2)}vmin`;
+    }
 
     // Weapon panel.
     const def = weaponOf(me);
@@ -556,6 +585,29 @@ export class Hud {
     w.z = z;
     w.life = 1.2;
     this.hurt = Math.min(0.7, this.hurt + 0.15 + amount / 120);
+  }
+
+  /**
+   * Blood thrown across the view by a hit, nearer the edges than the middle so
+   * it never hides the target: the Corps' own red, or a Z.E.R.O frame's crude.
+   */
+  bloodSplat(amount: number, team: number): void {
+    const sp = this.splats[this.nextSplat++ % SPLATS];
+    const images = splatImages(team);
+    const size = 16 + Math.min(1, amount / 60) * 18 + Math.random() * 8;
+    // Somewhere on a band round the edge of the view.
+    const a = Math.random() * Math.PI * 2;
+    const reach = 0.32 + Math.random() * 0.14;
+    const s = sp.el.style;
+    s.width = s.height = `${size.toFixed(1)}vmin`;
+    s.left = `calc(${(50 + Math.cos(a) * reach * 100).toFixed(1)}% - ${(size / 2).toFixed(1)}vmin)`;
+    s.top = `calc(${(50 + Math.sin(a) * reach * 100).toFixed(1)}% - ${(size / 2).toFixed(1)}vmin)`;
+    s.rotate = `${(Math.random() * 40 - 20).toFixed(0)}deg`;
+    s.backgroundImage = `url(${images[Math.floor(Math.random() * images.length)]})`;
+    sp.peak = Math.min(0.85, 0.35 + amount / 60);
+    sp.life = SPLAT_TIME;
+    s.opacity = sp.peak.toFixed(3);
+    s.translate = '0 0';
   }
 
   /** A line in the kill feed. `victimNote` follows the victim's name ("· HALBERD" for a mech). */

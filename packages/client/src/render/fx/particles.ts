@@ -55,6 +55,25 @@ export interface Emit {
   planeD: number;
 }
 
+export const rand = (a: number, b: number): number => a + Math.random() * (b - a);
+
+const n3 = new THREE.Vector3();
+
+/** A random direction, pushed toward `normal` by `bias` (0 all round, 1 a wide cone off the surface). */
+export function scatter(out: THREE.Vector3, normal: { x: number; y: number; z: number } | null, bias: number): THREE.Vector3 {
+  out.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
+  if (out.lengthSq() < 1e-4) out.set(0, 1, 0);
+  out.normalize();
+  if (normal) {
+    out.addScaledVector(n3.set(normal.x, normal.y, normal.z), bias * 1.6);
+    // Never back into the surface.
+    const into = out.dot(n3);
+    if (into < 0) out.addScaledVector(n3, -into * 1.2);
+    out.normalize();
+  }
+  return out;
+}
+
 export function emitTemplate(): Emit {
   return {
     x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 1, delay: 0, size0: 1, size1: 1,

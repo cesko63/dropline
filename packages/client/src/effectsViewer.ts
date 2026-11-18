@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { FRAMES, createMech, frameIndex, type Mech, type Vec3 } from '@dropline/shared';
+import { FRAMES, WEAPONS, createMech, createPlayerState, frameIndex, type Actor, type Mech, type Vec3 } from '@dropline/shared';
+import { Avatar } from './render/avatar';
 import { Effects, type Surfaces } from './render/effects';
 import { MechAvatar } from './render/mechAvatar';
 import { createEnvironment, createRenderer } from './render/scene';
@@ -11,10 +12,12 @@ import { createEnvironment, createRenderer } from './render/scene';
  * frame of effects costs. `window.effects` drives it from the console.
  */
 
-type Shot = 'rifle hits' | 'cannon hits' | 'rocket: floor' | 'rocket: wall' | 'rocket: air' | 'flak' | 'pilot down' | 'steam' | 'footfalls' | 'thrust' | 'mech drop' | 'stomp' | 'damaged mech' | 'mech destroyed';
-const SHOTS: Shot[] = ['rifle hits', 'cannon hits', 'rocket: floor', 'rocket: wall', 'rocket: air', 'flak', 'pilot down', 'steam', 'footfalls', 'thrust', 'mech drop', 'stomp', 'damaged mech', 'mech destroyed'];
+type Shot = 'rifle hits' | 'cannon hits' | 'rocket: floor' | 'rocket: wall' | 'rocket: air' | 'flak' | 'pilot hits' | 'pilot down' | 'pilot torn apart' | 'steam' | 'footfalls' | 'thrust' | 'mech drop' | 'stomp' | 'damaged mech' | 'mech destroyed';
+const SHOTS: Shot[] = ['rifle hits', 'cannon hits', 'rocket: floor', 'rocket: wall', 'rocket: air', 'flak', 'pilot hits', 'pilot down', 'pilot torn apart', 'steam', 'footfalls', 'thrust', 'mech drop', 'stomp', 'damaged mech', 'mech destroyed'];
 /** Seconds before a looping effect plays again; the wreck burns out in full first. */
 const LOOP = 2.5;
+/** The torn-apart pilot's pieces lie a while before it plays again. */
+const GIB_LOOP = 6;
 const WRECK_LOOP = 17.5;
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -99,10 +102,53 @@ function buildMech(): void {
   scene.add(avatar.root);
 }
 
+// A pilot for the wounds, standing 2 m in front of the wall and facing the shooter.
+const SHOOTER = new THREE.Vector3(6, 1.6, 6);
+const PILOT_AT: Vec3 = { x: 0, y: 0, z: -6 };
+let pilot: Actor;
+let pilotAvatar: Avatar | null = null;
+function buildPilot(): void {
+  if (pilotAvatar) {
+    scene.remove(pilotAvatar.root);
+    pilotAvatar.dispose();
+  }
+  const loadout = ['carbine', 'scattergun', 'longshot', 'pike'];
+  pilot = {
+    id: 0,
+    team: opts.team,
+    p: createPlayerState({ ...PILOT_AT }),
+    alive: true,
+    loadout,
+    ammo: loadout.map((id) => WEAPONS[id].magSize),
+    equip: 0,
+    ads: 0,
+    weapon: 0,
+    punchPitch: 0,
+    reload: 0,
+  } as unknown as Actor;
+  pilot.p.grounded = true;
+  pilot.p.yaw = Math.atan2(-(SHOOTER.x - PILOT_AT.x), -(SHOOTER.z - PILOT_AT.z));
+  pilotAvatar = new Avatar(opts.team, false, 2);
+  scene.add(pilotAvatar.root);
+}
+
+/** A round from the shooter into the pilot (at `height` above their feet), and the wound it leaves. */
+function shootPilot(height: number, damage: number, head: boolean, heavy: boolean): Vec3 {
+  const at = v(PILOT_AT.x + (Math.random() - 0.5) * 0.25, height, PILOT_AT.z + (Math.random() - 0.5) * 0.15);
+  const dir = new THREE.Vector3(at.x - SHOOTER.x, at.y - SHOOTER.y, at.z - SHOOTER.z).normalize();
+  fx.tracer(muzzle.copy(SHOOTER), at, heavy ? '#ffb38a' : '#ffe2b0', heavy ? 0.09 : 0.04);
+  fx.flash(muzzle, 4);
+  fx.wound(at, dir, opts.team, damage, head);
+  pilotAvatar?.flash();
+  return dir;
+}
+
 let clock = 0;
 let since = 0;
 /** The mech is on stage for this effect. */
 let mechShot = false;
+/** The pilot is on stage for this effect. */
+let pilotShot = false;
 
 const v = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
 const UP = v(0, 1, 0);
@@ -115,6 +161,9 @@ function play(): void {
   const s = opts.shot;
   mechShot = s === 'damaged mech' || s === 'mech destroyed';
   if (avatar) avatar.root.visible = mechShot;
+  pilotShot = s.startsWith('pilot');
+  if (pilotShot) buildPilot();
+  if (pilotAvatar) pilotAvatar.root.visible = pilotShot;
   if (mechShot) {
     buildMech();
     mech.health = s === 'damaged mech' ? FRAMES.halberd.health * 0.15 : FRAMES.halberd.health;
@@ -147,8 +196,27 @@ function play(): void {
       fx.explosion(v(-1.5, 3.5, -2), null, 3, true);
       setTimeout(() => fx.explosion(v(1.8, 4.4, -3), null, 3, true), 140);
       break;
+    case 'pilot hits':
+      for (let i = 0; i < 6; i++) {
+        setTimeout(() => {
+          const head = i === 5;
+          shootPilot(head ? 1.65 : 0.9 + Math.random() * 0.6, i < 3 ? 17 : 55, head, false);
+        }, i * 180);
+      }
+      break;
     case 'pilot down':
-      fx.downed(v(0, 1.1, -2), opts.team === 0 ? '#58d6ff' : '#ff2a3c');
+      for (let i = 0; i < 3; i++) setTimeout(() => shootPilot(1 + Math.random() * 0.5, 17, false, false), i * 120);
+      setTimeout(() => {
+        pilot.alive = false;
+        fx.downed(v(PILOT_AT.x, 1.1, PILOT_AT.z), pilotAvatar!.fallDir(muzzle), opts.team);
+      }, 360);
+      break;
+    case 'pilot torn apart':
+      setTimeout(() => {
+        const dir = shootPilot(1.1, 30, false, true);
+        pilot.alive = false;
+        fx.gib(pilotAvatar!.gib(), opts.team, dir);
+      }, 300);
       break;
     case 'steam':
       for (let i = 0; i < 6; i++) setTimeout(() => fx.steam(v(0, 1.3, -2), 4), i * 60);
@@ -176,7 +244,8 @@ function frame(dt: number): void {
   clock += dt;
   since += dt;
   const s = opts.shot;
-  if (opts.loop && since > (s === 'mech destroyed' ? WRECK_LOOP : s === 'damaged mech' ? Infinity : LOOP)) play();
+  if (opts.loop && since > (s === 'mech destroyed' ? WRECK_LOOP : s === 'damaged mech' ? Infinity : s === 'pilot torn apart' || s === 'pilot down' ? GIB_LOOP : LOOP)) play();
+  if (pilotAvatar && pilotShot) pilotAvatar.update(dt, pilot, PILOT_AT, true, 0);
 
   if (avatar && mechShot) {
     if (s === 'mech destroyed' && mech.state === 'piloted' && since > 0.8) {
@@ -206,7 +275,7 @@ function frame(dt: number): void {
   renderer.render(scene, camera);
   worst = Math.max(worst * 0.995, cost);
   const c = fx.counts;
-  stats.textContent = `smoke ${c.smoke}  fire ${c.fire}  sparks ${c.sparks}  debris ${c.debris}\nfx.update ${cost.toFixed(2)} ms (worst ${worst.toFixed(2)})  draw calls ${renderer.info.render.calls}`;
+  stats.textContent = `smoke ${c.smoke}  fire ${c.fire}  sparks ${c.sparks}  debris ${c.debris}  drops ${c.drops}  pieces ${c.pieces}\nfx.update ${cost.toFixed(2)} ms (worst ${worst.toFixed(2)})  draw calls ${renderer.info.render.calls}`;
 }
 
 // --- Panel and camera -----------------------------------------------------------
@@ -285,10 +354,11 @@ requestAnimationFrame(loop);
     refresh();
   },
   refresh,
-  view(y: number, t: number, d: number) {
+  view(y: number, t: number, d: number, look?: Vec3) {
     yaw = y;
     tilt = t;
     dist = d;
+    if (look) target.set(look.x, look.y, look.z);
   },
   /** Stop the frame loop and step it by hand: `effects.step(1/60, 30)`. */
   step(dt: number, n = 1) {

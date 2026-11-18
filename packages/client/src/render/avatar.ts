@@ -128,6 +128,8 @@ export class Avatar {
   private shot = 0;
   private noticed = 0;
   private dead = -1;
+  /** Torn apart: nothing is left to lie there. */
+  private gibbed = false;
   private weapon = '';
   private shoulder = false;
   private podUp = 0;
@@ -258,6 +260,22 @@ export class Avatar {
     if (!this.shoulder) this.gun.fire();
   }
 
+  /**
+   * The pilot is torn apart: the body is gone at once. Returns the skeleton as
+   * it stood this moment, so its parts can fly from where they were.
+   */
+  gib(): Skeleton {
+    this.gibbed = true;
+    this.root.visible = false;
+    this.root.updateMatrixWorld(true);
+    return this.bones;
+  }
+
+  /** Which way the body falls when it goes down: its back, flat on the ground. */
+  fallDir(out: THREE.Vector3): THREE.Vector3 {
+    return out.set(Math.sin(this.heading), 0, Math.cos(this.heading));
+  }
+
   /** Pop the "!" over the head. */
   notice(): void {
     this.noticed = 0.9;
@@ -314,10 +332,11 @@ export class Avatar {
       this.laser.visible = false;
       this.muzzleFlash.visible = false;
       // Lie there, then clear away.
-      this.root.visible = this.dead < 2.4;
+      this.root.visible = this.dead < 2.4 && !this.gibbed;
     } else {
       if (this.dead >= 0) {
         this.dead = -1;
+        this.gibbed = false;
         this.heading = s.yaw;
       }
       this.root.visible = show;

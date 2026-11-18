@@ -181,6 +181,19 @@ body {
   opacity: 0;
 }
 
+/* Blood (or a Z.E.R.O frame's crude) thrown across the view by a hit. */
+#splatter {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+#splatter i {
+  position: absolute;
+  background: center / contain no-repeat;
+  opacity: 0;
+}
+
 /* Scope view of the marksman rifle: a round window with a fine cross. */
 #scope {
   position: absolute;

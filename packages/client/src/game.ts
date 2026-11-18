@@ -70,6 +70,11 @@ function killLabel(weapon: string): string {
   return 'FELL';
 }
 
+/** A pilot's own guns leave a body; a mech's guns, rockets and a mech's weight tear it apart. */
+function tearsApart(weapon: string): boolean {
+  return weapon !== '' && WEAPONS[weapon]?.mount !== 'arm';
+}
+
 export interface GameOptions {
   seed: number;
   /** Debug view: bot states over their heads. */
@@ -119,6 +124,8 @@ export class Game {
   private mechPrev: Vec3[] = [];
   private mechDrawn: Vec3[] = [];
   private raise: number[] = [];
+  /** The way the last blow to each pilot came, for the body it tears apart. */
+  private hitDir: THREE.Vector3[] = [];
   private readonly cmds: InputCmd[] = [];
   /** The line to the server while playing online, else null. */
   private conn: Connection | null = null;
@@ -144,6 +151,7 @@ export class Game {
   /** Where a wreck's fires sit, filled each frame. */
   private readonly burn = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   private readonly tmp = new THREE.Vector3();
+  private readonly woundAt = new THREE.Vector3();
   private readonly eye = v3();
   private readonly aim = v3();
   private readonly at = v3();
@@ -327,6 +335,7 @@ export class Game {
     this.mechPrev = this.match.mechs.map((k) => ({ ...k.pos }));
     this.mechDrawn = this.match.mechs.map((k) => ({ ...k.pos }));
     this.raise = this.match.actors.map(() => 0);
+    this.hitDir = this.match.actors.map(() => new THREE.Vector3(0, 1, 0));
     this.fx.clear();
     this.hud.reset(this.match, me);
     this.input.yaw = me.p.yaw;
@@ -672,6 +681,30 @@ export class Game {
     this.sfx.spawn();
   }
 
+  /**
+   * Blood (or a machine's crude) where a pilot was hit. A shot strikes at its
+   * point and flies on away from the shooter; a blast, whose point is the
+   * burst, strikes the chest and throws it away from the burst. The way it came
+   * is kept, for a body torn apart by the same blow.
+   */
+  private wound(victim: number, attacker: number, pos: Vec3, amount: number, head: boolean): void {
+    const body = this.drawn[victim];
+    const at = this.woundAt;
+    const dir = this.hitDir[victim];
+    const onBody = Math.hypot(pos.x - body.x, pos.z - body.z) < 0.8 && pos.y > body.y - 0.3 && pos.y < body.y + 2.1;
+    if (onBody) {
+      const from = this.match.actors[attacker].p.pos;
+      at.set(pos.x, pos.y, pos.z);
+      dir.set(pos.x - from.x, pos.y - from.y - 1.5, pos.z - from.z);
+    } else {
+      at.set(body.x, body.y + 1.15, body.z);
+      dir.set(at.x - pos.x, at.y - pos.y, at.z - pos.z);
+    }
+    if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
+    dir.normalize();
+    this.fx.wound(at, dir, this.match.actors[victim].team, amount, head);
+  }
+
   /** 1 beside the player's view, falling to 0 at `range` meters. */
   private near(pos: Vec3, range: number): number {
     const cam = this.rig.camera.position;
@@ -764,14 +797,9 @@ export class Game {
         const a = m.actors[e.actor];
         const mine = a === me;
         a.lastShotTime = m.time;
-        if (mine && source === 'server') {
-          // The shot itself was shown when the trigger was pulled. What the server
-          // adds is whether it struck anyone: sparks in the victim's colours.
-          for (const t of e.traces) {
-            if (t.victim >= 0) this.fx.burst(t.end, null, t.head ? 10 : 5, TEAM_LOOK[m.actors[t.victim].team].visor, 5);
-          }
-          break;
-        }
+        // The shot itself was shown when the trigger was pulled. Whether it struck
+        // anyone is the server's word, and bleeds through the 'damage' event.
+        if (mine && source === 'server') break;
         const firstPerson = mine && !this.rig.outside;
         const body = a.inMech ? this.mechAvatars[a.id] : this.avatars[a.id];
         const muzzle = firstPerson ? this.viewmodel.muzzleWorld(this.rig.camera, this.tmp) : body.muzzleWorld(this.tmp);
@@ -784,9 +812,6 @@ export class Game {
           if (t.normal) {
             this.fx.impact(t.end, t.normal, a.inMech);
             struck = t.end;
-          } else if (t.victim >= 0 && source !== 'predicted') {
-            // Sparks in the victim's colours, more of them for a headshot.
-            this.fx.burst(t.end, null, t.head ? 10 : 5, TEAM_LOOK[m.actors[t.victim].team].visor, 5);
           } else if (t.shield) {
             this.shieldSpark(t.mech, t.end, 6);
           } else if (t.mech >= 0) {
@@ -807,6 +832,7 @@ export class Game {
       }
       case 'damage': {
         this.avatars[e.victim].flash();
+        this.wound(e.victim, e.attacker, e.pos, e.amount, e.head);
         if (e.attacker === me.id) {
           this.hud.hitmarker(e.head, e.killed);
           this.hud.damageNumber(e.victim, e.pos, e.amount, e.head);
@@ -821,6 +847,7 @@ export class Game {
           const side = Math.sign(dx * Math.cos(me.p.yaw) - dz * Math.sin(me.p.yaw)) || 1;
           this.rig.jolt(side, Math.min(1, 0.25 + e.amount / 50));
           this.input.rumble(Math.min(1, 0.25 + e.amount / 60), 0.5, 140);
+          this.hud.bloodSplat(e.amount, me.team);
           this.sfx.hurt();
         }
         break;
@@ -834,7 +861,9 @@ export class Game {
         chest.x = victim.p.pos.x;
         chest.y = victim.p.pos.y + 1.1;
         chest.z = victim.p.pos.z;
-        this.fx.downed(chest, TEAM_LOOK[victim.team].visor);
+        const body = this.avatars[victim.id];
+        if (tearsApart(e.weapon)) this.fx.gib(body.gib(), victim.team, this.hitDir[victim.id]);
+        else this.fx.downed(chest, body.fallDir(this.tmp), victim.team);
         if (killer === me) {
           this.hud.showBanner('ELIMINATED ', victim.name);
           this.rig.kick(3);

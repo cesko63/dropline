@@ -234,3 +234,108 @@ export function markAtlas(): THREE.CanvasTexture {
     }
   });
 }
+
+/** A round drop at (cx, cy), radius r, with an anti-aliased edge `soft` wide: 1 inside, 0 outside. */
+function disc(u: number, v: number, cx: number, cy: number, r: number, soft = 0.02): number {
+  return 1 - smoothstep(r - soft, r + soft, Math.hypot(u - cx, v - cy));
+}
+
+/**
+ * What flies out of a wounded pilot (blood, or a machine's oil), for the gore
+ * layer. Red is density, green the light from above, as in the smoke atlas:
+ * tile 0 a single round drop (also drawn stretched into a streak), tile 1 a
+ * cluster of drops, tile 2 a soft cloud of mist, tile 3 a ragged clot.
+ */
+export function dropAtlas(): THREE.CanvasTexture {
+  const tile = 64;
+  const size = tile * 2;
+  const noise = makeNoise(61, 16);
+  const rand = rng(67);
+  const cluster = Array.from({ length: 6 }, (_, i) => [rand() * 0.5 - 0.25, rand() * 0.5 - 0.25, i === 0 ? 0.2 : 0.06 + rand() * 0.08]);
+  return canvasTexture(size, (px) => {
+    for (let t = 0; t < 4; t++) {
+      const ox = (t % 2) * tile;
+      const oy = Math.floor(t / 2) * tile;
+      for (let y = 0; y < tile; y++) {
+        for (let x = 0; x < tile; x++) {
+          const u = (x + 0.5) / tile - 0.5;
+          const v = (y + 0.5) / tile - 0.5;
+          const r = Math.hypot(u, v) * 2;
+          const n = noise(u * 6 + t * 3, v * 6 + t * 5, 4);
+          let d: number;
+          if (t === 0) d = disc(u, v, 0, 0, 0.36, 0.06);
+          else if (t === 1) d = Math.max(...cluster.map(([cx, cy, cr]) => disc(u, v, cx, cy, cr, 0.03)));
+          else if (t === 2) d = (1 - smoothstep(0.1, 0.95, r)) * (0.25 + n * 0.9) * 0.8;
+          else d = 1 - smoothstep(0.45, 0.6, r + (n - 0.5) * 0.6);
+          // Lit from the top, with a wet highlight up and to the left on the solid drops.
+          const top = 0.35 + 0.65 * smoothstep(0.4, -0.4, v);
+          const shine = t === 2 ? 0 : disc(u, v, -0.1, -0.12, 0.08, 0.05) * 0.6;
+          const i = ((oy + y) * size + ox + x) * 4;
+          px[i] = Math.min(1, Math.max(0, d)) * 255;
+          px[i + 1] = Math.min(1, t === 2 ? 0.6 + 0.4 * top : top + shine) * 255;
+          px[i + 2] = 0;
+          px[i + 3] = 255;
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Stains a wound leaves on the world, as coverage in every channel (an alpha
+ * map): tile 0 a splat (a blot thrown round with drops), tile 1 a pool, tile 2
+ * a spray fanning out along +U from its left edge (laid along the shot), tile 3
+ * scattered drops.
+ */
+export function stainAtlas(): THREE.CanvasTexture {
+  const tile = 128;
+  const size = tile * 2;
+  const noise = makeNoise(71, 16);
+  const rand = rng(73);
+  // Drops of each tile: centre, radius, and how far each is drawn out along the spray.
+  const splat = Array.from({ length: 22 }, () => {
+    const a = rand() * Math.PI * 2;
+    const r = 0.22 + rand() * 0.24;
+    return [Math.cos(a) * r, Math.sin(a) * r, 0.008 + rand() * 0.025];
+  });
+  const spray = Array.from({ length: 46 }, () => {
+    const along = rand() ** 0.7;
+    const across = (rand() - 0.5) * (0.06 + along * 0.55);
+    return [-0.42 + along * 0.88, across, (0.03 - along * 0.022) * (0.5 + rand())];
+  });
+  const drops = Array.from({ length: 14 }, () => [(rand() - 0.5) * 0.8, (rand() - 0.5) * 0.8, 0.015 + rand() * 0.05]);
+  return canvasTexture(size, (px) => {
+    for (let t = 0; t < 4; t++) {
+      const ox = (t % 2) * tile;
+      const oy = Math.floor(t / 2) * tile;
+      for (let y = 0; y < tile; y++) {
+        for (let x = 0; x < tile; x++) {
+          const u = (x + 0.5) / tile - 0.5;
+          const v = (y + 0.5) / tile - 0.5;
+          const r = Math.hypot(u, v);
+          const ang = Math.atan2(v, u);
+          const n = noise(u * 8 + t * 4, v * 8 + t * 2, 4);
+          let a = 0;
+          if (t === 0) {
+            const blot = 1 - smoothstep(0.17, 0.2, r + (n - 0.5) * 0.12 - 0.03 * Math.sin(ang * 7));
+            a = Math.max(blot, ...splat.map(([cx, cy, cr]) => disc(u, v, cx, cy, cr, 0.006)));
+          } else if (t === 1) {
+            const lobes = 0.33 + 0.05 * Math.sin(ang * 3 + 1) + 0.03 * Math.sin(ang * 5 + 2) + (n - 0.5) * 0.08;
+            a = (1 - smoothstep(lobes - 0.015, lobes + 0.015, r)) * (0.85 + 0.15 * n);
+          } else if (t === 2) {
+            // Each drop is drawn out along the spray, 2.5 times as long as it is wide.
+            for (const [cx, cy, cr] of spray) a = Math.max(a, disc((u - cx) / 2.5 + cx, v, cx, cy, cr, 0.006));
+            a = Math.max(a, 1 - smoothstep(0.06, 0.08, Math.hypot((u + 0.38) * 0.7, v) + (n - 0.5) * 0.05));
+          } else {
+            for (const [cx, cy, cr] of drops) a = Math.max(a, disc(u, v, cx, cy, cr * (0.8 + n * 0.4), 0.006));
+          }
+          // Nothing may reach the tile's edge.
+          a *= 1 - smoothstep(0.46, 0.5, Math.max(Math.abs(u), Math.abs(v)));
+          const i = ((oy + y) * size + ox + x) * 4;
+          px[i] = px[i + 1] = px[i + 2] = Math.min(1, Math.max(0, a)) * 255;
+          px[i + 3] = 255;
+        }
+      }
+    }
+  });
+}

@@ -1,8 +1,11 @@
 import * as THREE from 'three';
 import type { Vec3 } from '@dropline/shared';
-import { ParticleLayer, emitTemplate, type Emit } from './fx/particles';
+import { ParticleLayer, emitTemplate, rand, scatter, type Emit } from './fx/particles';
+import { Gore } from './fx/gore';
+import { floorBelow, type Surfaces } from './fx/surfaces';
 import { fireAtlas, markAtlas, smokeAtlas } from './fx/textures';
 import { FINISH } from './mech/kit';
+import type { Skeleton } from './pilot/rig';
 import type { Environment } from './scene';
 
 const TRACERS = 64;
@@ -33,10 +36,7 @@ const MARKS = {
 } as const;
 export type MarkKind = keyof typeof MARKS;
 
-/** What effects need to know about the map: where a ray meets it. `CollisionWorld` is one. */
-export interface Surfaces {
-  castRay(origin: Vec3, dir: Vec3, maxDist: number): { dist: number; normal: Vec3 } | null;
-}
+export type { Surfaces };
 
 /** Colours of the hot things, in linear light; values over 1 burn white through the tone mapping. */
 const HOT = {
@@ -61,23 +61,6 @@ const col = new THREE.Color();
 const col2 = new THREE.Color();
 const ray = { o: { x: 0, y: 0, z: 0 }, d: { x: 0, y: 0, z: 0 } };
 const e: Emit = emitTemplate();
-
-const rand = (a: number, b: number): number => a + Math.random() * (b - a);
-
-/** A random direction, pushed toward `normal` by `bias` (0 all round, 1 a wide cone off the surface). */
-function scatter(out: THREE.Vector3, normal: Vec3 | null, bias: number): THREE.Vector3 {
-  out.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
-  if (out.lengthSq() < 1e-4) out.set(0, 1, 0);
-  out.normalize();
-  if (normal) {
-    out.addScaledVector(n3.set(normal.x, normal.y, normal.z), bias * 1.6);
-    // Never back into the surface.
-    const into = out.dot(n3);
-    if (into < 0) out.addScaledVector(n3, -into * 1.2);
-    out.normalize();
-  }
-  return out;
-}
 
 function setColors(c0: THREE.Color, c1: THREE.Color): void {
   e.r0 = c0.r;
@@ -164,6 +147,7 @@ interface Ring {
  * what the game and the /effects.html page call, so both show the same thing.
  */
 export class Effects {
+  private readonly gore: Gore;
   private readonly smokeLayer: ParticleLayer;
   private readonly fireLayer: ParticleLayer;
   private readonly sparkLayer: ParticleLayer;
@@ -198,6 +182,7 @@ export class Effects {
     this.fireLayer = new ParticleLayer({ capacity: FIRE, map: fire, additive: true, sorted: false, nearFade: [0.2, 1.2] });
     this.sparkLayer = new ParticleLayer({ capacity: SPARKS, map: fire, additive: true, sorted: false, nearFade: [0.1, 0.5] });
     scene.add(this.smokeLayer.mesh, this.fireLayer.mesh, this.sparkLayer.mesh);
+    this.gore = new Gore(scene, surfaces, (p) => this.sparkShower(p, null, 3, 3, HOT.spark, HOT.sparkCool, 0.025));
 
     const additive = { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false };
     this.tracerMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial(additive), TRACERS);
@@ -281,23 +266,14 @@ export class Effects {
   }
 
   /** Particles alive in each layer and debris in the world: the page's performance readout. */
-  get counts(): { smoke: number; fire: number; sparks: number; debris: number } {
-    return { smoke: this.smokeLayer.live, fire: this.fireLayer.live, sparks: this.sparkLayer.live, debris: this.chunks.filter((c) => c.age >= 0).length };
+  get counts(): { smoke: number; fire: number; sparks: number; debris: number; drops: number; pieces: number } {
+    return { smoke: this.smokeLayer.live, fire: this.fireLayer.live, sparks: this.sparkLayer.live, debris: this.chunks.filter((c) => c.age >= 0).length, ...this.gore.counts };
   }
 
   // --- Building blocks ----------------------------------------------------------
 
-  /** Height of the first surface below a point, or -1e9 when there is none in reach. */
   private floorBelow(x: number, y: number, z: number): number {
-    if (!this.surfaces) return -1e9;
-    ray.o.x = x;
-    ray.o.y = y + 0.05;
-    ray.o.z = z;
-    ray.d.x = 0;
-    ray.d.y = -1;
-    ray.d.z = 0;
-    const hit = this.surfaces.castRay(ray.o, ray.d, 40);
-    return hit ? ray.o.y - hit.dist : -1e9;
+    return floorBelow(this.surfaces, x, y, z);
   }
 
   /**
@@ -550,11 +526,44 @@ export class Effects {
     this.billow(pos, count, size * 0.3, 1.2, size * 0.5, 4, 0.75, col, { rise: 1.8, alpha: 0.55, wind: 0.6 });
   }
 
-  /** A pilot going down: sparks in their side's light and a wisp of smoke from the suit. */
-  downed(pos: Vec3, color: string): void {
-    this.burst(pos, null, 22, color, 7);
-    col.setRGB(0.3, 0.3, 0.31);
-    this.billow(pos, 4, 0.3, 1, 0.4, 3, 1.6, col, { alpha: 0.5 });
+  /**
+   * A pilot struck at `pos` by something flying along `dir` (unit): blood from
+   * the Corps, dark crude and a few sparks from a Z.E.R.O frame. `damage` is
+   * how hard it hit.
+   */
+  wound(pos: Vec3, dir: Vec3, team: number, damage: number, head: boolean): void {
+    this.gore.wound(pos, dir, team, damage, head);
+    if (team === 1) this.burst(pos, dir, head ? 8 : 3, '#ff2a3c', 4);
+  }
+
+  /**
+   * A pilot going down at `chest`, falling toward `back`: a last burst of what
+   * they bleed and a pool spreading under them. A Z.E.R.O frame's lights die
+   * in sparks and a wisp of smoke.
+   */
+  downed(chest: Vec3, back: Vec3, team: number): void {
+    this.gore.down(chest, back, team);
+    if (team !== 1) return;
+    this.burst(chest, null, 18, '#ff2a3c', 6);
+    col.setRGB(0.12, 0.12, 0.13);
+    this.billow(chest, 4, 0.3, 1, 0.4, 3, 1.6, col, { alpha: 0.5 });
+  }
+
+  /**
+   * A pilot torn apart by a heavy weapon (a mech's guns, a rocket, a mech's
+   * weight): `bones` is the body as it stood, `push` (unit) the way the blow
+   * came. The Corps go in a red burst of limbs and flesh; a Z.E.R.O frame
+   * bursts into its own plates, gears and pistons in a spray of crude, sparks
+   * and a crimson flash as its core goes.
+   */
+  gib(bones: Skeleton, team: number, push: Vec3): void {
+    this.gore.gib(bones, team, push);
+    if (team !== 1) return;
+    const core = bones.chest.getWorldPosition(new THREE.Vector3());
+    this.glow(core, 1.8, 0.09, col.set('#ff2a3c').multiplyScalar(2));
+    this.sparkShower(core, null, 40, 10, HOT.spark, HOT.sparkCool, 0.03);
+    col.setRGB(0.07, 0.07, 0.075);
+    this.billow(core, 6, 0.3, 2, 0.5, 3, 1.8, col, { alpha: 0.6, rise: 0.6 });
   }
 
   /** Dust kicked up from the ground: it rolls outward and settles. `reach` is how far it spreads. */
@@ -770,6 +779,7 @@ export class Effects {
     this.smokeLayer.clear();
     this.fireLayer.clear();
     this.sparkLayer.clear();
+    this.gore.clear();
     for (const c of this.chunks) c.age = -1;
     for (const r of this.rockets) {
       r.id = -1;
@@ -799,6 +809,7 @@ export class Effects {
     this.smokeLayer.update(dt, camera, WIND_X, WIND_Z);
     this.fireLayer.update(dt, camera, WIND_X, WIND_Z);
     this.sparkLayer.update(dt, camera, WIND_X, WIND_Z);
+    this.gore.update(dt, camera, WIND_X, WIND_Z);
 
     for (const b of this.rings) {
       if (b.life <= 0) continue;
@@ -822,6 +833,7 @@ export class Effects {
     this.lit.copy(hemi.color).multiplyScalar(hemi.intensity).add(col.copy(sun.color).multiplyScalar(sun.intensity * 0.8)).multiplyScalar(1 / Math.PI);
     this.shade.copy(hemi.groundColor).add(hemi.color).multiplyScalar((hemi.intensity * 0.5) / Math.PI);
     this.smokeLayer.setLight(this.lit, this.shade);
+    this.gore.setLight(this.lit, this.shade);
   }
 
   private updateTracers(dt: number): void {
