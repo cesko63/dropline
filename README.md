@@ -594,18 +594,41 @@ packages/
 
 ## Stand-ins
 
-- **Sound:** pilots are recorded (CC0 packs from OpenGameArt, listed in
-  `AUDIO.md`): footsteps that follow the legs and change between concrete and
-  steel, jumps, landings weighed by the fall, the slide's scrape, mantles, the
-  jet pack, the rush of air at speed, the three arm guns (a dry crack close up,
-  the take with the room in it far off), the rocket pod, explosions, rounds
-  striking concrete or steel, reloads and weapon swaps, being hit, and dying.
-  Spire Nine's ambience is recorded too: wind, distant traffic and sirens, the
+- **Sound:** pilots and mechs are recorded (CC0 packs from OpenGameArt, listed
+  in `AUDIO.md`). Pilots: footsteps that follow the legs and change between
+  concrete and steel, jumps, landings weighed by the fall, the slide's scrape,
+  mantles, the jet pack, the rush of air at speed, the three arm guns (a dry
+  crack close up, the take with the room in it far off), the rocket pod,
+  explosions, rounds striking concrete or steel, reloads and weapon swaps,
+  being hit, and dying. Mechs: footfalls weighed by the frame (the Lynx light
+  and quick, the Bastion low), leg servos, the dash and jump jets, the stomp,
+  the autocannon, flak cannon and rail cannon, flak bursts, belt reloads, the
+  shield coming up, humming, taking fire and shattering, the cloak, the call-in
+  (a roar that deepens for exactly as long as the fall, then the landing),
+  climbing in and the reactor spooling up, the cockpit's hum and a running
+  mech's reactor nearby (a cloaked enemy's is silent), climbing out and
+  ejecting, rams, armour and hull hits, a mech blowing apart and its wreck
+  cooking off. Every sound has 1 to 7 takes picked at random with a little
+  pitch jitter, and the player's own sounds keep voices in reserve so a crowded
+  fight never drowns them out. The menus, the HUD and its alerts are recorded
+  too: a tick as the pointer or the pad reaches a choice, a switch on a press,
+  sweeps as a screen opens and closes, the hit tick (a ping on the head, a
+  heavier thunk on a kill), the mech meter's chimes, a radio squelch on the
+  call, beeps under a falling mech and a failing hull, a sweep on deploy,
+  callouts, static when the line drops and a tone for a win or a loss. Spire
+  Nine's ambience is recorded too: wind, distant traffic and sirens, the
   harvester's drone and groans, a far rumble, creaking steel and falling grit.
-  Every sound has 1 to 7 takes picked at random with a little pitch jitter.
-  Mechs, menus, the HUD's alerts and confirmations are still synthesized from
-  filtered noise and short tones (`client/src/audio/sfx.ts`) until their
-  recordings replace them; there is no music yet.
+  There is no music yet.
+- **HUD and menus** follow the look of today's military shooters, in a
+  condensed type (Barlow Condensed, SIL Open Font License, bundled in
+  `assets/fonts`): the score top left, a compass along the top that also marks
+  where your mech is, alerts under it (an enemy mech landing on you, a lost
+  connection, the lead taken or lost, a side 10 points from winning), the kill
+  feed top right, health in four plates bottom left (a lost chunk stays lit,
+  then drains), the weapon bottom right with the mech meter as a ring over it,
+  and kills under the crosshair with the points they scored. The start screen
+  lists its choices down the left over the match, the controls on the right
+  and the keys that work along the bottom.
 - **Models:** pilots wear real suits built in code (`client/src/render/pilot`):
   the Corps suit and the Z.E.R.O frame share one skeleton and one outline, so
   both match the hitbox, and a pose-driven animator covers every movement state.
@@ -703,8 +726,8 @@ packages/
       4. Effects: smoke, steam, sparks, blasts and wrecks (done)
    8. Sound and music (now)
       1. Recorded sound and pilots: steps, movement, guns, impacts, hurt (done)
-      2. Mechs: steps, jets, cannons, rockets, shields, call-in, wrecks
-      3. Menus, HUD and alerts
+      2. Mechs: steps, jets, cannons, rockets, shields, call-in, wrecks (done)
+      3. Menus, HUD and alerts (done)
       4. Ambience for Spire Nine (done)
       5. Music, with its own volume
    9. Closing pass: teaching, performance, error cards, balance

@@ -19,6 +19,17 @@
     "screams": { "title": "15 vocal male strain/hurt/pain/jump sounds", "author": "qubodup", "page": "https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds", "file": "slightscreams.7z" },
     "wind": { "title": "Wind", "author": "IgnasD", "page": "https://opengameart.org/content/wind", "file": "wind.zip" },
     "distant": { "title": "Muffled Distant Explosion", "author": "NenadSimic", "page": "https://opengameart.org/content/muffled-distant-explosion", "file": "NenadSimic%20-%20Muffled%20Distant%20Explosion.wav" },
+    "stomp": { "title": "Mech Stomp / Step Sound", "author": "hc", "page": "https://opengameart.org/content/mech-stomp-step-sound", "file": "stomp.flac" },
+    "powerOff": { "title": "Machine shutting down", "author": "Cough-E", "page": "https://opengameart.org/content/machine-shutting-down", "file": "MachinePowerOff.ogg" },
+    "boost": { "title": "Boost or Launch or Thruster Sound Effect", "author": "EZduzziteh", "page": "https://opengameart.org/content/boost-or-launch-or-thruster-sound-effect", "file": "boost_0.mp3" },
+    "thruster": { "title": "Thruster", "author": "EZduzziteh", "page": "https://opengameart.org/content/thruster", "file": "space_ship_0.ogg" },
+    "cannon": { "title": "Cannon fire", "author": "Thimras", "page": "https://opengameart.org/content/cannon-fire", "file": "cannon_fire_0.ogg" },
+    "energy": { "title": "Seamless Energy Emission Loop", "author": "zeroisnotnull", "page": "https://opengameart.org/content/seamless-energy-emission-loop", "file": "movingshield_sound.ogg" },
+    "shields": { "title": "Space Ship Shield Sounds", "author": "bart", "page": "https://opengameart.org/content/space-ship-shield-sounds", "file": "space%20shield%20sounds.zip" },
+    "generator": { "title": "Generator (loop)", "author": "YCbCr", "page": "https://opengameart.org/content/generator-loop", "file": "loop_generator_1.mp3" },
+    "kenneyUi": { "title": "Interface Sounds", "author": "Kenney", "page": "https://opengameart.org/content/interface-sounds", "file": "kenney_interfaceSounds.zip" },
+    "kenneySwitches": { "title": "51 UI sound effects (buttons, switches and clicks)", "author": "Kenney", "page": "https://opengameart.org/content/51-ui-sound-effects-buttons-switches-and-clicks", "file": "UI_SFX_Set.zip" },
+    "beeps": { "title": "Interface beeps", "author": "bart", "page": "https://opengameart.org/content/interface-beeps", "file": "beeps.zip" },
     "windSynth": { "title": "wind1", "author": "Luke.RUSTLTD", "page": "https://opengameart.org/content/wind1", "file": "wind1.wav" },
     "sirens": { "title": "Sirens and Alarm Noise", "author": "aquinn", "page": "https://opengameart.org/content/sirens-and-alarm-noise", "file": "siren_0.mp3" },
     "metal27": { "title": "27 Metal Audio Samples (SFX)", "author": "blacklodgegames", "page": "https://opengameart.org/content/27-metal-audio-samples-sfx", "file": "27-Metal-Audio-Samples-blacklodgegames.com_.zip" }
@@ -206,6 +217,203 @@
     ] },
     "slide": { "loop": true, "length": 0.8, "from": [["loops", "rolling.ogg"]] },
     "rush": { "loop": true, "length": 3.6, "from": [["wind", "wind/Wind2.ogg", 2.4]] },
+
+    "mech-step": { "length": 0.55, "from": [
+      ["stomp", ""],
+      ["sfx1", "slam_02.ogg"],
+      ["sfx1", "slam_04.ogg"],
+      ["sfx1", "metal_08.ogg"],
+      ["kenneyScifi", "Audio/impactMetal_001.ogg"],
+      ["kenneyScifi", "Audio/impactMetal_002.ogg"]
+    ] },
+    "mech-servo": { "length": 0.35, "from": [
+      ["scifi", "misc_06.ogg", 0.1],
+      ["scifi", "misc_12.ogg", 0.15],
+      ["scifi", "misc_12.ogg", 0.45]
+    ] },
+    "mech-thrust": { "length": 0.7, "from": [
+      ["boost", ""],
+      ["thruster", "", 0.4],
+      ["kenneyScifi", "Audio/thrusterFire_000.ogg"],
+      ["kenneyScifi", "Audio/thrusterFire_002.ogg", 1]
+    ] },
+    "mech-leap": { "length": 1.2, "from": [
+      ["thruster", "", 0.35],
+      ["thruster", "", 2],
+      ["kenneyScifi", "Audio/thrusterFire_003.ogg", 0.5]
+    ] },
+    "slam": { "length": 0.6, "from": [
+      ["metalwood", "metal_slam_01.ogg"],
+      ["sfx1", "slam_03.ogg"],
+      ["sfx1", "slam_06.ogg"],
+      ["sfx2", "sfx100v2_door_03.ogg"]
+    ] },
+    "debris": { "length": 0.8, "from": [
+      ["breaking", "bfh1_rock_falling_01.ogg"],
+      ["breaking", "bfh1_rock_falling_03.ogg"],
+      ["breaking", "bfh1_rock_falling_09.ogg"],
+      ["breaking", "bfh1_falling_01.ogg"],
+      ["breaking", "bfh1_falling_04.ogg"]
+    ] },
+    "autocannon": { "length": 0.45, "from": [
+      ["firearms", "Prepared SFX Library/SKS/U_14P.wav", 3.55],
+      ["firearms", "Prepared SFX Library/SKS/U_14P.wav", 6.73],
+      ["firearms", "Prepared SFX Library/Marlin 336/I_22P.wav", 0.72],
+      ["firearms", "Prepared SFX Library/Marlin 336/I_22P.wav", 6.98],
+      ["firearms", "Prepared SFX Library/Model 1894/L_23P.wav", 0.55],
+      ["firearms", "Prepared SFX Library/Model 1894/L_23P.wav", 4.1]
+    ] },
+    "autocannon-far": { "length": 1, "from": [
+      ["firearms", "Prepared SFX Library/1917/B_16P.wav", 0.59],
+      ["firearms", "Prepared SFX Library/Marlin 336/I_17P.wav", 0.57],
+      ["firearms", "Prepared SFX Library/Model 1894/L_17P.wav", 0.58]
+    ] },
+    "breaker": { "length": 0.6, "from": [
+      ["firearms", "Prepared SFX Library/CD/H_21P.wav", 0.44],
+      ["firearms", "Prepared SFX Library/CD/H_21P.wav", 3.05],
+      ["firearms", "Prepared SFX Library/Model 12/K_22P.wav", 0.82],
+      ["firearms", "Prepared SFX Library/Model 12/K_22P.wav", 7.42]
+    ] },
+    "breaker-boom": { "length": 1.2, "from": [
+      ["cannon", ""],
+      ["scifi", "explosion_01.ogg"],
+      ["bangs", "cannon_02.ogg"]
+    ] },
+    "lance": { "length": 0.75, "from": [
+      ["kenneyScifi", "Audio/laserLarge_000.ogg"],
+      ["kenneyScifi", "Audio/laserLarge_001.ogg"],
+      ["kenneyScifi", "Audio/laserLarge_002.ogg"],
+      ["kenneyScifi", "Audio/laserLarge_003.ogg"],
+      ["kenneyScifi", "Audio/laserLarge_004.ogg"]
+    ] },
+    "flak": { "length": 0.7, "from": [
+      ["bangs", "bang_02.ogg"],
+      ["bangs", "bang_04.ogg"],
+      ["bangs", "bang_05.ogg"],
+      ["bangs", "bang_08.ogg"],
+      ["bangs", "bang_10.ogg"]
+    ] },
+    "belt-out": { "length": 0.5, "from": [
+      ["metalwood", "metal_open_01.ogg"],
+      ["metalwood", "lock_open_01.ogg"],
+      ["sfx2", "sfx100v2_lock_open_01.ogg"]
+    ] },
+    "belt-in": { "length": 0.5, "from": [
+      ["metalwood", "metal_close_01.ogg"],
+      ["sfx1", "door_close_03.ogg"],
+      ["sfx1", "door_close_04.ogg"]
+    ] },
+    "shield-up": { "length": 0.95, "from": [
+      ["kenneyScifi", "Audio/forceField_000.ogg"],
+      ["kenneyScifi", "Audio/forceField_001.ogg"],
+      ["kenneyScifi", "Audio/forceField_003.ogg"]
+    ] },
+    "shield-down": { "length": 1.2, "from": [
+      ["shields", "space shield sounds - 1.wav"],
+      ["shields", "space shield sounds - 4.wav"],
+      ["shields", "space shield sounds - 7.wav"]
+    ] },
+    "shield-hum": { "loop": true, "length": 4, "from": [["energy", "", 0.5]] },
+    "shield-hit": { "length": 0.35, "from": [
+      ["scifi", "misc_05.ogg"],
+      ["scifi", "misc_07.ogg"],
+      ["scifi", "weird_05.ogg"]
+    ] },
+    "shield-break": { "length": 0.8, "from": [
+      ["breaking", "bfh1_glass_breaking_01.ogg"],
+      ["breaking", "bfh1_glass_breaking_03.ogg"],
+      ["breaking", "bfh1_glass_breaking_06.ogg"]
+    ] },
+    "power-down": { "length": 2, "from": [["powerOff", ""]] },
+    "power-up": { "length": 1.6, "reverse": true, "from": [["powerOff", ""]] },
+    "cloak-on": { "length": 1.5, "from": [
+      ["scifi", "misc_03.ogg"],
+      ["scifi", "teleport_02.ogg", 0.2]
+    ] },
+    "cloak-off": { "length": 0.5, "from": [
+      ["scifi", "teleport_01.ogg"],
+      ["scifi", "misc_02.ogg"]
+    ] },
+    "drop-fall": { "loop": true, "length": 2.5, "from": [["thruster", "", 1]] },
+    "hatch-open": { "length": 0.55, "from": [
+      ["kenneyScifi", "Audio/doorOpen_000.ogg"],
+      ["kenneyScifi", "Audio/doorOpen_001.ogg"],
+      ["kenneyScifi", "Audio/doorOpen_002.ogg"]
+    ] },
+    "hatch-close": { "length": 0.55, "from": [
+      ["kenneyScifi", "Audio/doorClose_000.ogg"],
+      ["kenneyScifi", "Audio/doorClose_001.ogg"],
+      ["kenneyScifi", "Audio/doorClose_002.ogg"]
+    ] },
+    "cockpit-hum": { "loop": true, "length": 4, "from": [["generator", "", 0.5]] },
+    "mech-hum": { "loop": true, "length": 4, "from": [["kenneyScifi", "Audio/spaceEngineLow_003.ogg", 0.5]] },
+    "armor-hit": { "length": 0.4, "from": [
+      ["kenneyScifi", "Audio/impactMetal_000.ogg"],
+      ["kenneyScifi", "Audio/impactMetal_003.ogg"],
+      ["kenneyScifi", "Audio/impactMetal_004.ogg"],
+      ["breaking", "bfh1_metal_hit_02.ogg"],
+      ["breaking", "bfh1_metal_hit_06.ogg"]
+    ] },
+    "hull-hit": { "length": 0.6, "from": [
+      ["sfx2", "sfx100v2_metal_hit_01.ogg"],
+      ["sfx2", "sfx100v2_hit_01.ogg"],
+      ["sfx1", "metal_06.ogg"],
+      ["sfx1", "metal_09.ogg"]
+    ] },
+    "wreck-debris": { "length": 1, "from": [
+      ["breaking", "bfh1_metal_falling_01.ogg"],
+      ["breaking", "bfh1_metal_falling_02.ogg"],
+      ["metalwood", "metal_falling_01.ogg"],
+      ["metalwood", "metal_falling_02.ogg"]
+    ] },
+    "cookoff": { "length": 0.8, "from": [
+      ["bangs", "fw_03.ogg"],
+      ["bangs", "fw_05.ogg"],
+      ["bangs", "fw_06.ogg"]
+    ] },
+    "ui-move": { "length": 0.06, "from": [
+      ["kenneyUi", "Audio/tick_002.ogg"],
+      ["kenneyUi", "Audio/tick_004.ogg"]
+    ] },
+    "ui-select": { "length": 0.12, "from": [
+      ["kenneySwitches", "switch2.wav"],
+      ["kenneySwitches", "switch1.wav"]
+    ] },
+    "ui-back": { "length": 0.12, "from": [
+      ["kenneyUi", "Audio/back_002.ogg"],
+      ["kenneyUi", "Audio/back_004.ogg"]
+    ] },
+    "ui-open": { "length": 0.25, "from": [["kenneyUi", "Audio/maximize_009.ogg"]] },
+    "ui-close": { "length": 0.25, "from": [["kenneyUi", "Audio/minimize_009.ogg"]] },
+    "ui-error": { "length": 0.3, "from": [
+      ["kenneyUi", "Audio/error_006.ogg"],
+      ["kenneyUi", "Audio/error_005.ogg"]
+    ] },
+    "ui-confirm": { "length": 0.35, "from": [["kenneyUi", "Audio/confirmation_003.ogg"]] },
+    "ui-listen": { "length": 0.35, "from": [["kenneyUi", "Audio/question_002.ogg"]] },
+    "hit-tick": { "length": 0.06, "from": [
+      ["kenneySwitches", "switch13.wav"],
+      ["kenneySwitches", "switch14.wav"]
+    ] },
+    "hit-head": { "length": 0.15, "from": [
+      ["kenneyUi", "Audio/glass_005.ogg"],
+      ["kenneyUi", "Audio/glass_002.ogg"]
+    ] },
+    "deploy": { "length": 0.5, "from": [["kenneyUi", "Audio/maximize_005.ogg"]] },
+    "streak-ready": { "length": 0.5, "from": [["kenneyUi", "Audio/confirmation_004.ogg"]] },
+    "radio": { "length": 0.15, "from": [
+      ["kenneyUi", "Audio/scratch_001.ogg"],
+      ["kenneyUi", "Audio/scratch_002.ogg"]
+    ] },
+    "callout": { "length": 0.32, "from": [["kenneyUi", "Audio/confirmation_001.ogg"]] },
+    "alarm": { "length": 0.22, "from": [["beeps", "Beeps/beep-07.wav"]] },
+    "zone-beep": { "length": 0.09, "from": [["beeps", "Beeps/beep-11.wav"]] },
+    "glitch": { "length": 0.05, "from": [
+      ["kenneyUi", "Audio/glitch_002.ogg"],
+      ["kenneyUi", "Audio/glitch_004.ogg"]
+    ] },
+    "match-win": { "length": 0.6, "from": [["kenneyDigital", "highUp.mp3"]] },
+    "match-lose": { "length": 0.7, "from": [["kenneyDigital", "lowDown.mp3"]] },
     "amb-wind": { "loop": true, "length": 14, "from": [["windSynth", "", 5]] },
     "amb-city": { "loop": true, "length": 12, "from": [["sfx2", "sfx100v2_loop_highway.ogg"]] },
     "amb-harvester": { "loop": true, "length": 4.5, "from": [["kenneyScifi", "Audio/spaceEngineLarge_001.ogg"]] },
@@ -226,10 +434,9 @@
       ["metal27", "27-Metal-Audio-Samples-blacklodgegames.com/wobble_02_44k_32bit_stereo.wav"]
     ] },
     "amb-debris": { "length": 0.9, "from": [
-      ["breaking", "bfh1_rock_falling_03.ogg"],
+      ["breaking", "bfh1_rock_falling_04.ogg"],
       ["breaking", "bfh1_rock_falling_07.ogg"],
-      ["breaking", "bfh1_rock_falling_08.ogg"],
-      ["breaking", "bfh1_rock_falling_09.ogg"]
+      ["breaking", "bfh1_rock_falling_08.ogg"]
     ] }
   }
 }
