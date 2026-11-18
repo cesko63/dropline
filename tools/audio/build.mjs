@@ -10,7 +10,8 @@
 //
 // Processing per take: cut from `start` (seconds) for at most `length`, drop
 // silence below -50 dBFS at the front, fade the end out, normalise the peak to
-// -1 dBFS. A loop instead has its end cross-faded into its start, so it repeats
+// -1 dBFS. A sound marked `reverse` is cut from the end of its source and
+// played backwards (a power-down becomes a power-up). A loop instead has its end cross-faded into its start, so it repeats
 // without a seam, and carries PAD seconds of its own wrap on each side: the
 // game loops the middle, so the gap an MP3 decoder may add at either end never
 // plays. Needs ffmpeg, curl, unzip, and 7z (or python3 with py7zr).
@@ -126,7 +127,7 @@ for (const [sound, def] of Object.entries(spec.sounds)) {
     const where = fetchPack(packId);
     const source = inner ? join(where, inner) : where;
     if (!existsSync(source)) throw new Error(`${sound}: ${source} not found`);
-    const take = decode(source, start, def.length + (def.loop ? CROSSFADE : 0.5));
+    const take = def.reverse ? decode(source, start, 3600).reverse() : decode(source, start, def.length + (def.loop ? CROSSFADE : 0.5));
     let samples;
     try {
       samples = normalise(def.loop ? loop(take, def.length) : oneShot(take, def.length));
@@ -137,7 +138,7 @@ for (const [sound, def] of Object.entries(spec.sounds)) {
     encode(samples, join(OUT, name));
     written.add(name);
     const pack = spec.packs[packId];
-    rows.push(`| ${name} | ${pack.title} | ${pack.author} | ${inner || decodeURIComponent(pack.file)}${start ? ` @ ${start} s` : ''} | ${statSync(source).size} | ${statSync(join(OUT, name)).size} |`);
+    rows.push(`| ${name} | ${pack.title} | ${pack.author} | ${inner || decodeURIComponent(pack.file)}${start ? ` @ ${start} s` : ''}${def.reverse ? ', reversed' : ''} | ${statSync(source).size} | ${statSync(join(OUT, name)).size} |`);
   });
 }
 for (const f of readdirSync(OUT)) if (f.endsWith('.mp3') && !written.has(f)) rmSync(join(OUT, f));
@@ -154,9 +155,9 @@ sources are CC0 (public domain) from OpenGameArt. This file is written by
 \`pnpm audio\` (tools/audio/build.mjs) from tools/audio/sounds.json; edit those,
 not this.
 
-Processing: cut from the source at the given time, silence below -50 dBFS
-dropped from the front, the end faded out (loops: end cross-faded into the
-start), peak normalised to -1 dBFS, mono 44.1 kHz MP3 at 64 kb/s. Bytes are the
+Processing: cut from the source at the given time (reversed: from its end,
+played backwards), silence below -50 dBFS dropped from the front, the end faded
+out (loops: end cross-faded into the start), peak normalised to -1 dBFS, mono 44.1 kHz MP3 at 64 kb/s. Bytes are the
 whole source file (original) and the shipped take (runtime).
 
 ${written.size} files, ${(total / 1024).toFixed(0)} KB in all.

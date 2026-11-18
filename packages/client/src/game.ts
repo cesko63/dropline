@@ -24,6 +24,7 @@ import {
   type MatchEvent,
   type MatchInfo,
   type MatchState,
+  type Mech,
   type MechAbility,
   type PlayerState,
   type Vec3,
@@ -55,6 +56,8 @@ const IMPACT_SPARK = '#ffcf8a';
 const CRIT_SPARK = '#ffd23f';
 /** Ids for rockets drawn from prediction, well clear of the server's own. */
 const LOCAL_ROCKETS = 1_000_000;
+/** Mechs farther off than this are not heard idling: their footfalls and guns carry, their reactors do not. */
+const MECH_HEARD_WITHIN = 30;
 
 /**
  * Where an event comes from. Offline everything is `sim`. Online the player's
@@ -547,7 +550,6 @@ export class Game {
       if (b && b.charge > 0 && a.alive && !a.inMech) avatar.setLaser(b.charge, b.charge >= BOTS.chargeLock, this.aimPoint(a));
       else avatar.setLaser(0, false, null);
     }
-    this.sfx.endFrame();
 
     this.smokeT += dt;
     const puff = this.smokeT > 0.11;
@@ -564,6 +566,7 @@ export class Game {
       const mine = k.id === me.id && me.inMech;
       // The player's own mech turns with the mouse, like their view.
       avatar.update(dt, k, this.mechDrawn[k.id], mine ? s.yaw : k.yaw, mine ? s.pitch : k.pitch, !mine || rig.showsSelf);
+      this.mechHum(k, mine);
       if (paused) continue;
       // What is left of a destroyed one burns out, cooking off now and then.
       if (k.state === 'none') {
@@ -585,6 +588,7 @@ export class Game {
         this.fx.thrust(at, 0.7);
       }
     }
+    this.sfx.endFrame();
     const own = m.mechs[me.id];
     if (me.inMech && own.health < frameOf(own).health * 0.25 && !paused) this.sfx.hullAlarm();
     this.hud.setFrame(this.loadout.value.mech);
@@ -797,6 +801,19 @@ export class Game {
   private near(pos: Vec3, range: number): number {
     const cam = this.rig.camera.position;
     return Math.max(0, 1 - Math.hypot(pos.x - cam.x, pos.y - cam.y, pos.z - cam.z) / range);
+  }
+
+  /**
+   * A running mech's reactor, heard from the seat or from close by (a cloaked
+   * enemy's is not heard at all), and the hum of a raised shield.
+   */
+  private mechHum(k: Mech, mine: boolean): void {
+    if (k.state !== 'piloted' && k.state !== 'boot') return;
+    const at = mine ? null : k.pos;
+    const hidden = k.cloak > 0 && k.team !== this.me.team;
+    const hum = mine ? 'cockpit-hum' : 'mech-hum';
+    if (!hidden && this.sfx.hears(at, MECH_HEARD_WITHIN)) this.sfx.hold(`${hum}-${k.id}`, hum, at, mine ? 0.25 : 0.6);
+    if (k.shieldUp) this.sfx.hold(`shield-${k.id}`, 'shield-hum', at, mine ? 0.3 : 0.8);
   }
 
   /** Sparks off a raised shield, in its team's light; the wall itself flares there. */
@@ -1086,7 +1103,7 @@ export class Game {
         if (mine && source === 'server') break;
         if (e.heavy) avatar.land(k.landSpeed);
         else avatar.step();
-        this.sfx.mechStep(mine ? null : k.pos, e.heavy);
+        this.sfx.mechStep(mine ? null : k.pos, e.heavy, frameOf(k).id);
         // Dust at the feet, except under the player's own cockpit where it would only fog the view.
         if (!mine || this.rig.outside) this.fx.footfall(k.pos, e.heavy);
         if (mine) {
