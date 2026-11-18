@@ -507,6 +507,26 @@ beam(backdrop, 'spike2', [-120, 10, -90], [-90, 50, -108], 4, 4, 'machine');
 scenery('corps-wall', -140, 0, 96, 140, 14, 100, 'concrete');
 scenery('corps-wall-light', -140, 12, 95.9, 140, 12.4, 96, 'conduit');
 
+// ---------------------------------------------------------------- ambience
+
+// What the map sounds like on its own. The halves differ as the skyline does:
+// the Corps' city still runs in the south (traffic, air-raid sirens), the
+// harvester drones and groans in the north. Wind blows over all of it, and the
+// half-built tower and the fallen jib creak and shed grit near by.
+const both = (points) => points.flatMap(([x, y, z]) => [[x, y, z], [x, y, -z]]);
+const ambience = [
+  { sound: 'amb-wind', gain: 0.2, exposed: true },
+  { sound: 'amb-city', gain: 1.7, reach: 20, at: [[-90, 25, 135], [0, 25, 140], [90, 25, 135]] },
+  { sound: 'amb-harvester', gain: 0.3, reach: 20, at: [[-30, 45, -152], [30, 45, -152], [-40, 15, -128], [36, 10, -112]] },
+  { sound: 'amb-siren', gain: 0.5, reach: 40, every: [35, 80], at: [[-130, 40, 150], [40, 50, 175], [150, 40, 110]] },
+  { sound: 'amb-groan', gain: 1, reach: 30, every: [18, 40], pitch: [0.4, 0.55], at: [[-20, 60, -150], [20, 60, -150], [-70, 30, -105]] },
+  { sound: 'amb-rumble', gain: 0.8, reach: 40, every: [25, 60], pitch: [0.75, 1], at: [[-180, 20, -60], [180, 20, 40], [-150, 20, 170], [120, 20, -175]] },
+  // The jib on its truck, the scaffold and the broken ends of the rail deck.
+  { sound: 'amb-creak', gain: 0.5, range: 40, every: [10, 25], pitch: [0.6, 0.85], at: [[0, 3, 0], [12, 6, 0], [22, 10, 0], ...both([[52, 6, 12], [-49, 7.5, 20]])] },
+  // Grit off the tower's open floors and the deck's broken ends.
+  { sound: 'amb-debris', gain: 0.4, range: 30, every: [8, 20], at: both([[22, 9, 10], [50, 9, 5], [-49, 7.5, 20], [-49, 7.5, 28]]) },
+];
+
 const map = {
   name: 'spire-nine',
   title: 'Spire Nine',
@@ -527,6 +547,7 @@ const map = {
   spawns,
   boxes,
   backdrop,
+  ambience,
 };
 
 const out = resolve(dirname(fileURLToPath(import.meta.url)), '../../data/maps/spire-nine.json');

@@ -124,5 +124,35 @@
     "count": 1,
     "loop": 3.6,
     "pad": 0.05
+  },
+  "amb-wind": {
+    "count": 1,
+    "loop": 14,
+    "pad": 0.05
+  },
+  "amb-city": {
+    "count": 1,
+    "loop": 12,
+    "pad": 0.05
+  },
+  "amb-harvester": {
+    "count": 1,
+    "loop": 4.5,
+    "pad": 0.05
+  },
+  "amb-siren": {
+    "count": 3
+  },
+  "amb-rumble": {
+    "count": 1
+  },
+  "amb-groan": {
+    "count": 3
+  },
+  "amb-creak": {
+    "count": 3
+  },
+  "amb-debris": {
+    "count": 4
   }
 }

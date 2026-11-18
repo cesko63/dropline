@@ -1,7 +1,8 @@
 // Builds the game's sound files from CC0 recordings. Run: pnpm audio
 //
 // tools/audio/sounds.json lists the packs (all CC0, from OpenGameArt) and, for
-// each sound the game plays, the recordings it is cut from. A sound can have
+// each sound the game plays, the recordings it is cut from: [pack, file in it,
+// start, length] (a one-shot's take can be shorter or longer than the rest). A sound can have
 // several takes; the game picks one at random each time. This script downloads
 // the packs into tools/audio/.cache (not committed), cuts each take, and writes:
 //   assets/audio/<sound>-<n>.mp3   the takes (mono, 44.1 kHz, 64 kb/s MP3)
@@ -122,14 +123,16 @@ const rows = [];
 const written = new Set();
 for (const [sound, def] of Object.entries(spec.sounds)) {
   manifest[sound] = def.loop ? { count: def.from.length, loop: def.length, pad: PAD } : { count: def.from.length };
-  def.from.forEach(([packId, inner, start = 0], i) => {
+  def.from.forEach(([packId, inner, start = 0, length = def.length], i) => {
     const where = fetchPack(packId);
     const source = inner ? join(where, inner) : where;
     if (!existsSync(source)) throw new Error(`${sound}: ${source} not found`);
-    const take = decode(source, start, def.length + (def.loop ? CROSSFADE : 0.5));
+    // The game loops every take of a sound over the same span.
+    if (def.loop && length !== def.length) throw new Error(`${sound}: a loop's takes cannot have their own length`);
+    const take = decode(source, start, length + (def.loop ? CROSSFADE : 0.5));
     let samples;
     try {
-      samples = normalise(def.loop ? loop(take, def.length) : oneShot(take, def.length));
+      samples = normalise(def.loop ? loop(take, length) : oneShot(take, length));
     } catch (err) {
       throw new Error(`${sound} take ${i + 1}: ${err.message}`);
     }

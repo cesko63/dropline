@@ -10,7 +10,7 @@ dropped from the front, the end faded out (loops: end cross-faded into the
 start), peak normalised to -1 dBFS, mono 44.1 kHz MP3 at 64 kb/s. Bytes are the
 whole source file (original) and the shipped take (runtime).
 
-116 files, 589 KB in all.
+133 files, 1036 KB in all.
 
 ## Sources
 
@@ -33,6 +33,9 @@ whole source file (original) and the shipped take (runtime).
 - [15 vocal male strain/hurt/pain/jump sounds](https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds) by qubodup
 - [Wind](https://opengameart.org/content/wind) by IgnasD
 - [Muffled Distant Explosion](https://opengameart.org/content/muffled-distant-explosion) by NenadSimic
+- [wind1](https://opengameart.org/content/wind1) by Luke.RUSTLTD
+- [Sirens and Alarm Noise](https://opengameart.org/content/sirens-and-alarm-noise) by aquinn
+- [27 Metal Audio Samples (SFX)](https://opengameart.org/content/27-metal-audio-samples-sfx) by blacklodgegames
 
 ## Files
 
@@ -154,3 +157,20 @@ whole source file (original) and the shipped take (runtime).
 | slide-start-2.mp3 | 100 CC0 SFX #2 | rubberduck | sfx100v2_stones_03.ogg | 12455 | 3387 |
 | slide-1.mp3 | 30 CC0 SFX loops | rubberduck | rolling.ogg | 51513 | 7776 |
 | rush-1.mp3 | Wind | IgnasD | wind/Wind2.ogg @ 2.4 s | 57568 | 30137 |
+| amb-wind-1.mp3 | wind1 | Luke.RUSTLTD | wind1.wav @ 5 s | 5291948 | 113310 |
+| amb-city-1.mp3 | 100 CC0 SFX #2 | rubberduck | sfx100v2_loop_highway.ogg | 187109 | 97428 |
+| amb-harvester-1.mp3 | Sci-Fi Sounds | Kenney | Audio/spaceEngineLarge_001.ogg | 212818 | 37451 |
+| amb-siren-1.mp3 | Sirens and Alarm Noise | aquinn | siren_0.mp3 @ 3.45 s | 661211 | 38914 |
+| amb-siren-2.mp3 | Sirens and Alarm Noise | aquinn | siren_0.mp3 @ 21.45 s | 661211 | 38914 |
+| amb-siren-3.mp3 | Sirens and Alarm Noise | aquinn | siren_0.mp3 @ 32 s | 661211 | 30137 |
+| amb-rumble-1.mp3 | 100 CC0 SFX #2 | rubberduck | sfx100v2_thunder_01.ogg | 51493 | 40586 |
+| amb-groan-1.mp3 | 27 Metal Audio Samples (SFX) | blacklodgegames | 27-Metal-Audio-Samples-blacklodgegames.com/wobble_08_44k_32bit_stereo.wav | 380608 | 9030 |
+| amb-groan-2.mp3 | 27 Metal Audio Samples (SFX) | blacklodgegames | 27-Metal-Audio-Samples-blacklodgegames.com/wobble_05_44k_32bit_stereo.wav | 309528 | 7358 |
+| amb-groan-3.mp3 | 27 Metal Audio Samples (SFX) | blacklodgegames | 27-Metal-Audio-Samples-blacklodgegames.com/wobble_09_44k_32bit_stereo.wav | 241496 | 5895 |
+| amb-creak-1.mp3 | 27 Metal Audio Samples (SFX) | blacklodgegames | 27-Metal-Audio-Samples-blacklodgegames.com/metal_grit_01_44k_32bit_stereo.wav | 399488 | 9448 |
+| amb-creak-2.mp3 | 27 Metal Audio Samples (SFX) | blacklodgegames | 27-Metal-Audio-Samples-blacklodgegames.com/wobble_10_44k_32bit_stereo.wav | 188736 | 4641 |
+| amb-creak-3.mp3 | 27 Metal Audio Samples (SFX) | blacklodgegames | 27-Metal-Audio-Samples-blacklodgegames.com/wobble_02_44k_32bit_stereo.wav | 176960 | 4432 |
+| amb-debris-1.mp3 | 75 CC0 breaking / falling / hit sfx | rubberduck | bfh1_rock_falling_03.ogg | 40966 | 7358 |
+| amb-debris-2.mp3 | 75 CC0 breaking / falling / hit sfx | rubberduck | bfh1_rock_falling_07.ogg | 17452 | 3387 |
+| amb-debris-3.mp3 | 75 CC0 breaking / falling / hit sfx | rubberduck | bfh1_rock_falling_08.ogg | 19708 | 3805 |
+| amb-debris-4.mp3 | 75 CC0 breaking / falling / hit sfx | rubberduck | bfh1_rock_falling_09.ogg | 30700 | 6104 |

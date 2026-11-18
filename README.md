@@ -437,6 +437,18 @@ them:
 - on the ground, no view is longer than the bots can see (75 m)
 - from anywhere, raised perches too, no view reaches into the other team's yard
 
+**What it sounds like.** The halves differ by ear as well as by eye: the
+Corps' city still runs in the south (distant traffic, an air-raid siren now
+and then), while in the north Z.E.R.O's harvester drones and lets out deep
+metal groans. Wind blows over everything and grows stronger up high; under a
+roof it drops away and the rest goes dull. Near the fallen jib, the
+scaffold and the broken ends of the rail deck, steel creaks and grit trickles
+down. A far rumble rolls in from the horizon every so often. Each one-shot
+waits its own random time (sirens 35 to 80 s, creaks 10 to 25 s) and no two
+come within 2 s of each other. The map file lists every source, where it
+sits and how often it plays (`ambience`), and `client/src/audio/ambience.ts`
+plays it.
+
 The map is made by `tools/maps/spire-nine.mjs`; edit that and run
 `pnpm map:spire-nine`, never the JSON. It is 120 by 160 m.
 
@@ -553,7 +565,7 @@ packages/
     src/camera/           First / third person camera, recoil, zoom, shake
     src/render/           Scene, map, pilots, mechs, first-person weapons, cockpit, effects
     src/render/fx/        Particle sprites and the effects' painted textures
-    src/audio/            Sound: the recorded sound bank, effects, pilots' footsteps and movement
+    src/audio/            Sound: the recorded sound bank, effects, pilots' footsteps and movement, map ambience
     src/ui/               HUD, start screen, settings screen, pad menu navigation
     tests/                Settings, bindings, stick and sound tests
   server/             Dedicated game server (Node, WebSocket)
@@ -588,10 +600,12 @@ packages/
   jet pack, the rush of air at speed, the three arm guns (a dry crack close up,
   the take with the room in it far off), the rocket pod, explosions, rounds
   striking concrete or steel, reloads and weapon swaps, being hit, and dying.
+  Spire Nine's ambience is recorded too: wind, distant traffic and sirens, the
+  harvester's drone and groans, a far rumble, creaking steel and falling grit.
   Every sound has 1 to 7 takes picked at random with a little pitch jitter.
   Mechs, menus, the HUD's alerts and confirmations are still synthesized from
   filtered noise and short tones (`client/src/audio/sfx.ts`) until their
-  recordings replace them; there is no ambience or music yet.
+  recordings replace them; there is no music yet.
 - **Models:** pilots wear real suits built in code (`client/src/render/pilot`):
   the Corps suit and the Z.E.R.O frame share one skeleton and one outline, so
   both match the hitbox, and a pose-driven animator covers every movement state.
@@ -657,7 +671,7 @@ packages/
   deck (they take the fallen carriage instead).
 - **Maps are built from boxes.** Spire Nine has its layout, light and dressing
   (concrete, steel, glass, blue conduits, black machine panels, crimson lights,
-  a lit skyline), but no props, decals or models yet, and no ambient sound.
+  a lit skyline), but no props, decals or models yet.
 - **Mechs can land on roofs.** A call-in only needs open sky, so a player's mech
   can come down on the Transit Hall roof or the tower's open third floor. Bots
   only call theirs where it can walk out.
@@ -691,7 +705,7 @@ packages/
       1. Recorded sound and pilots: steps, movement, guns, impacts, hurt (done)
       2. Mechs: steps, jets, cannons, rockets, shields, call-in, wrecks
       3. Menus, HUD and alerts
-      4. Ambience for Spire Nine
+      4. Ambience for Spire Nine (done)
       5. Music, with its own volume
    9. Closing pass: teaching, performance, error cards, balance
 6. Deployment

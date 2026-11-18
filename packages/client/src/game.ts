@@ -28,6 +28,7 @@ import {
   type PlayerState,
   type Vec3,
 } from '@dropline/shared';
+import { Ambience } from './audio/ambience';
 import { PilotFoley } from './audio/pilotFoley';
 import { Sfx } from './audio/sfx';
 import { SurfaceSounds, type Surface } from './audio/surfaces';
@@ -123,6 +124,7 @@ export class Game {
   private readonly hud = new Hud();
   private avatars: Avatar[] = [];
   private foley: PilotFoley[] = [];
+  private readonly ambience: Ambience;
   private readonly surfaces: SurfaceSounds;
   private mechAvatars: MechAvatar[] = [];
   private prev: Vec3[] = [];
@@ -186,6 +188,7 @@ export class Game {
       jetOut: (at) => this.fx.jetOut(at),
     });
     this.surfaces = new SurfaceSounds(map, world);
+    this.ambience = new Ambience(this.sfx, world, map.ambience ?? []);
     this.hud.debug = options.qa;
     this.seed = options.seed;
     this.startMeter = options.startMeter;
@@ -527,6 +530,7 @@ export class Game {
     this.pendingEvents = 0;
     const cam = rig.camera;
     this.sfx.setListener(cam.position.x, cam.position.y, cam.position.z, s.yaw);
+    this.ambience.update(paused ? 0 : dt, cam.position);
 
     for (const a of m.actors) {
       const avatar = this.avatars[a.id];

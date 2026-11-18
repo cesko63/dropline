@@ -3,11 +3,11 @@ import { SoundBank, type SoundName } from './bank';
 import type { Surface } from './surfaces';
 
 /**
- * Sound effects. Pilots (movement, weapons, impacts, hurt and death) play
- * recorded takes from the sound bank, a random take each time with a little
- * pitch jitter. Everything else is still a synthesized STAND-IN built from
- * filtered noise and short tones, until its recordings replace it (mechs, then
- * menus and HUD); callers will not change.
+ * Sound effects. Pilots (movement, weapons, impacts, hurt and death) and the
+ * map's ambience play recorded takes from the sound bank, a random take each
+ * time with a little pitch jitter. Everything else is still a synthesized
+ * STAND-IN built from filtered noise and short tones, until its recordings
+ * replace it (mechs, then menus and HUD); callers will not change.
  */
 
 const MAX_VOICES = 48;
@@ -55,6 +55,8 @@ export class Sfx {
   private master: GainNode | null = null;
   /** Everything of the match goes through here, so a pause silences it while menu sounds still play. */
   private game: GainNode | null = null;
+  /** The map's ambience, into the match; its filter closes under a roof. */
+  private ambience: BiquadFilterNode | null = null;
   private noise: AudioBuffer | null = null;
   private readonly bank = new SoundBank();
   private readonly loops = new Map<string, Loop>();
@@ -79,6 +81,11 @@ export class Sfx {
       const game = ctx.createGain();
       game.connect(master);
       this.game = game;
+      const ambience = ctx.createBiquadFilter();
+      ambience.type = 'lowpass';
+      ambience.frequency.value = 20000;
+      ambience.connect(game);
+      this.ambience = ambience;
       const limiter = ctx.createDynamicsCompressor();
       limiter.threshold.value = -10;
       limiter.ratio.value = 8;
@@ -208,16 +215,16 @@ export class Sfx {
    * sounds, or through distance fade, muffling and left/right pan for a place in
    * the world. Null when it would be inaudible.
    */
-  private bus(pos: Vec3 | null, gain = 1): AudioNode | null {
+  private bus(pos: Vec3 | null, gain = 1, reach = 9, dest = this.game): AudioNode | null {
     const ctx = this.ctx;
-    if (!ctx || !this.master || this.voices >= MAX_VOICES) return null;
+    if (!ctx || !dest || this.voices >= MAX_VOICES) return null;
     const out = ctx.createGain();
     if (!pos) {
       out.gain.value = gain;
-      out.connect(this.game!);
+      out.connect(dest);
       return out;
     }
-    const spot = this.spot(pos, gain);
+    const spot = this.spot(pos, gain, reach);
     if (spot.level < 0.012) return null;
     out.gain.value = spot.level;
     const muffle = ctx.createBiquadFilter();
@@ -225,12 +232,15 @@ export class Sfx {
     muffle.frequency.value = spot.muffle;
     const pan = ctx.createStereoPanner();
     pan.pan.value = spot.pan;
-    out.connect(muffle).connect(pan).connect(this.game!);
+    out.connect(muffle).connect(pan).connect(dest);
     return out;
   }
 
-  /** Level, muffling and pan for a sound at `pos` (null: the player's own). The object is reused. */
-  private spot(pos: Vec3 | null, gain: number): { level: number; muffle: number; pan: number } {
+  /**
+   * Level, muffling and pan for a sound at `pos` (null: the player's own),
+   * fading to half over `reach` metres. The object is reused.
+   */
+  private spot(pos: Vec3 | null, gain: number, reach = 9): { level: number; muffle: number; pan: number } {
     const spot = this.spotOut;
     if (!pos) {
       spot.level = gain;
@@ -243,8 +253,8 @@ export class Sfx {
     const dz = pos.z - this.lz;
     const d = Math.hypot(dx, dy, dz);
     const flat = Math.hypot(dx, dz) || 1;
-    spot.level = gain / (1 + d / 9);
-    spot.muffle = 16000 / (1 + d / 18);
+    spot.level = gain / (1 + d / reach);
+    spot.muffle = 16000 / (1 + d / (2 * reach));
     spot.pan = Math.max(-1, Math.min(1, ((dx * Math.cos(this.lyaw) - dz * Math.sin(this.lyaw)) / flat) * 0.85));
     return spot;
   }
@@ -279,9 +289,12 @@ export class Sfx {
    * called every frame, following `pos`; `endFrame` fades out those that were not.
    */
   hold(key: string, name: SoundName, pos: Vec3 | null, gain: number): void {
+    if (this.game) this.holdInto(this.game, key, name, this.spot(pos, gain));
+  }
+
+  private holdInto(dest: AudioNode, key: string, name: SoundName, spot: { level: number; muffle: number; pan: number }): void {
     const ctx = this.ctx;
-    if (!ctx || !this.game) return;
-    const spot = this.spot(pos, gain);
+    if (!ctx) return;
     let loop = this.loops.get(key);
     if (!loop) {
       const buffer = this.bank.pick(name);
@@ -297,7 +310,7 @@ export class Sfx {
       muffle.frequency.value = spot.muffle;
       const pan = ctx.createStereoPanner();
       pan.pan.value = spot.pan;
-      src.connect(out).connect(muffle).connect(pan).connect(this.game);
+      src.connect(out).connect(muffle).connect(pan).connect(dest);
       // Start somewhere in the loop, so two pilots' jets never phase together.
       src.start(ctx.currentTime, src.loopStart + Math.random() * (src.loopEnd - src.loopStart));
       loop = { src, out, muffle, pan, held: true };
@@ -324,6 +337,25 @@ export class Sfx {
       loop.src.stop(ctx.currentTime + 0.3);
       this.loops.delete(key);
     }
+  }
+
+  // ---------------------------------------------------------------- ambience
+
+  /** A loop of the map's own sound, held like `hold`; `pos` null is all around the listener. */
+  holdAmbient(key: string, name: SoundName, pos: Vec3 | null, gain: number, reach: number): void {
+    if (this.ambience) this.holdInto(this.ambience, key, name, this.spot(pos, gain, reach));
+  }
+
+  /** One of the map's own one-shots (a siren, a creak) at `pos`, played at `rate`. */
+  playAmbient(name: SoundName, pos: Vec3, gain: number, reach: number, rate: number): void {
+    const b = this.bus(pos, gain, reach, this.ambience);
+    if (b) this.play(b, name, 1, 0, rate);
+  }
+
+  /** How far under a roof the listener is (0 open sky, 1 indoors): the ambience dulls to match. */
+  setShelter(amount: number): void {
+    if (!this.ambience || !this.ctx) return;
+    this.ambience.frequency.setTargetAtTime(20000 * Math.pow(900 / 20000, amount), this.ctx.currentTime, 0.1);
   }
 
   private burst(dest: AudioNode, o: BurstOpts): void {

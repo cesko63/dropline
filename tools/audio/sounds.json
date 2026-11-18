@@ -18,7 +18,10 @@
     "clicks": { "title": "Equipment Clicks II", "author": "LFA", "page": "https://opengameart.org/content/equipment-clicks-ii", "file": "equipmentclicks.wav" },
     "screams": { "title": "15 vocal male strain/hurt/pain/jump sounds", "author": "qubodup", "page": "https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds", "file": "slightscreams.7z" },
     "wind": { "title": "Wind", "author": "IgnasD", "page": "https://opengameart.org/content/wind", "file": "wind.zip" },
-    "distant": { "title": "Muffled Distant Explosion", "author": "NenadSimic", "page": "https://opengameart.org/content/muffled-distant-explosion", "file": "NenadSimic%20-%20Muffled%20Distant%20Explosion.wav" }
+    "distant": { "title": "Muffled Distant Explosion", "author": "NenadSimic", "page": "https://opengameart.org/content/muffled-distant-explosion", "file": "NenadSimic%20-%20Muffled%20Distant%20Explosion.wav" },
+    "windSynth": { "title": "wind1", "author": "Luke.RUSTLTD", "page": "https://opengameart.org/content/wind1", "file": "wind1.wav" },
+    "sirens": { "title": "Sirens and Alarm Noise", "author": "aquinn", "page": "https://opengameart.org/content/sirens-and-alarm-noise", "file": "siren_0.mp3" },
+    "metal27": { "title": "27 Metal Audio Samples (SFX)", "author": "blacklodgegames", "page": "https://opengameart.org/content/27-metal-audio-samples-sfx", "file": "27-Metal-Audio-Samples-blacklodgegames.com_.zip" }
   },
   "sounds": {
     "carbine": { "length": 0.32, "from": [
@@ -202,6 +205,31 @@
       ["sfx2", "sfx100v2_stones_03.ogg"]
     ] },
     "slide": { "loop": true, "length": 0.8, "from": [["loops", "rolling.ogg"]] },
-    "rush": { "loop": true, "length": 3.6, "from": [["wind", "wind/Wind2.ogg", 2.4]] }
+    "rush": { "loop": true, "length": 3.6, "from": [["wind", "wind/Wind2.ogg", 2.4]] },
+    "amb-wind": { "loop": true, "length": 14, "from": [["windSynth", "", 5]] },
+    "amb-city": { "loop": true, "length": 12, "from": [["sfx2", "sfx100v2_loop_highway.ogg"]] },
+    "amb-harvester": { "loop": true, "length": 4.5, "from": [["kenneyScifi", "Audio/spaceEngineLarge_001.ogg"]] },
+    "amb-siren": { "length": 4.8, "from": [
+      ["sirens", "", 3.45],
+      ["sirens", "", 21.45],
+      ["sirens", "", 32.0, 3.7]
+    ] },
+    "amb-rumble": { "length": 5, "from": [["sfx2", "sfx100v2_thunder_01.ogg"]] },
+    "amb-groan": { "length": 1.1, "from": [
+      ["metal27", "27-Metal-Audio-Samples-blacklodgegames.com/wobble_08_44k_32bit_stereo.wav"],
+      ["metal27", "27-Metal-Audio-Samples-blacklodgegames.com/wobble_05_44k_32bit_stereo.wav"],
+      ["metal27", "27-Metal-Audio-Samples-blacklodgegames.com/wobble_09_44k_32bit_stereo.wav"]
+    ] },
+    "amb-creak": { "length": 1.1, "from": [
+      ["metal27", "27-Metal-Audio-Samples-blacklodgegames.com/metal_grit_01_44k_32bit_stereo.wav"],
+      ["metal27", "27-Metal-Audio-Samples-blacklodgegames.com/wobble_10_44k_32bit_stereo.wav"],
+      ["metal27", "27-Metal-Audio-Samples-blacklodgegames.com/wobble_02_44k_32bit_stereo.wav"]
+    ] },
+    "amb-debris": { "length": 0.9, "from": [
+      ["breaking", "bfh1_rock_falling_03.ogg"],
+      ["breaking", "bfh1_rock_falling_07.ogg"],
+      ["breaking", "bfh1_rock_falling_08.ogg"],
+      ["breaking", "bfh1_rock_falling_09.ogg"]
+    ] }
   }
 }
