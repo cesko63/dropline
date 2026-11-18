@@ -24,8 +24,12 @@ const Z = -0.6;
 const SCREEN_Z = Z + 0.024;
 /** The glass (or the feed) just beyond the window frame. */
 const VIEW_Z = Z - 0.04;
-/** The cannon arm is the mech's own arm, scaled down into the viewmodel's space. */
-const ARM_SCALE = 0.36;
+/**
+ * The cannon arm is the mech's own arm, scaled down into the viewmodel's space.
+ * It hangs outside the window, its shoulder well beyond the glass, so its back
+ * end stays outside even at full recoil and the dash and pillar hide its base.
+ */
+const ARM_SCALE = 0.42;
 
 interface Layout {
   /** Height of the bar over the window, or null for a canopy with struts instead. */
@@ -37,16 +41,16 @@ interface Layout {
   inset: number;
   pillarW: number;
   lean: number;
-  /** Where the cannon arm's shoulder sits, relative to where the viewmodel rig holds it. */
+  /** Where the cannon arm's shoulder sits, relative to where the viewmodel rig holds it (0.5, -0.37, -0.8): beyond the window, its barrel just over the dash. */
   arm: [number, number, number];
 }
 
 const LAYOUTS: Record<string, Layout> = {
-  halberd: { roof: 0.3, roofH: 0.08, dash: -0.29, inset: 0.035, pillarW: 0.05, lean: 0.1, arm: [0.06, -0.03, 0.3] },
+  halberd: { roof: 0.3, roofH: 0.08, dash: -0.29, inset: 0.035, pillarW: 0.05, lean: 0.1, arm: [0.33, 0.03, -0.14] },
   // A bunker slit: a heavy brow low over the view, thick pillars set in.
-  bastion: { roof: 0.22, roofH: 0.15, dash: -0.25, inset: 0.1, pillarW: 0.12, lean: 0.04, arm: [0.02, 0.09, 0.5] },
+  bastion: { roof: 0.22, roofH: 0.15, dash: -0.25, inset: 0.1, pillarW: 0.12, lean: 0.04, arm: [0.3, 0.07, -0.14] },
   // A bubble canopy: thin struts arching overhead, a low dash, the widest view.
-  lynx: { roof: null, roofH: 0, dash: -0.31, inset: 0.0, pillarW: 0.03, lean: 0.25, arm: [0.06, -0.03, 0.3] },
+  lynx: { roof: null, roofH: 0, dash: -0.31, inset: 0.0, pillarW: 0.03, lean: 0.25, arm: [0.33, 0.0, -0.14] },
 };
 
 /** Recoil per cannon: how far the arm is thrown back and up, and whether it throws a casing. */
