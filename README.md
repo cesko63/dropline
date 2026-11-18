@@ -582,16 +582,26 @@ packages/
 
 ## Stand-ins
 
-- **Sound:** pilots are recorded (CC0 packs from OpenGameArt, listed in
-  `AUDIO.md`): footsteps that follow the legs and change between concrete and
-  steel, jumps, landings weighed by the fall, the slide's scrape, mantles, the
-  jet pack, the rush of air at speed, the three arm guns (a dry crack close up,
-  the take with the room in it far off), the rocket pod, explosions, rounds
-  striking concrete or steel, reloads and weapon swaps, being hit, and dying.
-  Every sound has 1 to 7 takes picked at random with a little pitch jitter.
-  Mechs, menus, the HUD's alerts and confirmations are still synthesized from
-  filtered noise and short tones (`client/src/audio/sfx.ts`) until their
-  recordings replace them; there is no ambience or music yet.
+- **Sound:** pilots and mechs are recorded (CC0 packs from OpenGameArt, listed
+  in `AUDIO.md`). Pilots: footsteps that follow the legs and change between
+  concrete and steel, jumps, landings weighed by the fall, the slide's scrape,
+  mantles, the jet pack, the rush of air at speed, the three arm guns (a dry
+  crack close up, the take with the room in it far off), the rocket pod,
+  explosions, rounds striking concrete or steel, reloads and weapon swaps,
+  being hit, and dying. Mechs: footfalls weighed by the frame (the Lynx light
+  and quick, the Bastion low), leg servos, the dash and jump jets, the stomp,
+  the autocannon, flak cannon and rail cannon, flak bursts, belt reloads, the
+  shield coming up, humming, taking fire and shattering, the cloak, the call-in
+  (a roar that deepens for exactly as long as the fall, then the landing),
+  climbing in and the reactor spooling up, the cockpit's hum and a running
+  mech's reactor nearby (a cloaked enemy's is silent), climbing out and
+  ejecting, rams, armour and hull hits, a mech blowing apart and its wreck
+  cooking off. Every sound has 1 to 7 takes picked at random with a little
+  pitch jitter, and the player's own sounds keep voices in reserve so a crowded
+  fight never drowns them out. Menus, the HUD's alerts and confirmations are
+  still synthesized from filtered noise and short tones
+  (`client/src/audio/sfx.ts`) until their recordings replace them; there is no
+  ambience or music yet.
 - **Models:** pilots wear real suits built in code (`client/src/render/pilot`):
   the Corps suit and the Z.E.R.O frame share one skeleton and one outline, so
   both match the hitbox, and a pose-driven animator covers every movement state.
@@ -689,7 +699,7 @@ packages/
       4. Effects: smoke, steam, sparks, blasts and wrecks (done)
    8. Sound and music (now)
       1. Recorded sound and pilots: steps, movement, guns, impacts, hurt (done)
-      2. Mechs: steps, jets, cannons, rockets, shields, call-in, wrecks
+      2. Mechs: steps, jets, cannons, rockets, shields, call-in, wrecks (done)
       3. Menus, HUD and alerts
       4. Ambience for Spire Nine
       5. Music, with its own volume
