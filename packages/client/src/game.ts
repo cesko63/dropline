@@ -55,6 +55,8 @@ const IMPACT_SPARK = '#ffcf8a';
 const CRIT_SPARK = '#ffd23f';
 /** Ids for rockets drawn from prediction, well clear of the server's own. */
 const LOCAL_ROCKETS = 1_000_000;
+/** The final-moments music starts once a team has this share of the score limit. */
+const FINAL_MOMENTS = 0.8;
 
 /**
  * Where an event comes from. Offline everything is `sim`. Online the player's
@@ -149,6 +151,10 @@ export class Game {
   private nextRocket = LOCAL_ROCKETS;
   /** When the match ended (milliseconds), for the countdown to the next one online. */
   private endedAt = 0;
+  /** The player has taken control in this match; until then the start screen's menu theme plays. */
+  private deployed = false;
+  /** How far this match's music has got: nothing yet, the spawn theme, final moments, the end. */
+  private musicStage: 'none' | 'spawn' | 'final' | 'end' = 'none';
   private accumulator = 0;
   private lastTime = 0;
   private pendingEvents = 0;
@@ -272,6 +278,7 @@ export class Game {
     this.rig.calm = s.reduceMotion;
     this.shakeScale = s.shake;
     this.sfx.setVolume(s.volume, s.muted);
+    this.sfx.music.setVolume(s.musicVolume);
     this.hud.setMuted(s.muted);
     this.hud.setDisplay(s.showFps, s.hudScale);
     this.keysChanged();
@@ -362,6 +369,8 @@ export class Game {
     this.fx.clear();
     this.ragdolls.clear();
     this.hud.reset(this.match, me);
+    this.deployed = this.input.playing;
+    this.musicStage = 'none';
     this.input.yaw = me.p.yaw;
     this.input.pitch = 0;
     this.input.weapon = -1;
@@ -429,6 +438,32 @@ export class Game {
     this.hud.showBanner(`${F.short} · `, F.blurb.split(':')[0].toUpperCase(), 'good');
   }
 
+  /**
+   * Music the way a modern shooter scores a match: the menu theme on the start
+   * screen, the side's spawn theme as the player drops in, then nothing while
+   * the fight goes on so every shot and step stays clear, a final-moments loop
+   * once a team nears the score limit, and the win or the loss at the end
+   * (started by the match's end). A menu over a match lowers it.
+   */
+  private updateMusic(): void {
+    const music = this.sfx.music;
+    const m = this.match;
+    if (this.input.playing) this.deployed = true;
+    music.setDucked(this.deployed && !this.input.playing);
+    if (!this.deployed) {
+      music.play('menu');
+      return;
+    }
+    if (this.musicStage === 'none') {
+      this.musicStage = 'spawn';
+      music.play(this.me.team === 0 ? 'intro-corps' : 'intro-zero');
+    }
+    if (this.musicStage === 'spawn' && !m.over && Math.max(...m.score) >= m.scoreLimit * FINAL_MOMENTS) {
+      this.musicStage = 'final';
+      music.play('final');
+    }
+  }
+
   /** Advance the simulation in fixed ticks, then draw one interpolated frame. */
   frame(dt: number): void {
     this.input.update(dt);
@@ -473,6 +508,7 @@ export class Game {
         for (const e of m.events) this.onEvent(e, 'sim');
       }
     }
+    this.updateMusic();
 
     const alpha = this.accumulator / TICK_DT;
     if (conn) {
@@ -1181,7 +1217,8 @@ export class Game {
       case 'matchEnd':
         this.endedAt = performance.now();
         this.hud.showEnd(e.winner === me.team, m, me);
-        this.sfx.matchEnd(e.winner === me.team);
+        this.musicStage = 'end';
+        this.sfx.music.play(e.winner === me.team ? 'victory' : 'defeat');
         break;
     }
   }

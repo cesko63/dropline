@@ -1,9 +1,9 @@
 # Audio
 
-Every recorded sound in DROPLINE, where it came from and what it weighs. All
-sources are CC0 (public domain) from OpenGameArt. This file is written by
-`pnpm audio` (tools/audio/build.mjs) from tools/audio/sounds.json; edit those,
-not this.
+Every recorded sound and piece of music in DROPLINE, where it came from and what
+it weighs. All sources are CC0 (public domain) from OpenGameArt. This file is
+written by `pnpm audio` (tools/audio/build.mjs) from tools/audio/sounds.json;
+edit those, not this.
 
 Processing: cut from the source at the given time, silence below -50 dBFS
 dropped from the front, the end faded out (loops: end cross-faded into the
@@ -33,6 +33,12 @@ whole source file (original) and the shipped take (runtime).
 - [15 vocal male strain/hurt/pain/jump sounds](https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds) by qubodup
 - [Wind](https://opengameart.org/content/wind) by IgnasD
 - [Muffled Distant Explosion](https://opengameart.org/content/muffled-distant-explosion) by NenadSimic
+- [Savage Ambush](https://opengameart.org/content/savage-ambush) by Ruskerdax
+- [The Hunt](https://opengameart.org/content/the-hunt) by Sudocolon
+- [Machines](https://opengameart.org/content/machines) by Tsorthan Grove
+- [Tense Future Loop](https://opengameart.org/content/tense-future-loop) by gmason
+- [Victory Fanfare Short](https://opengameart.org/content/victory-fanfare-short) by cynicmusic
+- [Dark Stinger 1](https://opengameart.org/content/dark-stinger-1) by Kresiek The Furry
 
 ## Files
 
@@ -154,3 +160,20 @@ whole source file (original) and the shipped take (runtime).
 | slide-start-2.mp3 | 100 CC0 SFX #2 | rubberduck | sfx100v2_stones_03.ogg | 12455 | 3387 |
 | slide-1.mp3 | 30 CC0 SFX loops | rubberduck | rolling.ogg | 51513 | 7776 |
 | rush-1.mp3 | Wind | IgnasD | wind/Wind2.ogg @ 2.4 s | 57568 | 30137 |
+
+## Music
+
+Stereo 44.1 kHz MP3 at 96 kb/s, in assets/music, levelled so the louder half of
+each track sits at -16 dBFS RMS (peaks kept under -1 dBFS). A looped track keeps
+its intro, which plays once; the game then loops the given span, whose two ends
+were matched by comparing spectral windows, with a 0.5 s cross-fade at the seam.
+6 files, 2733 KB in all.
+
+| File | Source | Author | Used | Original bytes | Runtime bytes |
+| --- | --- | --- | --- | --- | --- |
+| menu.mp3 | Savage Ambush | Ruskerdax | intro, then 33.67 to 107.516 s looped | 3902313 | 1291538 |
+| intro-corps.mp3 | The Hunt | Sudocolon | first 26 s | 7810933 | 312887 |
+| intro-zero.mp3 | Machines | Tsorthan Grove | first 21 s | 15378373 | 252701 |
+| final.mp3 | Tense Future Loop | gmason | intro, then 8.17 to 52.478 s looped | 1216702 | 631058 |
+| victory.mp3 | Victory Fanfare Short | cynicmusic | first 11.8 s | 2092996 | 141419 |
+| defeat.mp3 | Dark Stinger 1 | Kresiek The Furry | first 14 s | 210824 | 168691 |

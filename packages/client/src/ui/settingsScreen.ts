@@ -30,6 +30,7 @@ const FORMAT: Record<NumKey, (v: number) => string> = {
   fov: (v) => `${Math.round(v)}°`,
   hudScale: pct,
   volume: pct,
+  musicVolume: pct,
   shake: pct,
 };
 
@@ -212,6 +213,7 @@ export class SettingsScreen {
     } else {
       rows.push(
         this.slider('volume', 'Volume'),
+        this.slider('musicVolume', 'Music', 'The menu theme, the spawn theme, the final moments and the end of a match.'),
         this.toggle('muted', 'Sound off'),
         this.section('Comfort'),
         this.slider('shake', 'Screen shake', 'Blasts, landings and mech footfalls.'),

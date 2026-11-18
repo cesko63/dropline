@@ -149,6 +149,10 @@ async function boot(): Promise<void> {
       menu.showChoices();
     }
   };
+  // Browsers start sound only from a click or key: the first one anywhere brings in the menu theme.
+  const unlock = (): void => game.sfx.unlock();
+  window.addEventListener('pointerdown', unlock, { once: true });
+  window.addEventListener('keydown', unlock, { once: true });
   game.start();
   if (auto) join(menu.callsign());
   else if (params.has('hangar')) menu.onHangar();

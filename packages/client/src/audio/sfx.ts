@@ -1,5 +1,6 @@
 import type { Vec3 } from '@dropline/shared';
 import { SoundBank, type SoundName } from './bank';
+import { Music } from './music';
 import type { Surface } from './surfaces';
 
 /**
@@ -51,6 +52,8 @@ export class Sfx {
   muted = false;
   /** 0..1, from the settings. */
   volume = 0.8;
+  /** Plays through the master volume, past the match's pause. */
+  readonly music = new Music();
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   /** Everything of the match goes through here, so a pause silences it while menu sounds still play. */
@@ -90,6 +93,7 @@ export class Sfx {
       this.master = master;
       this.noise = noise;
       this.bank.load(ctx);
+      this.music.attach(ctx, master);
     } catch {
       // No audio device or a blocked context: the game runs silent.
     }
@@ -907,12 +911,5 @@ export class Sfx {
   spawn(): void {
     const b = this.bus(null, 0.5);
     if (b) this.burst(b, { type: 'bandpass', f0: 300, f1: 2600, q: 2, dur: 0.38, gain: 0.4 });
-  }
-
-  matchEnd(won: boolean): void {
-    const b = this.bus(null, 0.8);
-    if (!b) return;
-    const notes = won ? [660, 880, 1320] : [440, 349, 262];
-    notes.forEach((f, i) => this.tone(b, { type: 'triangle', f0: f, dur: 0.45, gain: 0.25, at: i * 0.16 }));
   }
 }

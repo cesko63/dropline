@@ -18,7 +18,21 @@
     "clicks": { "title": "Equipment Clicks II", "author": "LFA", "page": "https://opengameart.org/content/equipment-clicks-ii", "file": "equipmentclicks.wav" },
     "screams": { "title": "15 vocal male strain/hurt/pain/jump sounds", "author": "qubodup", "page": "https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds", "file": "slightscreams.7z" },
     "wind": { "title": "Wind", "author": "IgnasD", "page": "https://opengameart.org/content/wind", "file": "wind.zip" },
-    "distant": { "title": "Muffled Distant Explosion", "author": "NenadSimic", "page": "https://opengameart.org/content/muffled-distant-explosion", "file": "NenadSimic%20-%20Muffled%20Distant%20Explosion.wav" }
+    "distant": { "title": "Muffled Distant Explosion", "author": "NenadSimic", "page": "https://opengameart.org/content/muffled-distant-explosion", "file": "NenadSimic%20-%20Muffled%20Distant%20Explosion.wav" },
+    "savageAmbush": { "title": "Savage Ambush", "author": "Ruskerdax", "page": "https://opengameart.org/content/savage-ambush", "file": "ruskerdax_-_savage_ambush.mp3" },
+    "theHunt": { "title": "The Hunt", "author": "Sudocolon", "page": "https://opengameart.org/content/the-hunt", "file": "The%20Hunt.ogg" },
+    "machines": { "title": "Machines", "author": "Tsorthan Grove", "page": "https://opengameart.org/content/machines", "file": "machines.flac" },
+    "tenseFuture": { "title": "Tense Future Loop", "author": "gmason", "page": "https://opengameart.org/content/tense-future-loop", "file": "tensefutureloop.ogg" },
+    "fanfare": { "title": "Victory Fanfare Short", "author": "cynicmusic", "page": "https://opengameart.org/content/victory-fanfare-short", "file": "Heavy_ConceptB.wav" },
+    "darkStinger": { "title": "Dark Stinger 1", "author": "Kresiek The Furry", "page": "https://opengameart.org/content/dark-stinger-1", "file": "dark_stinger_0.ogg" }
+  },
+  "music": {
+    "menu": { "from": "savageAmbush", "loop": [33.67, 107.516] },
+    "intro-corps": { "from": "theHunt", "length": 26, "fade": 5 },
+    "intro-zero": { "from": "machines", "length": 21, "fade": 5 },
+    "final": { "from": "tenseFuture", "loop": [8.17, 52.478] },
+    "victory": { "from": "fanfare", "length": 11.8, "fade": 1.5 },
+    "defeat": { "from": "darkStinger", "length": 14, "fade": 4 }
   },
   "sounds": {
     "carbine": { "length": 0.32, "from": [

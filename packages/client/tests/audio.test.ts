@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createPlayerState, v3, type PlayerState } from '@dropline/shared';
 import manifest from '../../../assets/audio/sounds.json';
+import music from '../../../assets/music/music.json';
 import { PilotFoley } from '../src/audio/pilotFoley';
 import type { Sfx } from '../src/audio/sfx';
 import type { SurfaceSounds } from '../src/audio/surfaces';
@@ -88,5 +89,15 @@ describe('sound files', () => {
       for (let i = 1; i <= count; i++) if (!built[`../../../assets/audio/${name}-${i}.mp3`]) missing.push(`${name}-${i}.mp3`);
     }
     expect(missing).toEqual([]);
+  });
+});
+
+describe('music files', () => {
+  it('every track the music manifest lists is built, and every loop runs forward', () => {
+    const built = import.meta.glob('../../../assets/music/*.mp3');
+    for (const [track, entry] of Object.entries(music) as [string, { loop?: [number, number] }][]) {
+      expect(built[`../../../assets/music/${track}.mp3`], track).toBeDefined();
+      if (entry.loop) expect(entry.loop[1] - entry.loop[0], track).toBeGreaterThan(10);
+    }
   });
 });

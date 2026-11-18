@@ -41,6 +41,8 @@ export interface Settings {
   fullscreen: boolean;
   // Sound
   volume: number;
+  /** The music's own level, under the volume above. */
+  musicVolume: number;
   muted: boolean;
   // Comfort
   /** Screen shake, 0..1 of full. */
@@ -70,6 +72,7 @@ export function defaultSettings(): Settings {
     hudScale: 1,
     fullscreen: false,
     volume: 0.8,
+    musicVolume: 0.7,
     muted: false,
     shake: 1,
     reduceMotion: false,
@@ -93,6 +96,7 @@ export const RANGES = {
   fov: { min: 80, max: 120, step: 1 },
   hudScale: { min: 0.75, max: 1.4, step: 0.05 },
   volume: { min: 0, max: 1, step: 0.05 },
+  musicVolume: { min: 0, max: 1, step: 0.05 },
   shake: { min: 0, max: 1, step: 0.05 },
 } as const;
 
@@ -138,6 +142,7 @@ export function parseSettings(raw: string): Settings {
     hudScale: num(s.hudScale, RANGES.hudScale, d.hudScale),
     fullscreen: bool(s.fullscreen, d.fullscreen),
     volume: num(s.volume, RANGES.volume, d.volume),
+    musicVolume: num(s.musicVolume, RANGES.musicVolume, d.musicVolume),
     muted: bool(s.muted, d.muted),
     shake: num(s.shake, RANGES.shake, d.shake),
     reduceMotion: bool(s.reduceMotion, d.reduceMotion),
