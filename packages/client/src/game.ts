@@ -50,7 +50,6 @@ const RAISE_HOLD = 1.6;
 const OWN_TRACER = '#ffe2b0';
 const IMPACT_SPARK = '#ffcf8a';
 const CRIT_SPARK = '#ffd23f';
-const UP = v3(0, 1, 0);
 /** Ids for rockets drawn from prediction, well clear of the server's own. */
 const LOCAL_ROCKETS = 1_000_000;
 
@@ -140,8 +139,10 @@ export class Game {
   private seed: number;
   private readonly startMeter: number;
   private netDebug: boolean;
-  /** Seconds since damaged mechs last trailed smoke. */
+  /** Seconds since dashing mechs last threw thruster wash. */
   private smokeT = 0;
+  /** Where a wreck's fires sit, filled each frame. */
+  private readonly burn = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   private readonly tmp = new THREE.Vector3();
   private readonly eye = v3();
   private readonly aim = v3();
@@ -156,7 +157,7 @@ export class Game {
     this.renderer = createRenderer(canvas);
     this.env = createEnvironment(this.scene, map.env);
     this.scene.add(buildMapMeshes(map, this.renderer));
-    this.fx = new Effects(this.scene);
+    this.fx = new Effects(this.scene, this.env, world);
     this.hud.debug = options.qa;
     this.seed = options.seed;
     this.startMeter = options.startMeter;
@@ -517,17 +518,26 @@ export class Game {
       const mine = k.id === me.id && me.inMech;
       // The player's own mech turns with the mouse, like their view.
       avatar.update(dt, k, this.mechDrawn[k.id], mine ? s.yaw : k.yaw, mine ? s.pitch : k.pitch, !mine || rig.showsSelf);
-      if (!puff || k.state === 'none' || k.state === 'dropping') continue;
-      // Thruster wash under a dash, and smoke from a hull that is nearly gone.
-      if (k.dashTime > 0 && (!mine || rig.outside)) {
+      if (paused) continue;
+      // What is left of a destroyed one burns out, cooking off now and then.
+      if (k.state === 'none') {
+        const heat = avatar.wreckHeat;
+        if (heat <= 0) continue;
+        const pop = this.fx.wreckBurn(this.burn, avatar.burnPoints(this.burn), heat, dt);
+        if (pop) this.sfx.cookOff(pop);
+        continue;
+      }
+      if (k.state === 'dropping') continue;
+      // Smoke from a failing hull; a cloaked mech leaves none for the enemy to follow.
+      if (k.cloak <= 0 || k.team === me.team) this.fx.hullSmoke(avatar.ventWorld(this.tmp), 1 - k.health / frameOf(k).health, dt);
+      // Thruster wash under a dash.
+      if (puff && k.dashTime > 0 && (!mine || rig.outside)) {
         const at = this.at;
         at.x = k.pos.x;
         at.y = k.pos.y + 0.4;
         at.z = k.pos.z;
-        this.fx.smoke(at, 2, 0.9, 1.3, 0.6, null, 0.55);
+        this.fx.thrust(at, 0.7);
       }
-      // A cloaked mech leaves no smoke for the enemy to follow.
-      if (k.health < frameOf(k).health * 0.25 && (k.cloak <= 0 || k.team === me.team)) this.fx.smoke(avatar.ventWorld(this.tmp), 1, 0.3, 1.1, 1.3, null, 0.16);
     }
     const own = m.mechs[me.id];
     if (me.inMech && own.health < frameOf(own).health * 0.25 && !paused) this.sfx.hullAlarm();
@@ -535,7 +545,7 @@ export class Game {
 
     const mouse = this.input.takeMouseDelta();
     this.viewmodel.update(dt, me, mouse.dx, mouse.dy, me.inMech ? m.mechs[me.id] : null);
-    this.fx.update(dt);
+    this.fx.update(paused ? 0 : dt, cam);
     this.env.follow(p.x, p.y, p.z);
     // Fully aimed, a scoped weapon swaps its model for the scope view.
     const scoped = def.scope && me.ads > 0.9 && me.alive && !rig.outside;
@@ -690,7 +700,7 @@ export class Game {
     switch (what) {
       case 'dash':
         this.sfx.mechDash(at);
-        if (outside) this.fx.smoke(k.pos, 6, 1, 1.4, 0.7, null, 0.55);
+        if (outside) this.fx.thrust(k.pos, 1.6);
         if (mine) {
           this.rig.kick(6);
           this.viewmodel.thud(0.8);
@@ -699,7 +709,7 @@ export class Game {
         break;
       case 'leap':
         this.sfx.leap(at);
-        if (outside) this.fx.smoke(k.pos, 10, 1.4, 1.5, 0.8, null, 0.55);
+        if (outside) this.fx.thrust(k.pos, 2.5);
         if (mine) {
           this.rig.kick(4);
           this.viewmodel.thud(0.6);
@@ -712,10 +722,7 @@ export class Game {
         avatar.stomp();
         this.sfx.stomp(at);
         // The shockwave runs out along the ground as far as it reaches.
-        this.fx.ring(k.pos, radius, k.team === me.team ? ALLY_ZONE : ENEMY_ZONE, 0.45);
-        this.fx.ring(k.pos, radius * 0.6, '#ffe2b0', 0.3);
-        this.fx.smoke(k.pos, 16, radius * 0.35, 1.6, 0.9, null, 0.5);
-        this.fx.decal(k.pos, UP, 6);
+        this.fx.stomp(k.pos, radius, k.team === me.team ? ALLY_ZONE : ENEMY_ZONE);
         if (mine) {
           this.rig.thud(3);
           this.viewmodel.thud(1.4);
@@ -775,8 +782,7 @@ export class Game {
         for (const t of e.traces) {
           this.fx.tracer(muzzle, t.end, color, width);
           if (t.normal) {
-            this.fx.burst(t.end, t.normal, a.inMech ? 7 : 4, IMPACT_SPARK, a.inMech ? 6 : 4);
-            this.fx.decal(t.end, t.normal, a.inMech ? 1.8 : 1);
+            this.fx.impact(t.end, t.normal, a.inMech);
             struck = t.end;
           } else if (t.victim >= 0 && source !== 'predicted') {
             // Sparks in the victim's colours, more of them for a headshot.
@@ -788,6 +794,8 @@ export class Game {
           }
         }
         this.fx.flash(muzzle, (mine ? 2.5 : 4) * (a.inMech ? 2 : 1));
+        // A cannon leaves a puff at its muzzle, kept out of the pilot's own window.
+        if (a.inMech && !firstPerson) this.fx.muzzleSmoke(muzzle, e.weapon !== 'autocannon');
         body.fireFlash();
         if (mine) {
           this.viewmodel.fire();
@@ -826,7 +834,7 @@ export class Game {
         chest.x = victim.p.pos.x;
         chest.y = victim.p.pos.y + 1.1;
         chest.z = victim.p.pos.z;
-        this.fx.burst(chest, null, 22, TEAM_LOOK[victim.team].visor, 7);
+        this.fx.downed(chest, TEAM_LOOK[victim.team].visor);
         if (killer === me) {
           this.hud.showBanner('ELIMINATED ', victim.name);
           this.rig.kick(3);
@@ -856,7 +864,7 @@ export class Game {
         // Seen from outside, the arm lets off a puff of steam.
         if (mount === 'arm' && (a !== me || this.rig.outside) && a.alive && !a.inMech) {
           const at = this.avatars[a.id].ventWorld(this.tmp);
-          this.fx.smoke(at, 3, 0.08, 0.32, 0.6, UP, 0.8);
+          this.fx.steam(at, 4);
         }
         break;
       }
@@ -915,10 +923,7 @@ export class Game {
         const k = m.mechs[e.mech];
         const zone = k.team === me.team ? ALLY_ZONE : ENEMY_ZONE;
         this.mechAvatars[k.id].land(40);
-        this.fx.ring(e.pos, COMBAT.mech.drop.crushRadius * 1.7, zone, 0.55);
-        this.fx.smoke(e.pos, 18, 2.6, 1.7, 1.5, null, 0.5);
-        this.fx.burst(e.pos, UP, 34, IMPACT_SPARK, 13);
-        this.fx.decal(e.pos, UP, 16);
+        this.fx.mechLand(e.pos, COMBAT.mech.drop.crushRadius * 1.7, zone);
         this.sfx.mechLand(e.pos);
         this.shake(this.near(e.pos, 45) * 0.95);
         break;
@@ -961,7 +966,7 @@ export class Game {
         else avatar.step();
         this.sfx.mechStep(mine ? null : k.pos, e.heavy);
         // Dust at the feet, except under the player's own cockpit where it would only fog the view.
-        if (!mine || this.rig.outside) this.fx.smoke(k.pos, e.heavy ? 9 : 2, 0.9, e.heavy ? 1.7 : 0.9, 0.7, null, 0.5);
+        if (!mine || this.rig.outside) this.fx.footfall(k.pos, e.heavy);
         if (mine) {
           this.rig.thud(e.heavy ? 2.6 : 0.8);
           this.viewmodel.thud(e.heavy ? 1.3 : 0.45);
@@ -1032,16 +1037,7 @@ export class Game {
         const owner = m.actors[e.mech];
         const killer = e.attacker >= 0 ? m.actors[e.attacker] : null;
         this.mechAvatars[e.mech].destroy();
-        const core = this.at;
-        core.x = e.pos.x;
-        core.y = e.pos.y + 2.8;
-        core.z = e.pos.z;
-        this.fx.explosion(core, null, 8);
-        this.fx.fireball({ x: core.x, y: core.y + 1.6, z: core.z }, 3.4, 0.6);
-        this.fx.burst(core, null, 60, IMPACT_SPARK, 19);
-        this.fx.smoke(core, 22, 1.6, 2.8, 2.8, null, 0.2);
-        this.fx.ring(e.pos, 10, '#ffb066', 0.6);
-        this.fx.decal(e.pos, UP, 20);
+        this.fx.mechDeath(e.pos, m.mechs[e.mech].team);
         this.sfx.mechDestroyed(e.pos);
         this.shake(this.near(e.pos, 55));
         if (killer) this.hud.addKill(killer, owner, killLabel(e.weapon), me, ` · ${frameOf(m.mechs[e.mech]).short}`);
@@ -1092,7 +1088,7 @@ export class Game {
         const def = PROJECTILES[e.kind];
         this.fx.endRocket(this.rocketAlias.get(e.id) ?? e.id);
         this.rocketAlias.delete(e.id);
-        this.fx.explosion(e.pos, e.normal, def.radius);
+        this.fx.explosion(e.pos, e.normal, def.radius, def.mechFuse !== undefined);
         // A flak burst is a crack, not a rocket's boom.
         if (def.mechFuse) this.sfx.flakBurst(e.pos);
         else this.sfx.explosion(e.pos);

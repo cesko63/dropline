@@ -6,8 +6,10 @@ import { FOOT, buildMechSkeleton, legReach, mechKit, shapeOf, type MechBone, typ
 
 /** Height the machine starts its fall from, meters above the landing spot. */
 const DROP_HEIGHT = 170;
-/** Seconds a wreck stays before it is cleared away. */
-const WRECK_TIME = 3.2;
+/** Seconds a wreck stays before it is cleared away: ablaze, then dying down, then sinking away. */
+const WRECK_TIME = 16;
+const WRECK_BLAZE = 7;
+const WRECK_SINK = 1.2;
 
 /** Leg poses as [hip, knee] angles: kneeling for its pilot, tucked for the fall. Reverse knees flip both. */
 const KNEEL: [number, number] = [1.15, -2.1];
@@ -292,6 +294,22 @@ export class MechAvatar {
     this.wreck = 0;
   }
 
+  /** How hard the wreck still burns: 1 ablaze, falling to 0 as it smoulders out; 0 with no wreck. */
+  get wreckHeat(): number {
+    if (this.wreck < 0) return 0;
+    const out = WRECK_TIME - WRECK_SINK;
+    return Math.max(0, Math.min(1, 1 - (this.wreck - WRECK_BLAZE) / (out - WRECK_BLAZE)));
+  }
+
+  /** Where the wreck's fires sit, in the world: the vent first (it burns hardest), then the hatch and the left shoulder. */
+  burnPoints(out: THREE.Vector3[]): number {
+    const b = this.bones;
+    b.vent.getWorldPosition(out[0]);
+    b.hatch.getWorldPosition(out[1]);
+    b.armL.getWorldPosition(out[2]);
+    return 3;
+  }
+
   muzzleWorld(out: THREE.Vector3): THREE.Vector3 {
     return this.muzzle.getWorldPosition(out);
   }
@@ -551,16 +569,19 @@ export class MechAvatar {
     this.pose[3] = damp(this.pose[3], s * KNEEL[1] * 0.8, 4, dt);
     b.hips.position.y = Math.max(this.setLeg('L', this.pose[0], this.pose[1]), this.setLeg('R', this.pose[2], this.pose[3]));
     this.body.color.lerpColors(WHITE, SOOT, u);
-    this.body.emissive.setRGB(0, 0, 0);
+    // Hot metal glows a dull red under the soot while it burns.
+    const glow = this.wreckHeat * (0.8 + 0.2 * Math.sin(this.time * 9) * Math.sin(this.time * 2.3));
+    this.body.emissive.setRGB(0.07 * glow, 0.01 * glow, 0);
     this.setPower(0);
     b.crew.visible = false;
-    this.ventMat.color.setScalar(1.6 * (1 - u) * (0.5 + Math.random() * 0.5));
+    this.ventMat.color.setScalar(1.6 * Math.max(1 - u, this.wreckHeat * 0.6) * (0.5 + Math.random() * 0.5));
     this.podMat.color.setScalar(0);
     this.muzzleFlash.visible = false;
     for (const f of this.flames) f.visible = false;
     for (const f of this.retros) f.visible = false;
-    const gone = Math.max(0, (this.wreck - (WRECK_TIME - 0.8)) / 0.8);
+    const gone = Math.max(0, (this.wreck - (WRECK_TIME - WRECK_SINK)) / WRECK_SINK);
     this.rig.scale.setScalar(1 - gone * gone);
+    this.rig.position.y = -gone * 1.5;
   }
 
   /** The wall unfolds upward when raised and folds away when lowered; it dims as it wears down and flares where it is hit. */

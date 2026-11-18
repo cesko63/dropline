@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { COMBAT, WEAPONS, clamp, frameOf, lenH, type Actor, type Mech } from '@dropline/shared';
 import { spring, stepSpring } from '../util/spring';
 import { ArmGun, GUN_FINISH } from './armGun';
+import { ParticleLayer, emitTemplate } from './fx/particles';
+import { smokeAtlas } from './fx/textures';
 import { Cockpit } from './mech/cockpit';
 import { block, rod } from './pilot/rig';
 
@@ -55,14 +57,6 @@ interface Debris {
   vel: THREE.Vector3;
   spin: THREE.Vector3;
   life: number;
-}
-
-interface Puff {
-  mesh: THREE.Mesh;
-  mat: THREE.MeshBasicMaterial;
-  vel: THREE.Vector3;
-  life: number;
-  span: number;
 }
 
 const tmp = new THREE.Vector3();
@@ -150,8 +144,9 @@ export class Viewmodel {
   private nextCasing = 0;
   private readonly spentCell: Debris;
   private readonly spentMat: THREE.MeshStandardMaterial;
-  private readonly puffs: Puff[] = [];
-  private nextPuff = 0;
+  /** Steam from the housing, drawn in the view's own small scale. */
+  private readonly puffs = new ParticleLayer({ capacity: 60, map: smokeAtlas(), additive: false, sorted: true, nearFade: [0, 0.001] });
+  private readonly puff = emitTemplate();
   private bob = 0;
   private idle = 0;
   private swayX = 0;
@@ -345,14 +340,9 @@ export class Viewmodel {
     this.scene.add(spent);
     this.spentCell = { mesh: spent, vel: new THREE.Vector3(), spin: new THREE.Vector3(), life: 0 };
 
-    const puffGeo = new THREE.IcosahedronGeometry(0.02, 0);
-    for (let i = 0; i < 14; i++) {
-      const mat = new THREE.MeshBasicMaterial({ color: '#d5e8f2', transparent: true, opacity: 0, depthWrite: false });
-      const mesh = new THREE.Mesh(puffGeo, mat);
-      mesh.visible = false;
-      this.scene.add(mesh);
-      this.puffs.push({ mesh, mat, vel: new THREE.Vector3(), life: 0, span: 1 });
-    }
+    this.puffs.setLight(new THREE.Color(1.15, 1.2, 1.25), new THREE.Color(0.45, 0.5, 0.56));
+    this.scene.add(this.puffs.mesh);
+    Object.assign(this.puff, { size0: 0.03, alpha: 0.5, fadeIn: 0.08, spin: 1.5 });
 
     this.scene.add(this.rig);
     // Matches the world's light rig: cool sky fill, warm sun from the same side.
@@ -470,14 +460,18 @@ export class Viewmodel {
 
   /** Let steam out of the housing's vents. */
   private steam(count: number): void {
+    const p = this.puff;
     for (let i = 0; i < count; i++) {
-      const p = this.puffs[this.nextPuff++ % this.puffs.length];
-      this.vents.getWorldPosition(p.mesh.position);
-      p.mesh.position.x += (Math.random() - 0.5) * 0.03;
-      p.mesh.position.z += (Math.random() - 0.5) * 0.1;
-      p.vel.set(-0.06 - Math.random() * 0.1, 0.16 + Math.random() * 0.16, (Math.random() - 0.5) * 0.08);
-      p.span = p.life = 0.4 + Math.random() * 0.3;
-      p.mesh.visible = true;
+      this.vents.getWorldPosition(tmp);
+      p.x = tmp.x + (Math.random() - 0.5) * 0.03;
+      p.y = tmp.y;
+      p.z = tmp.z + (Math.random() - 0.5) * 0.1;
+      p.vx = -0.06 - Math.random() * 0.1;
+      p.vy = 0.16 + Math.random() * 0.16;
+      p.vz = (Math.random() - 0.5) * 0.08;
+      p.life = 0.4 + Math.random() * 0.3;
+      p.size1 = 0.13 + Math.random() * 0.06;
+      this.puffs.emit(p);
     }
   }
 
@@ -637,15 +631,7 @@ export class Viewmodel {
       this.fall(spent, dt);
       this.spentMat.emissiveIntensity = 2 * clamp(spent.life / 0.7, 0, 1);
     }
-    for (const puff of this.puffs) {
-      if (puff.life <= 0) continue;
-      puff.life -= dt;
-      puff.mesh.position.addScaledVector(puff.vel, dt);
-      const age = 1 - puff.life / puff.span;
-      puff.mesh.scale.setScalar(0.8 + age * 2.6);
-      puff.mat.opacity = 0.34 * (1 - age);
-      if (puff.life <= 0) puff.mesh.visible = false;
-    }
+    this.puffs.update(dt, this.camera, 0, 0);
   }
 
   /** The barrel, the printer, the heat it shows, the fins and the coolant cell. */

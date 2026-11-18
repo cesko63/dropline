@@ -260,8 +260,13 @@ The rules below hold for all three frames; the frames differ in the next section
   eight rockets from the front of a Halberd, or five into the glowing vent on its
   back, which takes 1.6 times the damage from everything. A mech that keeps
   moving makes rockets miss.
+- **Wear shows.** Past half its hull a mech trails grey smoke from its vent;
+  past three quarters it pours black smoke and licks of fire.
 - **Losing it.** The pilot is thrown clear, alive and high in the air, the enemy
-  team scores 3, and the meter starts again from empty.
+  team scores 3, and the meter starts again from empty. The mech goes up in a
+  fireball that flings burning plates; the wreck burns where it fell for about
+  7 s, cooking off now and then, smoulders out, and sinks away after 16 s. It is
+  only a picture: nothing collides with it.
 
 Bots do all of this too: they call their mech when the meter fills, walk to it,
 fight from the cockpit, and on foot they switch to the launcher and keep their
@@ -544,6 +549,7 @@ packages/
     src/settings/         The settings: defaults, checks, migrations, storage
     src/camera/           First / third person camera, recoil, zoom, shake
     src/render/           Scene, map, pilots, mechs, first-person weapons, cockpit, effects
+    src/render/fx/        Particle sprites and the effects' painted textures
     src/audio/            Sound effects
     src/ui/               HUD, start screen, settings screen, pad menu navigation
     tests/                Settings, bindings and stick tests
@@ -602,7 +608,17 @@ packages/
   on in order (dash lights, readouts, the view), a failing hull turns the
   lights red and flashes the warning strip, the pilot's hands work the sticks,
   and the cannon out to the right is the mech's own arm, kicking by its weight.
-  Smoke, steam and blasts are still plain shapes.
+- **Effects** are sprites and textures painted in code at start-up from seeded
+  noise (`client/src/render/fx`), so nothing is downloaded. Smoke, dust and
+  steam are soft puffs lit by the map's own sky and sun, drift with one breeze
+  and settle along the floor or wall they came off; fire, flashes, embers and
+  sparks glow on top; sparks bounce on the floor; debris tumbles, glances off
+  walls and comes to rest; hits leave bullet holes, craters, scorches and
+  scuffs. A rocket is a fireball rolling up into dark smoke, a flak shell a
+  white crack and a puff of black, a mech's death a fireball, burning plates
+  and a black column. Open `/effects.html` to play each one on its own,
+  against a floor and a wall, by day or night, with what is alive and what it
+  costs in the corner.
 - **Mech frames are tuned on bot duels.** The numbers above come from bots on
   the test map; how the shield, cloak and leap play between people is untested.
 - **Bots do not wallrun.** They climb, drop and leap, but never run along a
@@ -639,7 +655,7 @@ packages/
       1. Pilot suits and the arm gun (done)
       2. The three mech frames (done)
       3. The cockpit from inside (done)
-      4. Effects: smoke, steam, sparks, blasts and wrecks
+      4. Effects: smoke, steam, sparks, blasts and wrecks (done)
    8. Sound and music
    9. Closing pass: teaching, performance, error cards, balance
 6. Deployment

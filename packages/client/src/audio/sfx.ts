@@ -717,6 +717,16 @@ export class Sfx {
     for (let i = 0; i < 4; i++) this.burst(b, { type: 'bandpass', f0: 700 + i * 350, q: 5, dur: 0.07, gain: 0.3, at: 0.35 + i * 0.17 });
   }
 
+  /** Something in a burning wreck cooking off: a muffled pop and a short crackle. */
+  cookOff(pos: Vec3): void {
+    if (!this.allow('cookoff', 0.15)) return;
+    const b = this.bus(pos, 2);
+    if (!b) return;
+    this.burst(b, { type: 'lowpass', f0: 1400, f1: 120, dur: 0.35, gain: 0.8 });
+    this.tone(b, { type: 'sine', f0: 120, f1: 45, dur: 0.22, gain: 0.6 });
+    for (let i = 0; i < 3; i++) this.burst(b, { type: 'bandpass', f0: 1800 + i * 900, q: 4, dur: 0.04, gain: 0.25, at: 0.08 + i * 0.07 + Math.random() * 0.04 });
+  }
+
   spawn(): void {
     const b = this.bus(null, 0.5);
     if (b) this.burst(b, { type: 'bandpass', f0: 300, f1: 2600, q: 2, dur: 0.38, gain: 0.4 });

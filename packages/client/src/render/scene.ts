@@ -29,6 +29,7 @@ export function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
 
 export interface Environment {
   sun: THREE.DirectionalLight;
+  hemi: THREE.HemisphereLight;
   /** Keeps the shadow area and sky centred on the player. */
   follow(x: number, y: number, z: number): void;
 }
@@ -80,7 +81,8 @@ export function createEnvironment(scene: THREE.Scene, mapEnv?: MapEnv): Environm
   sky.renderOrder = -1;
   scene.add(sky);
 
-  scene.add(new THREE.HemisphereLight(env.hemiSky, env.hemiGround, env.hemiIntensity));
+  const hemi = new THREE.HemisphereLight(env.hemiSky, env.hemiGround, env.hemiIntensity);
+  scene.add(hemi);
 
   // The sun sits 120 m out along its direction, so the shadow camera's depth range fits.
   const sunOffset = new THREE.Vector3(env.sunDir[0], env.sunDir[1], env.sunDir[2]).normalize().multiplyScalar(120);
@@ -99,6 +101,7 @@ export function createEnvironment(scene: THREE.Scene, mapEnv?: MapEnv): Environm
 
   return {
     sun,
+    hemi,
     follow(x, y, z) {
       // Snap to whole meters so shadow edges do not shimmer while moving.
       const sx = Math.round(x);
