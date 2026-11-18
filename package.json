@@ -10,7 +10,8 @@
     "typecheck": "pnpm -r typecheck",
     "host": "pnpm --filter @dropline/server start",
     "lag": "pnpm --filter @dropline/server lag",
-    "map:spire-nine": "node tools/maps/spire-nine.mjs"
+    "map:spire-nine": "node tools/maps/spire-nine.mjs",
+    "audio": "node tools/audio/build.mjs"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

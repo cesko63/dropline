@@ -1,13 +1,28 @@
 import type { Vec3 } from '@dropline/shared';
+import { SoundBank, type SoundName } from './bank';
+import type { Surface } from './surfaces';
 
 /**
- * Sound effects. Every sound here is a synthesized STAND-IN built from filtered
- * noise and short tones, so the game has timing and feedback before recorded
- * audio exists. Replace each method's body with sample playback later; callers
- * will not change.
+ * Sound effects. Pilots (movement, weapons, impacts, hurt and death) play
+ * recorded takes from the sound bank, a random take each time with a little
+ * pitch jitter. Everything else is still a synthesized STAND-IN built from
+ * filtered noise and short tones, until its recordings replace it (mechs, then
+ * menus and HUD); callers will not change.
  */
 
 const MAX_VOICES = 48;
+
+/** A sound that plays for as long as `hold` is called every frame. */
+interface Loop {
+  src: AudioBufferSourceNode;
+  out: GainNode;
+  muffle: BiquadFilterNode;
+  pan: StereoPannerNode;
+  held: boolean;
+}
+
+/** Beyond this, a remote shot is heard as its distant take, with the room in it. */
+const FAR_SHOT = 18;
 
 interface BurstOpts {
   dur: number;
@@ -41,6 +56,9 @@ export class Sfx {
   /** Everything of the match goes through here, so a pause silences it while menu sounds still play. */
   private game: GainNode | null = null;
   private noise: AudioBuffer | null = null;
+  private readonly bank = new SoundBank();
+  private readonly loops = new Map<string, Loop>();
+  private readonly spotOut = { level: 0, muffle: 20000, pan: 0 };
   private voices = 0;
   private readonly last = new Map<string, number>();
   private lx = 0;
@@ -71,6 +89,7 @@ export class Sfx {
       this.ctx = ctx;
       this.master = master;
       this.noise = noise;
+      this.bank.load(ctx);
     } catch {
       // No audio device or a blocked context: the game runs silent.
     }
@@ -198,21 +217,113 @@ export class Sfx {
       out.connect(this.game!);
       return out;
     }
+    const spot = this.spot(pos, gain);
+    if (spot.level < 0.012) return null;
+    out.gain.value = spot.level;
+    const muffle = ctx.createBiquadFilter();
+    muffle.type = 'lowpass';
+    muffle.frequency.value = spot.muffle;
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = spot.pan;
+    out.connect(muffle).connect(pan).connect(this.game!);
+    return out;
+  }
+
+  /** Level, muffling and pan for a sound at `pos` (null: the player's own). The object is reused. */
+  private spot(pos: Vec3 | null, gain: number): { level: number; muffle: number; pan: number } {
+    const spot = this.spotOut;
+    if (!pos) {
+      spot.level = gain;
+      spot.muffle = 20000;
+      spot.pan = 0;
+      return spot;
+    }
     const dx = pos.x - this.lx;
     const dy = pos.y - this.ly;
     const dz = pos.z - this.lz;
     const d = Math.hypot(dx, dy, dz);
-    const level = gain / (1 + d / 9);
-    if (level < 0.012) return null;
-    out.gain.value = level;
-    const muffle = ctx.createBiquadFilter();
-    muffle.type = 'lowpass';
-    muffle.frequency.value = 16000 / (1 + d / 18);
-    const pan = ctx.createStereoPanner();
     const flat = Math.hypot(dx, dz) || 1;
-    pan.pan.value = Math.max(-1, Math.min(1, ((dx * Math.cos(this.lyaw) - dz * Math.sin(this.lyaw)) / flat) * 0.85));
-    out.connect(muffle).connect(pan).connect(this.game!);
-    return out;
+    spot.level = gain / (1 + d / 9);
+    spot.muffle = 16000 / (1 + d / 18);
+    spot.pan = Math.max(-1, Math.min(1, ((dx * Math.cos(this.lyaw) - dz * Math.sin(this.lyaw)) / flat) * 0.85));
+    return spot;
+  }
+
+  private distance(pos: Vec3): number {
+    return Math.hypot(pos.x - this.lx, pos.y - this.ly, pos.z - this.lz);
+  }
+
+  /** The player's own sound (`pos` null), or one within `range` metres of the listener. */
+  hears(pos: Vec3 | null, range: number): boolean {
+    return pos === null || this.distance(pos) <= range;
+  }
+
+  /** One take of a recorded sound into `dest`, `at` seconds from now, pitch jittered by ±5%. */
+  private play(dest: AudioNode, name: SoundName, gain: number, at = 0, rate = 1): void {
+    const buffer = this.bank.pick(name);
+    const ctx = this.ctx;
+    if (!buffer || !ctx) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.playbackRate.value = rate * (0.95 + Math.random() * 0.1);
+    const env = ctx.createGain();
+    env.gain.value = gain;
+    src.connect(env).connect(dest);
+    this.voices++;
+    src.onended = () => this.voices--;
+    src.start(ctx.currentTime + at);
+  }
+
+  /**
+   * Keeps a looping sound going (a jet pack, a slide) for as long as this is
+   * called every frame, following `pos`; `endFrame` fades out those that were not.
+   */
+  hold(key: string, name: SoundName, pos: Vec3 | null, gain: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.game) return;
+    const spot = this.spot(pos, gain);
+    let loop = this.loops.get(key);
+    if (!loop) {
+      const buffer = this.bank.pick(name);
+      if (!buffer) return;
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      [src.loopStart, src.loopEnd] = this.bank.loopRange(name);
+      const out = ctx.createGain();
+      out.gain.value = 0;
+      const muffle = ctx.createBiquadFilter();
+      muffle.type = 'lowpass';
+      muffle.frequency.value = spot.muffle;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = spot.pan;
+      src.connect(out).connect(muffle).connect(pan).connect(this.game);
+      // Start somewhere in the loop, so two pilots' jets never phase together.
+      src.start(ctx.currentTime, src.loopStart + Math.random() * (src.loopEnd - src.loopStart));
+      loop = { src, out, muffle, pan, held: true };
+      this.loops.set(key, loop);
+    }
+    loop.held = true;
+    // Eased, so a loop swells in and follows a moving pilot without zipper noise.
+    const t = ctx.currentTime;
+    loop.out.gain.setTargetAtTime(spot.level, t, 0.04);
+    loop.muffle.frequency.setTargetAtTime(spot.muffle, t, 0.04);
+    loop.pan.pan.setTargetAtTime(spot.pan, t, 0.04);
+  }
+
+  /** Call once a frame after every `hold`: loops nobody held this frame fade out and stop. */
+  endFrame(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    for (const [key, loop] of this.loops) {
+      if (loop.held) {
+        loop.held = false;
+        continue;
+      }
+      loop.out.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      loop.src.stop(ctx.currentTime + 0.3);
+      this.loops.delete(key);
+    }
   }
 
   private burst(dest: AudioNode, o: BurstOpts): void {
@@ -261,15 +372,24 @@ export class Sfx {
     osc.stop(t + o.dur + 0.02);
   }
 
-  /** A gunshot. `pos` null is the player's own weapon. */
+  /**
+   * A gunshot. `pos` null is the player's own weapon. A pilot's guns are
+   * recorded: close up the dry crack, far off the take with the room in it,
+   * and the heavy ones with a low thump under the crack.
+   */
   fire(weapon: string, pos: Vec3 | null): void {
     if (!this.allow(`fire-${weapon}-${pos ? 'far' : 'own'}`, 0.03)) return;
     const b = this.bus(pos, pos ? 1.5 : 0.8);
     if (!b) return;
-    if (weapon === 'scattergun') {
-      this.burst(b, { type: 'lowpass', f0: 2400, f1: 260, dur: 0.34, gain: 0.95 });
-      this.burst(b, { type: 'bandpass', f0: 900, dur: 0.1, gain: 0.5 });
-      this.tone(b, { type: 'sine', f0: 115, f1: 34, dur: 0.26, gain: 0.8 });
+    const far = pos !== null && this.distance(pos) > FAR_SHOT;
+    if (weapon === 'carbine') {
+      this.play(b, far ? 'carbine-far' : 'carbine', far ? 0.8 : 0.6);
+    } else if (weapon === 'scattergun') {
+      this.play(b, far ? 'scattergun-far' : 'scattergun', 0.9);
+      if (!far) this.play(b, 'gun-body', 0.55, 0, 0.8);
+    } else if (weapon === 'longshot') {
+      this.play(b, far ? 'longshot-far' : 'longshot', 0.95);
+      if (!far) this.play(b, 'gun-body', 0.6);
     } else if (weapon === 'autocannon') {
       // Slower and far heavier than a carbine: a thump under every round.
       this.burst(b, { type: 'bandpass', f0: 1200, dur: 0.08, gain: 0.7 });
@@ -288,22 +408,14 @@ export class Sfx {
       this.tone(b, { type: 'sine', f0: 3100, f1: 2900, dur: 0.5, gain: 0.05, at: 0.05 });
     } else if (weapon === 'pike') {
       this.rocket(b);
-    } else if (weapon === 'longshot') {
-      this.burst(b, { type: 'bandpass', f0: 2800, dur: 0.06, gain: 0.7 });
-      this.burst(b, { type: 'lowpass', f0: 1500, f1: 180, dur: 0.55, gain: 0.6 });
-      this.tone(b, { type: 'sine', f0: 190, f1: 42, dur: 0.3, gain: 0.7 });
-    } else {
-      this.burst(b, { type: 'bandpass', f0: 1900, dur: 0.07, gain: 0.55 });
-      this.burst(b, { type: 'lowpass', f0: 700, f1: 240, dur: 0.14, gain: 0.5 });
-      this.tone(b, { type: 'sine', f0: 150, f1: 55, dur: 0.09, gain: 0.5 });
     }
   }
 
-  /** A round striking the map. */
-  impact(pos: Vec3): void {
+  /** A round striking the map: a chip off concrete, or a ping off steel. */
+  impact(pos: Vec3, surface: Surface): void {
     if (!this.allow('impact', 0.045)) return;
     const b = this.bus(pos, 0.9);
-    if (b) this.burst(b, { type: 'bandpass', f0: 3200, q: 2, dur: 0.045, gain: 0.4 });
+    if (b) this.play(b, surface === 'metal' ? 'impact-metal' : 'impact-hard', 0.45, 0, 1 + Math.random() * 0.3);
   }
 
   /** The player's round landing on an enemy. */
@@ -326,20 +438,27 @@ export class Sfx {
     this.tone(b, { type: 'triangle', f0: 2340, dur: 0.24, gain: 0.13, at: 0.09 });
   }
 
-  /** The player taking damage. */
-  hurt(): void {
+  /** The player taking damage: a blow on the armour, and a grunt when it hurts (not on every graze). */
+  hurt(amount: number): void {
     if (!this.allow('hurt', 0.07)) return;
     const b = this.bus(null, 0.9);
     if (!b) return;
-    this.tone(b, { type: 'sine', f0: 96, f1: 44, dur: 0.16, gain: 0.7 });
-    this.burst(b, { type: 'lowpass', f0: 520, dur: 0.1, gain: 0.45 });
+    this.play(b, 'hurt', Math.min(0.9, 0.4 + amount / 60));
+    if (amount >= 20 && this.allow('voice', 1.2)) this.play(b, 'voice-pain', 0.5, 0.04);
   }
 
   death(): void {
     const b = this.bus(null, 0.9);
     if (!b) return;
-    this.tone(b, { type: 'sine', f0: 220, f1: 38, dur: 0.75, gain: 0.5 });
-    this.burst(b, { type: 'lowpass', f0: 420, f1: 80, dur: 0.75, gain: 0.4 });
+    this.play(b, 'land-heavy', 0.8);
+    this.play(b, 'voice-death', 0.7, 0.03);
+  }
+
+  /** Another pilot dying where the player can hear it. */
+  deathCry(pos: Vec3): void {
+    if (!this.allow('cry', 0.3)) return;
+    const b = this.bus(pos, 1.4);
+    if (b) this.play(b, 'voice-death', 0.6);
   }
 
   /**
@@ -349,29 +468,27 @@ export class Sfx {
   ventOut(): void {
     const b = this.bus(null, 0.6);
     if (!b) return;
-    this.burst(b, { type: 'bandpass', f0: 900, q: 4, dur: 0.05, gain: 0.6 });
-    this.tone(b, { type: 'triangle', f0: 520, f1: 210, dur: 0.12, gain: 0.12, at: 0.02 });
-    this.burst(b, { type: 'highpass', f0: 5200, f1: 2600, dur: 0.95, gain: 0.3, at: 0.08 });
-    this.burst(b, { type: 'bandpass', f0: 2400, f1: 900, q: 1.2, dur: 0.7, gain: 0.16, at: 0.1 });
+    this.play(b, 'clunk', 0.7);
+    this.play(b, 'vent-hiss', 0.5, 0.06);
   }
 
   /** The fresh cell slides home and locks; the weapon hums back up. */
   cellIn(): void {
     const b = this.bus(null, 0.6);
     if (!b) return;
-    this.burst(b, { type: 'bandpass', f0: 1500, q: 5, dur: 0.035, gain: 0.6 });
-    this.burst(b, { type: 'bandpass', f0: 2900, q: 6, dur: 0.03, gain: 0.45, at: 0.06 });
-    this.tone(b, { type: 'sine', f0: 380, f1: 920, dur: 0.16, gain: 0.1, at: 0.05 });
+    this.play(b, 'slide-in', 0.5);
+    this.play(b, 'click', 0.7, 0.06);
+    this.play(b, 'servo-up', 0.12, 0.05);
   }
 
   /** The shoulder pod tips back and takes two rockets, one after the other, within `duration`. */
   podLoad(duration: number): void {
     const b = this.bus(null, 0.6);
     if (!b) return;
-    this.tone(b, { type: 'sawtooth', f0: 90, f1: 150, dur: 0.3, gain: 0.07 });
+    this.play(b, 'swing', 0.35, 0, 1.2);
     for (const share of [0.45, 0.8]) {
-      this.burst(b, { type: 'bandpass', f0: 420, q: 4, dur: 0.09, gain: 0.7, at: duration * share });
-      this.tone(b, { type: 'sine', f0: 130, f1: 70, dur: 0.12, gain: 0.4, at: duration * share });
+      this.play(b, 'slide-in', 0.4, duration * share - 0.12);
+      this.play(b, 'lock-heavy', 0.6, duration * share);
     }
   }
 
@@ -379,8 +496,8 @@ export class Sfx {
   podReady(): void {
     const b = this.bus(null, 0.6);
     if (!b) return;
-    this.burst(b, { type: 'bandpass', f0: 800, q: 4, dur: 0.05, gain: 0.5 });
-    this.tone(b, { type: 'triangle', f0: 990, dur: 0.09, gain: 0.14, at: 0.04 });
+    this.play(b, 'click', 0.6);
+    this.play(b, 'lock-light', 0.4, 0.04);
   }
 
   /** Magazine out (the mech's cannon). */
@@ -403,8 +520,8 @@ export class Sfx {
   dry(overheat = false): void {
     const b = this.bus(null, 0.5);
     if (!b) return;
-    this.burst(b, { type: 'bandpass', f0: 4000, q: 4, dur: 0.02, gain: 0.5 });
-    if (overheat) this.tone(b, { type: 'square', f0: 210, f1: 150, dur: 0.09, gain: 0.1 });
+    this.play(b, 'dry-click', 0.7);
+    if (overheat) this.play(b, 'servo-down', 0.25, 0.02, 0.8);
   }
 
   /**
@@ -422,29 +539,89 @@ export class Sfx {
       const d = Math.max(0.25, duration);
       const printAt = d * 0.3;
       const lockAt = d;
-      this.tone(b, { type: 'sawtooth', f0: 480, f1: 170, dur: printAt, gain: 0.04 });
-      this.burst(b, { type: 'bandpass', f0: 1800, q: 6, dur: 0.025, gain: 0.45, at: printAt - 0.02 });
-      this.burst(b, { type: 'bandpass', f0: 900, f1: 5200, q: 2.5, dur: d * 0.25, gain: 0.22, at: printAt });
-      this.tone(b, { type: 'sine', f0: 900, f1: 1900, dur: d * 0.25, gain: 0.025, at: printAt });
+      this.play(b, 'servo-down', 0.2);
+      this.play(b, 'lock-light', 0.35, printAt - 0.02);
+      this.play(b, 'printer', 0.3, printAt);
       if (weapon === 'scattergun') {
-        this.burst(b, { type: 'bandpass', f0: 950, q: 5, dur: 0.045, gain: 0.7, at: lockAt - 0.07 });
-        this.burst(b, { type: 'bandpass', f0: 760, q: 5, dur: 0.05, gain: 0.8, at: lockAt });
-        this.tone(b, { type: 'sine', f0: 130, f1: 60, dur: 0.13, gain: 0.32, at: lockAt });
+        this.play(b, 'lock-heavy', 0.6, lockAt - 0.07);
+        this.play(b, 'lock-heavy', 0.75, lockAt, 0.85);
       } else if (weapon === 'longshot') {
-        this.tone(b, { type: 'sine', f0: 420, f1: 2400, dur: d * 0.45, gain: 0.05, swell: true, at: d * 0.55 });
-        this.burst(b, { type: 'bandpass', f0: 680, q: 4, dur: 0.07, gain: 0.8, at: lockAt });
-        this.tone(b, { type: 'sine', f0: 95, f1: 48, dur: 0.2, gain: 0.34, at: lockAt });
+        this.play(b, 'servo-up', 0.18, d * 0.55, 0.8);
+        this.play(b, 'lock-heavy', 0.8, lockAt, 0.75);
       } else {
-        for (const at of [lockAt - 0.06, lockAt - 0.03, lockAt]) this.burst(b, { type: 'bandpass', f0: 2700, q: 7, dur: 0.02, gain: 0.5, at });
-        this.tone(b, { type: 'square', f0: 700, f1: 1500, dur: 0.06, gain: 0.035, at: lockAt - 0.04 });
+        for (const at of [lockAt - 0.06, lockAt - 0.03, lockAt]) this.play(b, 'click', 0.45, at, 1.2);
       }
     } else if (mount === 'shoulder') {
-      this.tone(b, { type: 'sawtooth', f0: 120, f1: 210, dur: 0.34, gain: 0.07 });
-      this.burst(b, { type: 'bandpass', f0: 520, q: 4, dur: 0.07, gain: 0.7, at: 0.3 });
-      this.tone(b, { type: 'sine', f0: 150, f1: 80, dur: 0.1, gain: 0.3, at: 0.3 });
+      this.play(b, 'swing', 0.45);
+      this.play(b, 'lock-heavy', 0.6, 0.3);
     } else {
       this.burst(b, { type: 'bandpass', f0: 500, f1: 1900, q: 1.5, dur: 0.15, gain: 0.4 });
     }
+  }
+
+  // ---------------------------------------------------------------- pilot movement
+  // `pos` null is the player's own pilot. Remote pilots are mixed louder than
+  // the distance fade alone would leave them: hearing an enemy coming is a
+  // big part of the game.
+
+  /**
+   * A footfall: the boot on the surface, and close up the suit's gear and the
+   * grit of a sprint; `weight` (0..1) grows with speed.
+   */
+  step(pos: Vec3 | null, surface: Surface, weight: number): void {
+    const b = this.bus(pos, pos ? 1.6 : 0.5);
+    if (!b) return;
+    this.play(b, surface === 'metal' ? 'step-metal' : 'step-hard', 0.35 + 0.4 * weight);
+    if (!this.hears(pos, 10)) return;
+    this.play(b, 'step-gear', 0.15 + 0.2 * weight);
+    if (surface === 'hard' && weight > 0.7) this.play(b, 'step-grit', 0.12);
+  }
+
+  /** A push off the ground or off a wall. */
+  jump(pos: Vec3 | null): void {
+    const b = this.bus(pos, pos ? 1.6 : 0.5);
+    if (!b) return;
+    this.play(b, 'jump', 0.35);
+    this.play(b, 'step-gear', 0.35);
+  }
+
+  /** Back on the ground; `impact` (0..1) is how hard, from the speed of the fall. */
+  land(pos: Vec3 | null, impact: number, surface: Surface): void {
+    const b = this.bus(pos, pos ? 1.8 : 0.6);
+    if (!b) return;
+    this.play(b, 'land', 0.3 + 0.5 * impact);
+    this.play(b, surface === 'metal' ? 'step-metal' : 'step-hard', 0.6);
+    this.play(b, 'step-gear', 0.4);
+    if (impact > 0.5) this.play(b, 'land-heavy', impact * 0.6);
+  }
+
+  /** Feet onto a wall to run along it. */
+  wallGrab(pos: Vec3 | null, surface: Surface): void {
+    const b = this.bus(pos, pos ? 1.6 : 0.5);
+    if (!b) return;
+    this.play(b, surface === 'metal' ? 'step-metal' : 'step-hard', 0.6, 0, 1.1);
+    this.play(b, 'step-gear', 0.35);
+  }
+
+  /** Hands on a ledge, hauling up. */
+  mantle(pos: Vec3 | null): void {
+    const b = this.bus(pos, pos ? 1.6 : 0.5);
+    if (!b) return;
+    this.play(b, 'lock-light', 0.3, 0, 0.8);
+    this.play(b, 'step-gear', 0.45, 0.08);
+  }
+
+  /** Dropping into a slide: grit spraying. The scrape itself is held while it lasts. */
+  slideStart(pos: Vec3 | null): void {
+    const b = this.bus(pos, pos ? 1.6 : 0.5);
+    if (b) this.play(b, 'slide-start', 0.45);
+  }
+
+  /** A jet pack lighting: a burst of air before the roar, which is held while it burns. */
+  jetIgnite(pos: Vec3 | null): void {
+    if (!this.allow(`jet-${pos ? 'far' : 'own'}`, 0.08)) return;
+    const b = this.bus(pos, pos ? 2 : 0.6);
+    if (b) this.play(b, 'jet-ignite', 0.45);
   }
 
   /** An enemy bot spotting the player. */
@@ -464,9 +641,8 @@ export class Sfx {
 
   /** A rocket leaving its tube: a thump, then the motor catching. */
   private rocket(b: AudioNode): void {
-    this.tone(b, { type: 'sine', f0: 140, f1: 48, dur: 0.18, gain: 0.8 });
-    this.burst(b, { type: 'bandpass', f0: 500, f1: 2600, q: 0.9, dur: 0.5, gain: 0.6 });
-    this.burst(b, { type: 'lowpass', f0: 900, f1: 200, dur: 0.6, gain: 0.35, at: 0.04 });
+    this.play(b, 'rocket-launch', 0.9);
+    this.play(b, 'rocket-motor', 0.5, 0.03);
   }
 
   /** One rocket of a mech's salvo. `pos` null is the player's own mech. */
@@ -481,10 +657,11 @@ export class Sfx {
     if (!this.allow('explosion', 0.04)) return;
     const b = this.bus(pos, big ? 5 : 3.2);
     if (!b) return;
-    this.burst(b, { type: 'bandpass', f0: 2600, dur: 0.05, gain: 0.8 });
-    this.burst(b, { type: 'lowpass', f0: 1800, f1: 90, dur: big ? 1.3 : 0.7, gain: 1 });
-    this.tone(b, { type: 'sine', f0: big ? 78 : 96, f1: 24, dur: big ? 0.9 : 0.5, gain: 1 });
-    if (big) this.burst(b, { type: 'bandpass', f0: 420, f1: 140, q: 2, dur: 1.5, gain: 0.5, at: 0.12 });
+    // The crack fades with distance faster than the rumble does.
+    const near = Math.max(0, 1 - this.distance(pos) / 60);
+    this.play(b, 'blast', 0.35 + 0.5 * near);
+    this.play(b, 'blast-body', 0.7, 0, big ? 0.8 : 1);
+    this.play(b, 'blast-low', big ? 1 : 0.8, 0, big ? 0.85 : 1);
   }
 
   /** A flak shell bursting: a sharp crack with little body, far smaller than a rocket. */

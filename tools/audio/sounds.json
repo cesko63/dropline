@@ -1,0 +1,207 @@
+{
+  "packs": {
+    "firearms": { "title": "The Free Firearm Sound Library", "author": "bart", "page": "https://opengameart.org/content/the-free-firearm-sound-library", "file": "Prepared%20SFX%20Library.7z" },
+    "bangs": { "title": "25 CC0 bang / firework SFX", "author": "rubberduck", "page": "https://opengameart.org/content/25-cc0-bang-firework-sfx", "file": "25-CC0-bang-sfx.zip" },
+    "breaking": { "title": "75 CC0 breaking / falling / hit sfx", "author": "rubberduck", "page": "https://opengameart.org/content/75-cc0-breaking-falling-hit-sfx", "file": "sfx_breaking_and_falling.zip" },
+    "metalwood": { "title": "100 CC0 metal and wood SFX", "author": "rubberduck", "page": "https://opengameart.org/content/100-cc0-metal-and-wood-sfx", "file": "100-CC0-wood-metal-SFX.zip" },
+    "sfx1": { "title": "100 CC0 SFX", "author": "rubberduck", "page": "https://opengameart.org/content/100-cc0-sfx", "file": "100-CC0-SFX_0.zip" },
+    "sfx2": { "title": "100 CC0 SFX #2", "author": "rubberduck", "page": "https://opengameart.org/content/100-cc0-sfx-2", "file": "sfx_100_v2.zip" },
+    "loops": { "title": "30 CC0 SFX loops", "author": "rubberduck", "page": "https://opengameart.org/content/30-cc0-sfx-loops", "file": "sfx_loops.zip" },
+    "scifi": { "title": "50 CC0 Sci-Fi SFX", "author": "rubberduck", "page": "https://opengameart.org/content/50-cc0-sci-fi-sfx", "file": "sci-fi-sfx.zip" },
+    "kenneyScifi": { "title": "Sci-Fi Sounds", "author": "Kenney", "page": "https://opengameart.org/content/sci-fi-sounds", "file": "sci-fi_sounds.zip" },
+    "kenneyDigital": { "title": "63 Digital sound effects", "author": "Kenney", "page": "https://opengameart.org/content/63-digital-sound-effects-lasers-phasers-space-etc", "file": "Digital_SFX_Set.zip" },
+    "steps": { "title": "Footsteps Leather, Cloth, Armor", "author": "HaelDB", "page": "https://opengameart.org/content/footsteps-leather-cloth-armor", "file": "footsteps.zip" },
+    "steps2": { "title": "Different steps on wood, stone, leaves, gravel and mud", "author": "TinyWorlds", "page": "https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud", "file": "%5Bkdd%5DDifferentSteps_0.zip" },
+    "jumpland": { "title": "Jump Landing Sound", "author": "qubodup", "page": "https://opengameart.org/content/jump-landing-sound", "file": "jumpland.wav" },
+    "steam": { "title": "Steam release sounds", "author": "bart", "page": "https://opengameart.org/content/steam-release-sounds", "file": "steam_hisses.zip" },
+    "metal": { "title": "Metal Interactions", "author": "qubodup", "page": "https://opengameart.org/content/metal-interactions", "file": "metal_interactions.7z" },
+    "clicks": { "title": "Equipment Clicks II", "author": "LFA", "page": "https://opengameart.org/content/equipment-clicks-ii", "file": "equipmentclicks.wav" },
+    "screams": { "title": "15 vocal male strain/hurt/pain/jump sounds", "author": "qubodup", "page": "https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds", "file": "slightscreams.7z" },
+    "wind": { "title": "Wind", "author": "IgnasD", "page": "https://opengameart.org/content/wind", "file": "wind.zip" },
+    "distant": { "title": "Muffled Distant Explosion", "author": "NenadSimic", "page": "https://opengameart.org/content/muffled-distant-explosion", "file": "NenadSimic%20-%20Muffled%20Distant%20Explosion.wav" }
+  },
+  "sounds": {
+    "carbine": { "length": 0.32, "from": [
+      ["firearms", "Prepared SFX Library/AR-15/D_32P.wav", 0.69],
+      ["firearms", "Prepared SFX Library/AR-15/D_32P.wav", 5.645],
+      ["firearms", "Prepared SFX Library/AK-47/C_28P.wav", 0.595],
+      ["firearms", "Prepared SFX Library/AK-47/C_28P.wav", 3.245]
+    ] },
+    "carbine-far": { "length": 0.9, "from": [
+      ["firearms", "Prepared SFX Library/AR-15/D_24P.wav", 0.535],
+      ["firearms", "Prepared SFX Library/AR-15/D_24P.wav", 3.9],
+      ["firearms", "Prepared SFX Library/AK-47/C_31P.wav", 0.32]
+    ] },
+    "scattergun": { "length": 0.5, "from": [
+      ["firearms", "Prepared SFX Library/Mossberg/N_30P.wav", 1.685],
+      ["firearms", "Prepared SFX Library/Mossberg/N_30P.wav", 4.955],
+      ["firearms", "Prepared SFX Library/Nova/O_21P.wav", 0.415],
+      ["firearms", "Prepared SFX Library/Nova/O_21P.wav", 3.455]
+    ] },
+    "scattergun-far": { "length": 1.1, "from": [
+      ["firearms", "Prepared SFX Library/Mossberg/N_26P.wav", 0.77],
+      ["firearms", "Prepared SFX Library/Mossberg/N_26P.wav", 4.57],
+      ["firearms", "Prepared SFX Library/Nova/O_17P.wav", 0.68]
+    ] },
+    "longshot": { "length": 0.6, "from": [
+      ["firearms", "Prepared SFX Library/Savage 10 .300 Blackout/T_27P.wav", 0.935],
+      ["firearms", "Prepared SFX Library/Savage 10 .300 Blackout/T_27P.wav", 4.965],
+      ["firearms", "Prepared SFX Library/Mosin Nagant/M_21P.wav", 1.02],
+      ["firearms", "Prepared SFX Library/Mosin Nagant/M_21P.wav", 5.015]
+    ] },
+    "longshot-far": { "length": 1.1, "from": [
+      ["firearms", "Prepared SFX Library/Savage 10 .300 Blackout/T_17P.wav", 0.845],
+      ["firearms", "Prepared SFX Library/Savage 10 .300 Blackout/T_17P.wav", 4.25],
+      ["firearms", "Prepared SFX Library/Mosin Nagant/M_26P.wav", 1.125]
+    ] },
+    "gun-body": { "length": 0.6, "from": [
+      ["firearms", "Prepared SFX Library/Tikka/W_29P.wav", 0.56],
+      ["firearms", "Prepared SFX Library/Tikka/W_29P.wav", 5.66],
+      ["firearms", "Prepared SFX Library/Arisaka/E_25P.wav", 0.51],
+      ["firearms", "Prepared SFX Library/Arisaka/E_25P.wav", 4.02]
+    ] },
+    "rocket-launch": { "length": 0.8, "from": [
+      ["bangs", "cannon_01.ogg"],
+      ["bangs", "cannon_02.ogg"],
+      ["bangs", "cannon_04.ogg"]
+    ] },
+    "rocket-motor": { "length": 1.7, "from": [["scifi", "rocket_01.ogg"]] },
+    "blast": { "length": 0.9, "from": [
+      ["bangs", "bang_01.ogg"],
+      ["bangs", "bang_06.ogg"],
+      ["bangs", "bang_07.ogg"],
+      ["bangs", "bang_09.ogg"]
+    ] },
+    "blast-body": { "length": 1.6, "from": [
+      ["kenneyScifi", "Audio/explosionCrunch_000.ogg"],
+      ["kenneyScifi", "Audio/explosionCrunch_001.ogg"],
+      ["kenneyScifi", "Audio/explosionCrunch_004.ogg"]
+    ] },
+    "blast-low": { "length": 1.6, "from": [
+      ["kenneyScifi", "Audio/lowFrequency_explosion_000.ogg"],
+      ["kenneyScifi", "Audio/lowFrequency_explosion_001.ogg"],
+      ["distant", ""]
+    ] },
+    "impact-hard": { "length": 0.25, "from": [
+      ["breaking", "bfh1_rock_hit_01.ogg"],
+      ["breaking", "bfh1_hit_04.ogg"],
+      ["breaking", "bfh1_hit_05.ogg"],
+      ["breaking", "bfh1_hit_09.ogg"],
+      ["sfx2", "sfx100v2_stones_02.ogg"]
+    ] },
+    "impact-metal": { "length": 0.25, "from": [
+      ["metalwood", "metal_hit_01.ogg"],
+      ["metalwood", "metal_hit_02.ogg"],
+      ["metalwood", "metal_hit_05.ogg"],
+      ["breaking", "bfh1_metal_hit_01.ogg"],
+      ["breaking", "bfh1_metal_hit_03.ogg"]
+    ] },
+    "hurt": { "length": 0.35, "from": [
+      ["breaking", "bfh1_hit_02.ogg"],
+      ["breaking", "bfh1_hit_07.ogg"],
+      ["breaking", "bfh1_metal_hit_04.ogg"],
+      ["breaking", "bfh1_metal_hit_05.ogg"]
+    ] },
+    "voice-pain": { "length": 0.5, "from": [
+      ["screams", "slightscream-01.flac"],
+      ["screams", "slightscream-02.flac"],
+      ["screams", "slightscream-08.flac"],
+      ["screams", "slightscream-11.flac"],
+      ["screams", "slightscream-12.flac"]
+    ] },
+    "voice-death": { "length": 0.8, "from": [
+      ["screams", "slightscream-05.flac"],
+      ["screams", "slightscream-10.flac"],
+      ["screams", "slightscream-15.flac"]
+    ] },
+    "vent-hiss": { "length": 0.9, "from": [
+      ["steam", "steam hisses - Marker #1.wav"],
+      ["steam", "steam hisses - Marker #2.wav"],
+      ["steam", "steam hisses - Marker #3.wav"],
+      ["steam", "steam hisses - Marker #4.wav"]
+    ] },
+    "clunk": { "length": 0.35, "from": [
+      ["metal", "metal_interactions/metal_interaction2.wav"],
+      ["metal", "metal_interactions/metal_button_press2.wav"]
+    ] },
+    "slide-in": { "length": 0.45, "from": [
+      ["metal", "metal_interactions/metal_interaction1.wav"],
+      ["metal", "metal_interactions/metal_button_press1.wav"]
+    ] },
+    "swing": { "length": 0.8, "from": [["metal", "metal_interactions/metal_swing1.wav"]] },
+    "click": { "length": 0.17, "from": [
+      ["clicks", "", 0.135],
+      ["clicks", "", 2.055],
+      ["clicks", "", 2.38],
+      ["clicks", "", 5.46]
+    ] },
+    "dry-click": { "length": 0.1, "from": [
+      ["clicks", "", 1.125],
+      ["clicks", "", 3.79]
+    ] },
+    "lock-heavy": { "length": 0.25, "from": [
+      ["breaking", "bfh1_metal_hit_02.ogg"],
+      ["breaking", "bfh1_metal_hit_04.ogg"],
+      ["breaking", "bfh1_metal_hit_06.ogg"]
+    ] },
+    "lock-light": { "length": 0.15, "from": [
+      ["metalwood", "hammer_02.ogg"],
+      ["metalwood", "hammer_03.ogg"],
+      ["metalwood", "metal_hit_04.ogg"]
+    ] },
+    "servo-up": { "length": 0.45, "from": [
+      ["kenneyDigital", "phaserUp1.mp3"],
+      ["kenneyDigital", "phaserUp3.mp3"]
+    ] },
+    "servo-down": { "length": 0.45, "from": [
+      ["kenneyDigital", "phaserDown1.mp3"],
+      ["kenneyDigital", "phaserDown3.mp3"]
+    ] },
+    "printer": { "length": 0.5, "from": [
+      ["kenneyScifi", "Audio/computerNoise_000.ogg", 0.5],
+      ["kenneyScifi", "Audio/computerNoise_001.ogg", 0.5]
+    ] },
+    "step-hard": { "length": 0.25, "from": [
+      ["steps2", "stone01.ogg"],
+      ["steps2", "wood01.ogg"],
+      ["steps2", "wood02.ogg"],
+      ["steps2", "wood03.ogg"],
+      ["sfx2", "sfx100v2_footstep_wood_01.ogg"],
+      ["sfx2", "sfx100v2_footstep_wood_03.ogg"],
+      ["sfx2", "sfx100v2_footstep_wood_04.ogg"]
+    ] },
+    "step-metal": { "length": 0.25, "from": [
+      ["steps", "footsteps/step_metal.ogg"],
+      ["steps", "footsteps/step_metal (2).ogg"],
+      ["steps", "footsteps/step_metal (3).ogg"],
+      ["steps", "footsteps/step_metal (4).ogg"]
+    ] },
+    "step-gear": { "length": 0.25, "from": [
+      ["steps", "footsteps/step_lth1.ogg"],
+      ["steps", "footsteps/step_lth2.ogg"],
+      ["steps", "footsteps/step_lth33.ogg"],
+      ["steps", "footsteps/step_lth4.ogg"]
+    ] },
+    "step-grit": { "length": 0.3, "from": [
+      ["sfx2", "sfx100v2_footstep_01.ogg"],
+      ["sfx2", "sfx100v2_footstep_02.ogg"]
+    ] },
+    "land": { "length": 0.4, "from": [["jumpland", ""]] },
+    "land-heavy": { "length": 0.4, "from": [
+      ["breaking", "bfh1_hit_02.ogg"],
+      ["breaking", "bfh1_hit_07.ogg"]
+    ] },
+    "jump": { "length": 0.25, "from": [["sfx2", "sfx100v2_air_03.ogg"]] },
+    "jet-ignite": { "length": 0.6, "from": [
+      ["sfx2", "sfx100v2_air_02.ogg"],
+      ["sfx2", "sfx100v2_air_01.ogg"]
+    ] },
+    "jet": { "loop": true, "length": 3.4, "from": [["kenneyScifi", "Audio/thrusterFire_001.ogg", 1.2]] },
+    "slide-start": { "length": 0.35, "from": [
+      ["sfx2", "sfx100v2_stones_01.ogg"],
+      ["sfx2", "sfx100v2_stones_03.ogg"]
+    ] },
+    "slide": { "loop": true, "length": 0.8, "from": [["loops", "rolling.ogg"]] },
+    "rush": { "loop": true, "length": 3.6, "from": [["wind", "wind/Wind2.ogg", 2.4]] }
+  }
+}

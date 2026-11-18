@@ -263,6 +263,11 @@ export class Avatar {
   }
 
   /** A flinch when hit. */
+  /** A foot came down this frame. */
+  get footfall(): boolean {
+    return this.anim.footfall;
+  }
+
   flinch(): void {
     this.anim.hit();
   }

@@ -28,7 +28,9 @@ import {
   type PlayerState,
   type Vec3,
 } from '@dropline/shared';
+import { PilotFoley } from './audio/pilotFoley';
 import { Sfx } from './audio/sfx';
+import { SurfaceSounds, type Surface } from './audio/surfaces';
 import { CameraRig } from './camera/cameraRig';
 import { ACTIONS, codeLabel, type Action } from './input/bindings';
 import { Input, PAD_START } from './input/input';
@@ -120,6 +122,8 @@ export class Game {
   private readonly viewmodel = new Viewmodel();
   private readonly hud = new Hud();
   private avatars: Avatar[] = [];
+  private foley: PilotFoley[] = [];
+  private readonly surfaces: SurfaceSounds;
   private mechAvatars: MechAvatar[] = [];
   private prev: Vec3[] = [];
   private drawn: Vec3[] = [];
@@ -177,10 +181,11 @@ export class Game {
       settled: (at, team) => this.fx.bleedOut(at, team),
       jet: (at, dir, burst) => {
         this.fx.runawayJet(at, dir, burst);
-        if (burst && Math.random() < 0.5) this.sfx.leap(at);
+        if (burst && Math.random() < 0.5) this.sfx.jetIgnite(at);
       },
       jetOut: (at) => this.fx.jetOut(at),
     });
+    this.surfaces = new SurfaceSounds(map, world);
     this.hud.debug = options.qa;
     this.seed = options.seed;
     this.startMeter = options.startMeter;
@@ -343,6 +348,7 @@ export class Game {
     this.viewmodel.setTeam(me.team);
     this.avatars = this.match.actors.map((a) => new Avatar(a.team, a.team === me.team && a !== me, a.id));
     for (const avatar of this.avatars) this.scene.add(avatar.root, avatar.laser);
+    this.foley = this.match.actors.map((a) => new PilotFoley(this.sfx, this.surfaces, a.id));
     this.mechAvatars = this.match.mechs.map((k) => new MechAvatar(k.team, k.team === me.team, frameOf(k)));
     for (const avatar of this.mechAvatars) this.scene.add(avatar.root);
     this.prev = this.match.actors.map((a) => ({ ...a.p.pos }));
@@ -529,10 +535,12 @@ export class Game {
       this.raise[a.id] += ((shouldered ? 1 : 0) - this.raise[a.id]) * (1 - Math.exp(-14 * dt));
       // A pilot in a mech is out of sight inside it.
       avatar.update(dt, a, this.drawn[a.id], (a !== me || rig.showsSelf) && !a.inMech, this.raise[a.id]);
+      if (a.alive && !a.inMech) this.foley[a.id].update(a.p, a === me ? null : this.drawn[a.id], avatar.footfall);
       // A marksman's laser runs from its muzzle along its view to whatever it meets.
       if (b && b.charge > 0 && a.alive && !a.inMech) avatar.setLaser(b.charge, b.charge >= BOTS.chargeLock, this.aimPoint(a));
       else avatar.setLaser(0, false, null);
     }
+    this.sfx.endFrame();
 
     this.smokeT += dt;
     const puff = this.smokeT > 0.11;
@@ -847,15 +855,18 @@ export class Game {
         // A cannon round is drawn thicker than a rifle's, a rail slug thicker still.
         const width = (firstPerson ? 0.02 : 0.04) * (a.inMech ? 2.2 : 1) * (e.weapon === 'lance' ? 2 : 1);
         let struck: Vec3 | null = null;
+        let surface: Surface = 'metal';
         for (const t of e.traces) {
           this.fx.tracer(muzzle, t.end, color, width);
           if (t.normal) {
             this.fx.impact(t.end, t.normal, a.inMech);
             struck = t.end;
+            surface = this.surfaces.struck(t.end, t.normal);
           } else if (t.shield) {
             this.shieldSpark(t.mech, t.end, 6);
           } else if (t.mech >= 0) {
             struck = t.end;
+            surface = 'metal';
           }
         }
         this.fx.flash(muzzle, (mine ? 2.5 : 4) * (a.inMech ? 2 : 1));
@@ -867,7 +878,7 @@ export class Game {
           if (source !== 'server') this.input.rumble(a.inMech ? 0.35 : 0, a.inMech ? 0.3 : (WEAPONS[e.weapon]?.pellets ?? 1) > 1 ? 0.45 : 0.18, a.inMech ? 70 : 45);
         }
         this.sfx.fire(e.weapon, mine ? null : a.p.pos);
-        if (struck) this.sfx.impact(struck);
+        if (struck) this.sfx.impact(struck, surface);
         break;
       }
       case 'damage': {
@@ -888,7 +899,7 @@ export class Game {
           this.rig.jolt(side, Math.min(1, 0.25 + e.amount / 50));
           this.input.rumble(Math.min(1, 0.25 + e.amount / 60), 0.5, 140);
           this.hud.bloodSplat(e.amount, me.team);
-          this.sfx.hurt();
+          this.sfx.hurt(e.amount);
         }
         break;
       }
@@ -914,6 +925,8 @@ export class Game {
           this.input.resetToggles();
           this.input.rumble(0.9, 0.7, 380);
           this.sfx.death();
+        } else {
+          this.sfx.deathCry(chest);
         }
         break;
       }

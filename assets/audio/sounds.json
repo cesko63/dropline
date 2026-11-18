@@ -1,0 +1,128 @@
+{
+  "carbine": {
+    "count": 4
+  },
+  "carbine-far": {
+    "count": 3
+  },
+  "scattergun": {
+    "count": 4
+  },
+  "scattergun-far": {
+    "count": 3
+  },
+  "longshot": {
+    "count": 4
+  },
+  "longshot-far": {
+    "count": 3
+  },
+  "gun-body": {
+    "count": 4
+  },
+  "rocket-launch": {
+    "count": 3
+  },
+  "rocket-motor": {
+    "count": 1
+  },
+  "blast": {
+    "count": 4
+  },
+  "blast-body": {
+    "count": 3
+  },
+  "blast-low": {
+    "count": 3
+  },
+  "impact-hard": {
+    "count": 5
+  },
+  "impact-metal": {
+    "count": 5
+  },
+  "hurt": {
+    "count": 4
+  },
+  "voice-pain": {
+    "count": 5
+  },
+  "voice-death": {
+    "count": 3
+  },
+  "vent-hiss": {
+    "count": 4
+  },
+  "clunk": {
+    "count": 2
+  },
+  "slide-in": {
+    "count": 2
+  },
+  "swing": {
+    "count": 1
+  },
+  "click": {
+    "count": 4
+  },
+  "dry-click": {
+    "count": 2
+  },
+  "lock-heavy": {
+    "count": 3
+  },
+  "lock-light": {
+    "count": 3
+  },
+  "servo-up": {
+    "count": 2
+  },
+  "servo-down": {
+    "count": 2
+  },
+  "printer": {
+    "count": 2
+  },
+  "step-hard": {
+    "count": 7
+  },
+  "step-metal": {
+    "count": 4
+  },
+  "step-gear": {
+    "count": 4
+  },
+  "step-grit": {
+    "count": 2
+  },
+  "land": {
+    "count": 1
+  },
+  "land-heavy": {
+    "count": 2
+  },
+  "jump": {
+    "count": 1
+  },
+  "jet-ignite": {
+    "count": 2
+  },
+  "jet": {
+    "count": 1,
+    "loop": 3.4,
+    "pad": 0.05
+  },
+  "slide-start": {
+    "count": 2
+  },
+  "slide": {
+    "count": 1,
+    "loop": 0.8,
+    "pad": 0.05
+  },
+  "rush": {
+    "count": 1,
+    "loop": 3.6,
+    "pad": 0.05
+  }
+}

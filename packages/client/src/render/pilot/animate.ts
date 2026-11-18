@@ -71,6 +71,8 @@ export class PilotAnimator {
   private lastSide = 0;
   /** Pod angle in chest space, for the avatar to read. */
   podPitch = 1.15;
+  /** A foot came down this frame (running, or running along a wall): the footstep sound goes here. */
+  footfall = false;
 
   constructor(
     private readonly bones: Skeleton,
@@ -93,6 +95,7 @@ export class PilotAnimator {
   update(dt: number, inp: AnimInput): void {
     const { s } = inp;
     this.time += dt;
+    this.footfall = false;
     this.flinch = Math.max(0, this.flinch - dt * 6);
     this.kick = Math.max(0, this.kick - dt * 12);
     for (const b of BONES) this.target[b].set(0, 0, 0);
@@ -150,7 +153,11 @@ export class PilotAnimator {
     const sprint = clamp((inp.speed - 6) / 3, 0, 1);
     // One cycle is two steps; steps lengthen with speed.
     const stepLen = 0.9 + 0.14 * Math.max(inp.speed, 2);
+    // A foot plants as its thigh reaches the front of the swing, a quarter cycle into each step.
+    const plant = (phase: number): number => Math.floor((phase - Math.PI / 2) / Math.PI);
+    const planted = plant(this.phase);
     this.phase += (Math.PI * gaitSpeed * dt) / stepLen;
+    this.footfall = plant(this.phase) !== planted && g > 0.25 && (running || s.wallrun.active);
     const sinL = Math.sin(this.phase);
     const cosL = Math.cos(this.phase);
 
