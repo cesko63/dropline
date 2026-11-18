@@ -317,7 +317,7 @@ function refresh(): void {
 
 let yaw = 0.35;
 let tilt = 0.2;
-let dist = 20;
+let dist = 13;
 let worst = 0;
 let dragging = false;
 canvas.addEventListener('pointerdown', (e) => {
