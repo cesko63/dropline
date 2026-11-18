@@ -40,6 +40,9 @@ export class Menu {
   private readonly offline = el<HTMLButtonElement>('play-offline');
   private readonly status = el('menu-status');
   private readonly controls = el('controls');
+  /** The controls list and its heading, beside the choices. */
+  private readonly manual = el('manual');
+  private readonly keys = el('menu-keys');
   private readonly settingsBox = el('settings');
   private readonly hangarBox = el('hangar');
   private readonly hangarSummary = el('hangar-summary');
@@ -99,7 +102,7 @@ export class Menu {
     this.before = this.resume.hidden ? 'menu' : 'resume';
     this.choose.hidden = true;
     this.resume.hidden = true;
-    this.controls.hidden = true;
+    this.manual.hidden = true;
     this.panel().classList.add('wide');
   }
 
@@ -110,7 +113,7 @@ export class Menu {
   }
 
   private hideSub(focus: string): void {
-    this.controls.hidden = false;
+    this.manual.hidden = false;
     this.panel().classList.remove('wide');
     if (this.before === 'menu') this.choose.hidden = false;
     else this.resume.hidden = false;
@@ -183,6 +186,19 @@ export class Menu {
       }),
     );
     this.start.textContent = pad ? 'Press A to resume' : 'Click to resume';
+    // The strip along the bottom: how to get around these screens on this device.
+    const strip: [string, string][] = pad
+      ? [['D-pad', 'Move'], ['A', 'Select'], ['B', 'Back'], ['LB RB', 'Tabs'], ['Menu', 'Resume']]
+      : [['Click', 'Select'], ['Tab', 'Move'], ['Esc', 'Back']];
+    this.keys.replaceChildren(
+      ...strip.map(([keys, what]) => {
+        const span = document.createElement('span');
+        const cap = document.createElement('b');
+        cap.textContent = keys;
+        span.append(cap, what);
+        return span;
+      }),
+    );
   }
 
   /** The callsign as typed, tidied and remembered for next time. */

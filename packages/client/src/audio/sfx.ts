@@ -3,11 +3,11 @@ import { SoundBank, type SoundName } from './bank';
 import type { Surface } from './surfaces';
 
 /**
- * Sound effects. Pilots (movement, weapons, impacts, hurt and death) play
- * recorded takes from the sound bank, a random take each time with a little
- * pitch jitter. Everything else is still a synthesized STAND-IN built from
- * filtered noise and short tones, until its recordings replace it (mechs, then
- * menus and HUD); callers will not change.
+ * Sound effects. Pilots (movement, weapons, impacts, hurt and death), the
+ * menus, the HUD and its alerts play recorded takes from the sound bank, a
+ * random take each time with a little pitch jitter. Mechs are still a
+ * synthesized STAND-IN built from filtered noise and short tones, until their
+ * recordings replace them; callers will not change.
  */
 
 const MAX_VOICES = 48;
@@ -130,61 +130,69 @@ export class Sfx {
     return out;
   }
 
-  /** Focus moved to another control, or a slider stepped. */
+  /** Focus moved to another control, a button hovered, or a slider stepped. */
   uiMove(): void {
     if (!this.allow('uiMove', 0.03)) return;
-    const d = this.ui(0.5);
-    if (d) this.tone(d, { type: 'triangle', f0: 1650, dur: 0.035, gain: 0.08 });
+    const d = this.ui(0.35);
+    if (d) this.play(d, 'ui-move', 0.6);
   }
 
   /** A button pressed, a switch flipped. */
   uiSelect(): void {
-    const d = this.ui(0.6);
-    if (!d) return;
-    this.tone(d, { type: 'triangle', f0: 880, f1: 1320, dur: 0.07, gain: 0.12 });
-    this.burst(d, { dur: 0.03, type: 'highpass', f0: 4000, gain: 0.05 });
+    const d = this.ui(0.5);
+    if (d) this.play(d, 'ui-select', 0.8);
   }
 
   /** Back out of a screen, or a binding cancelled. */
   uiBack(): void {
-    const d = this.ui(0.6);
-    if (d) this.tone(d, { type: 'triangle', f0: 990, f1: 620, dur: 0.08, gain: 0.11 });
+    const d = this.ui(0.5);
+    if (d) this.play(d, 'ui-back', 0.8);
+  }
+
+  /** A screen opens over the menu (settings, hangar): a press and a rising sweep. */
+  uiOpen(): void {
+    const d = this.ui(0.5);
+    if (!d) return;
+    this.play(d, 'ui-select', 0.7);
+    this.play(d, 'ui-open', 0.45, 0.03);
+  }
+
+  /** That screen closes again: a falling sweep under the back click. */
+  uiClose(): void {
+    const d = this.ui(0.5);
+    if (!d) return;
+    this.play(d, 'ui-back', 0.7);
+    this.play(d, 'ui-close', 0.4, 0.02);
   }
 
   /** Waiting for a key to bind. */
   uiListen(): void {
-    const d = this.ui(0.5);
-    if (!d) return;
-    this.tone(d, { type: 'sine', f0: 660, dur: 0.06, gain: 0.1 });
-    this.tone(d, { type: 'sine', f0: 660, dur: 0.06, gain: 0.1, at: 0.09 });
+    const d = this.ui(0.45);
+    if (d) this.play(d, 'ui-listen', 0.7);
   }
 
   /** A side or a mech frame picked in the hangar: a servo whir that locks with a clunk. */
   uiEquip(): void {
-    const d = this.ui(0.7);
+    const d = this.ui(0.6);
     if (!d) return;
-    this.tone(d, { type: 'sawtooth', f0: 180, f1: 420, dur: 0.12, gain: 0.05 });
-    this.burst(d, { dur: 0.12, type: 'bandpass', f0: 900, f1: 2600, q: 2, gain: 0.06 });
-    this.tone(d, { type: 'square', f0: 110, f1: 70, dur: 0.07, gain: 0.09, at: 0.12 });
-    this.burst(d, { dur: 0.05, type: 'lowpass', f0: 1400, gain: 0.14, at: 0.12 });
+    this.play(d, 'servo-up', 0.35, 0, 1.1);
+    this.play(d, 'lock-heavy', 0.8, 0.12);
+    this.play(d, 'ui-select', 0.4, 0.12);
   }
 
   /** The mech in the hangar preview touches down: a deep, short thud. */
   uiThud(): void {
     if (!this.allow('uiThud', 0.3)) return;
-    const d = this.ui(0.8);
+    const d = this.ui(0.7);
     if (!d) return;
-    this.tone(d, { type: 'sine', f0: 90, f1: 38, dur: 0.35, gain: 0.3 });
-    this.burst(d, { dur: 0.25, type: 'lowpass', f0: 600, f1: 120, gain: 0.25 });
-    this.burst(d, { dur: 0.4, type: 'bandpass', f0: 2400, f1: 900, q: 0.6, gain: 0.03, at: 0.03 });
+    this.play(d, 'land-heavy', 0.8, 0, 0.7);
+    this.play(d, 'blast-low', 0.35, 0, 1.3);
   }
 
-  /** A key bound; `swapped` when another action gave it up. */
+  /** A key bound; `swapped` when another action gave it up, which sounds lower. */
   uiBound(swapped: boolean): void {
-    const d = this.ui(0.6);
-    if (!d) return;
-    this.tone(d, { type: 'triangle', f0: 740, dur: 0.06, gain: 0.12 });
-    this.tone(d, { type: 'triangle', f0: swapped ? 830 : 1110, dur: 0.09, gain: 0.12, at: 0.06 });
+    const d = this.ui(0.5);
+    if (d) this.play(d, 'ui-confirm', 0.7, 0, swapped ? 0.8 : 1);
   }
 
   setListener(x: number, y: number, z: number, yaw: number): void {
@@ -418,24 +426,22 @@ export class Sfx {
     if (b) this.play(b, surface === 'metal' ? 'impact-metal' : 'impact-hard', 0.45, 0, 1 + Math.random() * 0.3);
   }
 
-  /** The player's round landing on an enemy. */
+  /** The player's round landing on an enemy: a crisp tick, with a ping on the head. */
   hit(head: boolean): void {
     if (!this.allow('hit', 0.03)) return;
     const b = this.bus(null, 0.7);
     if (!b) return;
-    this.burst(b, { type: 'bandpass', f0: 2400, q: 5, dur: 0.04, gain: 0.7 });
-    if (head) {
-      this.tone(b, { type: 'triangle', f0: 3100, dur: 0.1, gain: 0.2 });
-      this.tone(b, { type: 'triangle', f0: 4650, dur: 0.08, gain: 0.11 });
-    }
+    this.play(b, 'hit-tick', 0.8);
+    if (head) this.play(b, 'hit-head', 0.5, 0.01);
   }
 
+  /** The player's shot finished someone: a heavier tick on a metal thunk, and a low ping. */
   kill(): void {
     const b = this.bus(null, 0.8);
     if (!b) return;
-    this.burst(b, { type: 'lowpass', f0: 900, dur: 0.12, gain: 0.5 });
-    this.tone(b, { type: 'triangle', f0: 1560, dur: 0.18, gain: 0.2, at: 0.03 });
-    this.tone(b, { type: 'triangle', f0: 2340, dur: 0.24, gain: 0.13, at: 0.09 });
+    this.play(b, 'hit-tick', 0.9, 0, 0.8);
+    this.play(b, 'lock-light', 0.5, 0.01, 0.9);
+    this.play(b, 'hit-head', 0.45, 0.04, 0.6);
   }
 
   /** The player taking damage: a blow on the armour, and a grunt when it hurts (not on every graze). */
@@ -674,13 +680,12 @@ export class Sfx {
     this.tone(b, { type: 'sine', f0: 140, f1: 50, dur: 0.18, gain: 0.5 });
   }
 
-  /** The mech frame for the next call changed: a short rising chirp, higher for each frame in the list. */
+  /** The mech frame for the next call changed: a switch, higher for each frame in the list. */
   frameSelect(index: number): void {
     const b = this.bus(null, 0.7);
     if (!b) return;
-    const f = 520 * Math.pow(1.26, index);
-    this.tone(b, { type: 'square', f0: f, dur: 0.05, gain: 0.1 });
-    this.tone(b, { type: 'square', f0: f * 1.5, dur: 0.08, gain: 0.1, at: 0.06 });
+    this.play(b, 'ui-select', 0.7);
+    this.play(b, 'ui-move', 0.5, 0.05, Math.pow(1.12, index));
   }
 
   /** Jump jets: a roar that climbs, under a hiss. */
@@ -744,30 +749,26 @@ export class Sfx {
     }
   }
 
-  /** The mech meter is full. */
+  /** The mech meter is full: a rising run of chimes. */
   meterReady(): void {
     const b = this.bus(null, 0.8);
-    if (!b) return;
-    [523, 784, 1047].forEach((f, i) => this.tone(b, { type: 'triangle', f0: f, dur: 0.22, gain: 0.22, at: i * 0.09 }));
-    this.burst(b, { type: 'bandpass', f0: 300, f1: 1800, q: 2, dur: 0.3, gain: 0.25 });
+    if (b) this.play(b, 'streak-ready', 0.6);
   }
 
-  /** The call went out: a radio blip and a confirming tone. */
+  /** The call went out: a squelch of radio and a confirming tone. */
   mechCall(): void {
     const b = this.bus(null, 0.8);
     if (!b) return;
-    this.burst(b, { type: 'bandpass', f0: 2200, q: 6, dur: 0.05, gain: 0.5 });
-    this.tone(b, { type: 'square', f0: 660, dur: 0.07, gain: 0.12, at: 0.06 });
-    this.tone(b, { type: 'square', f0: 990, dur: 0.12, gain: 0.12, at: 0.15 });
+    this.play(b, 'radio', 0.4);
+    this.play(b, 'ui-confirm', 0.5, 0.1);
+    this.play(b, 'radio', 0.3, 0.36);
   }
 
   /** The call (or another mech action) was refused. */
   denied(): void {
     if (!this.allow('denied', 0.25)) return;
     const b = this.bus(null, 0.7);
-    if (!b) return;
-    this.tone(b, { type: 'square', f0: 160, dur: 0.09, gain: 0.2 });
-    this.tone(b, { type: 'square', f0: 120, dur: 0.14, gain: 0.2, at: 0.11 });
+    if (b) this.play(b, 'ui-error', 0.7);
   }
 
   /** A mech falling from the sky: a whistle that drops for exactly as long as the fall. */
@@ -867,20 +868,20 @@ export class Sfx {
     this.burst(b, { type: 'bandpass', f0: 380, q: 6, dur: 0.14, gain: 0.7 });
   }
 
-  /** Hull nearly gone: two notes, repeated by the caller while it lasts. */
+  /** Hull nearly gone: two falling beeps, repeated by the caller while it lasts. */
   hullAlarm(): void {
     if (!this.allow('alarm', 1.1)) return;
     const b = this.bus(null, 0.6);
     if (!b) return;
-    this.tone(b, { type: 'square', f0: 740, dur: 0.12, gain: 0.1 });
-    this.tone(b, { type: 'square', f0: 554, dur: 0.16, gain: 0.1, at: 0.16 });
+    this.play(b, 'alarm', 0.4);
+    this.play(b, 'alarm', 0.4, 0.2, 0.75);
   }
 
-  /** Standing where an enemy mech is about to land. */
+  /** Standing where an enemy mech is about to land: a fast, bright beep. */
   zoneWarn(): void {
     if (!this.allow('zone', 0.3)) return;
     const b = this.bus(null, 0.7);
-    if (b) this.tone(b, { type: 'square', f0: 1240, dur: 0.09, gain: 0.14 });
+    if (b) this.play(b, 'zone-beep', 0.5);
   }
 
   /** A mech blowing apart. */
@@ -904,15 +905,38 @@ export class Sfx {
     for (let i = 0; i < 3; i++) this.burst(b, { type: 'bandpass', f0: 1800 + i * 900, q: 4, dur: 0.04, gain: 0.25, at: 0.08 + i * 0.07 + Math.random() * 0.04 });
   }
 
+  /** Deployed (or redeployed): a rising sweep. */
   spawn(): void {
     const b = this.bus(null, 0.5);
-    if (b) this.burst(b, { type: 'bandpass', f0: 300, f1: 2600, q: 2, dur: 0.38, gain: 0.4 });
+    if (b) this.play(b, 'deploy', 0.5);
   }
 
+  /** The match is decided: a rising tone over a low boom for a win, a falling one for a loss. */
   matchEnd(won: boolean): void {
     const b = this.bus(null, 0.8);
     if (!b) return;
-    const notes = won ? [660, 880, 1320] : [440, 349, 262];
-    notes.forEach((f, i) => this.tone(b, { type: 'triangle', f0: f, dur: 0.45, gain: 0.25, at: i * 0.16 }));
+    this.play(b, 'blast-low', 0.5, 0, 0.8);
+    this.play(b, won ? 'match-win' : 'match-lose', 0.6, 0.05);
+  }
+
+  /** News about the match on the HUD (the lead changed, a side is near the score limit). */
+  callout(): void {
+    if (!this.allow('callout', 0.5)) return;
+    const b = this.bus(null, 0.6);
+    if (!b) return;
+    this.play(b, 'radio', 0.25);
+    this.play(b, 'callout', 0.6, 0.06);
+  }
+
+  /** The line to the server dropped: a burst of static; or it came back. */
+  link(up: boolean): void {
+    const d = this.ui(0.5);
+    if (!d) return;
+    if (up) {
+      this.play(d, 'ui-confirm', 0.6);
+      return;
+    }
+    for (const at of [0, 0.05, 0.13]) this.play(d, 'glitch', 0.5, at);
+    this.play(d, 'ui-error', 0.4, 0.15);
   }
 }

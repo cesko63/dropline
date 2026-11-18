@@ -18,7 +18,10 @@
     "clicks": { "title": "Equipment Clicks II", "author": "LFA", "page": "https://opengameart.org/content/equipment-clicks-ii", "file": "equipmentclicks.wav" },
     "screams": { "title": "15 vocal male strain/hurt/pain/jump sounds", "author": "qubodup", "page": "https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds", "file": "slightscreams.7z" },
     "wind": { "title": "Wind", "author": "IgnasD", "page": "https://opengameart.org/content/wind", "file": "wind.zip" },
-    "distant": { "title": "Muffled Distant Explosion", "author": "NenadSimic", "page": "https://opengameart.org/content/muffled-distant-explosion", "file": "NenadSimic%20-%20Muffled%20Distant%20Explosion.wav" }
+    "distant": { "title": "Muffled Distant Explosion", "author": "NenadSimic", "page": "https://opengameart.org/content/muffled-distant-explosion", "file": "NenadSimic%20-%20Muffled%20Distant%20Explosion.wav" },
+    "kenneyUi": { "title": "Interface Sounds", "author": "Kenney", "page": "https://opengameart.org/content/interface-sounds", "file": "kenney_interfaceSounds.zip" },
+    "kenneySwitches": { "title": "51 UI sound effects (buttons, switches and clicks)", "author": "Kenney", "page": "https://opengameart.org/content/51-ui-sound-effects-buttons-switches-and-clicks", "file": "UI_SFX_Set.zip" },
+    "beeps": { "title": "Interface beeps", "author": "bart", "page": "https://opengameart.org/content/interface-beeps", "file": "beeps.zip" }
   },
   "sounds": {
     "carbine": { "length": 0.32, "from": [
@@ -202,6 +205,49 @@
       ["sfx2", "sfx100v2_stones_03.ogg"]
     ] },
     "slide": { "loop": true, "length": 0.8, "from": [["loops", "rolling.ogg"]] },
-    "rush": { "loop": true, "length": 3.6, "from": [["wind", "wind/Wind2.ogg", 2.4]] }
+    "rush": { "loop": true, "length": 3.6, "from": [["wind", "wind/Wind2.ogg", 2.4]] },
+    "ui-move": { "length": 0.06, "from": [
+      ["kenneyUi", "Audio/tick_002.ogg"],
+      ["kenneyUi", "Audio/tick_004.ogg"]
+    ] },
+    "ui-select": { "length": 0.12, "from": [
+      ["kenneySwitches", "switch2.wav"],
+      ["kenneySwitches", "switch1.wav"]
+    ] },
+    "ui-back": { "length": 0.12, "from": [
+      ["kenneyUi", "Audio/back_002.ogg"],
+      ["kenneyUi", "Audio/back_004.ogg"]
+    ] },
+    "ui-open": { "length": 0.25, "from": [["kenneyUi", "Audio/maximize_009.ogg"]] },
+    "ui-close": { "length": 0.25, "from": [["kenneyUi", "Audio/minimize_009.ogg"]] },
+    "ui-error": { "length": 0.3, "from": [
+      ["kenneyUi", "Audio/error_006.ogg"],
+      ["kenneyUi", "Audio/error_005.ogg"]
+    ] },
+    "ui-confirm": { "length": 0.35, "from": [["kenneyUi", "Audio/confirmation_003.ogg"]] },
+    "ui-listen": { "length": 0.35, "from": [["kenneyUi", "Audio/question_002.ogg"]] },
+    "hit-tick": { "length": 0.06, "from": [
+      ["kenneySwitches", "switch13.wav"],
+      ["kenneySwitches", "switch14.wav"]
+    ] },
+    "hit-head": { "length": 0.15, "from": [
+      ["kenneyUi", "Audio/glass_005.ogg"],
+      ["kenneyUi", "Audio/glass_002.ogg"]
+    ] },
+    "deploy": { "length": 0.5, "from": [["kenneyUi", "Audio/maximize_005.ogg"]] },
+    "streak-ready": { "length": 0.5, "from": [["kenneyUi", "Audio/confirmation_004.ogg"]] },
+    "radio": { "length": 0.15, "from": [
+      ["kenneyUi", "Audio/scratch_001.ogg"],
+      ["kenneyUi", "Audio/scratch_002.ogg"]
+    ] },
+    "callout": { "length": 0.32, "from": [["kenneyUi", "Audio/confirmation_001.ogg"]] },
+    "alarm": { "length": 0.22, "from": [["beeps", "Beeps/beep-07.wav"]] },
+    "zone-beep": { "length": 0.09, "from": [["beeps", "Beeps/beep-11.wav"]] },
+    "glitch": { "length": 0.05, "from": [
+      ["kenneyUi", "Audio/glitch_002.ogg"],
+      ["kenneyUi", "Audio/glitch_004.ogg"]
+    ] },
+    "match-win": { "length": 0.6, "from": [["kenneyDigital", "highUp.mp3"]] },
+    "match-lose": { "length": 0.7, "from": [["kenneyDigital", "lowDown.mp3"]] }
   }
 }

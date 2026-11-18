@@ -154,7 +154,7 @@ export class SettingsScreen {
     if (!this.isOpen) return;
     this.stopListening(false);
     this.root.hidden = true;
-    this.sfx.uiBack();
+    this.sfx.uiClose();
     this.onClose();
   }
 

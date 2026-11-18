@@ -10,7 +10,7 @@ dropped from the front, the end faded out (loops: end cross-faded into the
 start), peak normalised to -1 dBFS, mono 44.1 kHz MP3 at 64 kb/s. Bytes are the
 whole source file (original) and the shipped take (runtime).
 
-116 files, 589 KB in all.
+143 files, 646 KB in all.
 
 ## Sources
 
@@ -33,6 +33,9 @@ whole source file (original) and the shipped take (runtime).
 - [15 vocal male strain/hurt/pain/jump sounds](https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds) by qubodup
 - [Wind](https://opengameart.org/content/wind) by IgnasD
 - [Muffled Distant Explosion](https://opengameart.org/content/muffled-distant-explosion) by NenadSimic
+- [Interface Sounds](https://opengameart.org/content/interface-sounds) by Kenney
+- [51 UI sound effects (buttons, switches and clicks)](https://opengameart.org/content/51-ui-sound-effects-buttons-switches-and-clicks) by Kenney
+- [Interface beeps](https://opengameart.org/content/interface-beeps) by bart
 
 ## Files
 
@@ -154,3 +157,30 @@ whole source file (original) and the shipped take (runtime).
 | slide-start-2.mp3 | 100 CC0 SFX #2 | rubberduck | sfx100v2_stones_03.ogg | 12455 | 3387 |
 | slide-1.mp3 | 30 CC0 SFX loops | rubberduck | rolling.ogg | 51513 | 7776 |
 | rush-1.mp3 | Wind | IgnasD | wind/Wind2.ogg @ 2.4 s | 57568 | 30137 |
+| ui-move-1.mp3 | Interface Sounds | Kenney | Audio/tick_002.ogg | 4514 | 670 |
+| ui-move-2.mp3 | Interface Sounds | Kenney | Audio/tick_004.ogg | 5031 | 1088 |
+| ui-select-1.mp3 | 51 UI sound effects (buttons, switches and clicks) | Kenney | switch2.wav | 52472 | 1506 |
+| ui-select-2.mp3 | 51 UI sound effects (buttons, switches and clicks) | Kenney | switch1.wav | 55556 | 1506 |
+| ui-back-1.mp3 | Interface Sounds | Kenney | Audio/back_002.ogg | 7029 | 1297 |
+| ui-back-2.mp3 | Interface Sounds | Kenney | Audio/back_004.ogg | 6923 | 1297 |
+| ui-open-1.mp3 | Interface Sounds | Kenney | Audio/maximize_009.ogg | 7650 | 2342 |
+| ui-close-1.mp3 | Interface Sounds | Kenney | Audio/minimize_009.ogg | 7665 | 2133 |
+| ui-error-1.mp3 | Interface Sounds | Kenney | Audio/error_006.ogg | 8288 | 2969 |
+| ui-error-2.mp3 | Interface Sounds | Kenney | Audio/error_005.ogg | 7266 | 2969 |
+| ui-confirm-1.mp3 | Interface Sounds | Kenney | Audio/confirmation_003.ogg | 9535 | 3178 |
+| ui-listen-1.mp3 | Interface Sounds | Kenney | Audio/question_002.ogg | 9455 | 3178 |
+| hit-tick-1.mp3 | 51 UI sound effects (buttons, switches and clicks) | Kenney | switch13.wav | 4916 | 879 |
+| hit-tick-2.mp3 | 51 UI sound effects (buttons, switches and clicks) | Kenney | switch14.wav | 5884 | 879 |
+| hit-head-1.mp3 | Interface Sounds | Kenney | Audio/glass_005.ogg | 6206 | 1715 |
+| hit-head-2.mp3 | Interface Sounds | Kenney | Audio/glass_002.ogg | 4917 | 1506 |
+| deploy-1.mp3 | Interface Sounds | Kenney | Audio/maximize_005.ogg | 20900 | 4641 |
+| streak-ready-1.mp3 | Interface Sounds | Kenney | Audio/confirmation_004.ogg | 12391 | 4432 |
+| radio-1.mp3 | Interface Sounds | Kenney | Audio/scratch_001.ogg | 8989 | 1715 |
+| radio-2.mp3 | Interface Sounds | Kenney | Audio/scratch_002.ogg | 9319 | 1715 |
+| callout-1.mp3 | Interface Sounds | Kenney | Audio/confirmation_001.ogg | 8968 | 2969 |
+| alarm-1.mp3 | Interface beeps | bart | Beeps/beep-07.wav | 149984 | 2342 |
+| zone-beep-1.mp3 | Interface beeps | bart | Beeps/beep-11.wav | 149984 | 1297 |
+| glitch-1.mp3 | Interface Sounds | Kenney | Audio/glitch_002.ogg | 5473 | 879 |
+| glitch-2.mp3 | Interface Sounds | Kenney | Audio/glitch_004.ogg | 5225 | 670 |
+| match-win-1.mp3 | 63 Digital sound effects | Kenney | highUp.mp3 | 11705 | 3596 |
+| match-lose-1.mp3 | 63 Digital sound effects | Kenney | lowDown.mp3 | 16818 | 5686 |

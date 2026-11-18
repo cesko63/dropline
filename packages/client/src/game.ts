@@ -149,6 +149,11 @@ export class Game {
   private nextRocket = LOCAL_ROCKETS;
   /** When the match ended (milliseconds), for the countdown to the next one online. */
   private endedAt = 0;
+  /** The side last ahead on score (-1 before anyone was), and the sides already told they are close to winning. */
+  private leader = -1;
+  private nearWin = [false, false];
+  /** Whether the line to the server was up last frame, for its sound. */
+  private linkUp = true;
   private accumulator = 0;
   private lastTime = 0;
   private pendingEvents = 0;
@@ -362,6 +367,8 @@ export class Game {
     this.fx.clear();
     this.ragdolls.clear();
     this.hud.reset(this.match, me);
+    this.leader = -1;
+    this.nearWin = [false, false];
     this.input.yaw = me.p.yaw;
     this.input.pitch = 0;
     this.input.weapon = -1;
@@ -591,9 +598,15 @@ export class Game {
     this.hud.update(dt, m, me, rig.outside, scoped, cam, s.yaw);
     if (conn) {
       this.hud.updateNet(dt, conn.net.stats, conn.status, conn.secondsLeft);
+      const up = conn.status === 'online';
+      if (up !== this.linkUp) {
+        this.linkUp = up;
+        this.sfx.link(up);
+      }
       if (m.over) this.hud.setEndHint(`NEXT MATCH IN ${Math.max(0, Math.ceil(NET.restartSeconds - (performance.now() - this.endedAt) / 1000))}`);
     }
     if (this.hud.inDropZone && !paused) this.sfx.zoneWarn();
+    this.scoreNews(m, me);
 
     this.renderer.clear();
     this.renderer.render(this.scene, cam);
@@ -630,6 +643,33 @@ export class Game {
     }
     for (const e of net.advance(performance.now(), dt)) this.onEvent(e, 'server');
     return cmd;
+  }
+
+  /**
+   * Callouts for the score: a side takes the lead from the other, or comes
+   * within 10 points of winning. Each is said once.
+   */
+  private scoreNews(m: MatchState, me: Actor): void {
+    if (m.over) return;
+    const ally = me.team;
+    const lead = m.score[ally] > m.score[1 - ally] ? ally : m.score[ally] < m.score[1 - ally] ? 1 - ally : -1;
+    if (lead >= 0 && lead !== this.leader) {
+      // The first score of the match is not news; taking it back is.
+      if (this.leader >= 0) {
+        if (lead === ally) this.hud.showCallout('LEAD TAKEN', `${COMBAT.teams[ally].name} ahead`, 'good');
+        else this.hud.showCallout('LEAD LOST', `${COMBAT.teams[1 - ally].name} ahead`, 'bad');
+        this.sfx.callout();
+      }
+      this.leader = lead;
+    }
+    for (const team of [ally, 1 - ally]) {
+      if (this.nearWin[team] || m.score[team] < m.scoreLimit - 10) continue;
+      this.nearWin[team] = true;
+      const left = m.scoreLimit - m.score[team];
+      if (team === ally) this.hud.showCallout(`${left} TO WIN`, 'Victory is close', 'good');
+      else this.hud.showCallout(`ENEMY ${left} TO WIN`, `${COMBAT.teams[team].name} closing in`, 'bad');
+      this.sfx.callout();
+    }
   }
 
   /**
@@ -916,7 +956,7 @@ export class Game {
         if (tearsApart(e.weapon)) this.fx.gib(body.gib(), victim.team, this.hitDir[victim.id]);
         else this.dropBody(victim, chest);
         if (killer === me) {
-          this.hud.showBanner('ELIMINATED ', victim.name);
+          this.hud.showBanner('ELIMINATED ', victim.name, '', 1);
           this.rig.kick(3);
           this.sfx.kill();
         }
@@ -1124,7 +1164,7 @@ export class Game {
         this.shake(this.near(e.pos, 55));
         if (killer) this.hud.addKill(killer, owner, killLabel(e.weapon), me, ` · ${frameOf(m.mechs[e.mech]).short}`);
         if (killer === me) {
-          this.hud.showBanner('MECH DESTROYED ', owner.name);
+          this.hud.showBanner('MECH DESTROYED ', owner.name, '', COMBAT.mech.destroyScore);
           this.rig.kick(6);
           this.sfx.kill();
         }

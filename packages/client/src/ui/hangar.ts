@@ -204,7 +204,7 @@ export class Hangar {
   close(): void {
     if (!this.isOpen) return;
     this.root.hidden = true;
-    this.sfx.uiBack();
+    this.sfx.uiClose();
     this.onClose();
   }
 
