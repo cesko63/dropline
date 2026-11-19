@@ -791,6 +791,70 @@ body {
   animation: alert-in 0.15s ease-out;
 }
 
+/* One coaching line under the prompt: a tick that fills while it waits, then the words. */
+#coach {
+  position: absolute;
+  left: 50%;
+  top: 71%;
+  max-width: calc(100% - 32px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px 6px 12px;
+  border-left: 3px solid var(--cool);
+  background: rgba(8, 10, 13, 0.72);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease-out,
+    transform 0.2s ease-out,
+    visibility 0s linear 0.2s;
+}
+
+#coach.on {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-4px);
+  transition:
+    opacity 0.18s ease-out,
+    transform 0.18s ease-out;
+}
+
+/* Done: the mark fills in as it leaves. */
+#coach.done {
+  border-left-color: var(--ink);
+}
+
+#coach i {
+  width: 8px;
+  height: 8px;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+  flex: none;
+}
+
+#coach.done i {
+  background: var(--ink);
+}
+
+#coach-text b,
+#death .tip b {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 0.35em;
+  margin: 0 0.1em;
+  border: 1px solid rgba(241, 243, 241, 0.7);
+  border-radius: 3px;
+  background: rgba(8, 10, 13, 0.55);
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
 /* ---------------------------------------------------------------- bottom left: health */
 
 #vitals {
@@ -1418,6 +1482,19 @@ body {
   margin-top: 6px;
   background: var(--faint);
   overflow: hidden;
+}
+
+#death .tip {
+  margin-top: 12px;
+  max-width: 560px;
+  white-space: normal;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+#death .tip::before {
+  content: 'TIP · ';
+  color: var(--dim);
 }
 
 #death-bar {
@@ -2265,6 +2342,7 @@ body.pad .panel :focus {
 #weapon,
 #banner,
 #prompt,
+#coach,
 #death,
 #end {
   zoom: var(--hud-scale, 1);

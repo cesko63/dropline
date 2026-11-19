@@ -151,13 +151,33 @@ preview and the triggers zoom. The pad rumbles on shots, hits, blasts, a mech's
 footfalls and a death. With aim slowdown on, the view turns at 55% speed while
 the crosshair rests on a visible enemy pilot; it never pulls the aim.
 
+## Learning to play
+
+Nobody has to read the controls list first. In play, one short line under the
+crosshair asks for one move at a time with its key (or pad button): move,
+jump and double jump, jet thrust, slide, wallrun, change the arm's barrel, the
+shoulder launcher. A line leaves the moment the move is done, with a tick,
+and is never asked for again. One the player ignores steps aside after 15 s
+and comes back 45 s later. The moments that matter jump the queue and stay
+until they pass: the meter is full (call the mech), the mech is standing by
+(go and climb in), the arm is nearly empty (vent it), and the first time in
+each frame's cockpit (its move, then its ability). A move done before it is
+asked for counts too. Taken down, the death card adds one tip that fits how
+(a mech landing on you, a stomp, a marksman's laser, a headshot, a fall), once
+per kind.
+
+What a player has learned is kept with the settings, so a returning player
+sees none of it. **Settings → Controls → Help** turns the tips off or shows
+every one again; the full controls list stays on the start and pause screens.
+
 ## Settings
 
 Changes apply at once and are saved in the browser.
 
 - **Controls:** mouse sensitivity, sensitivity while aiming, invert up and down,
   hold or toggle for aim, crouch and sprint; pad look speed, stick deadzone
-  (round, with the rest of the throw rescaled), aim slowdown, vibration.
+  (round, with the rest of the throw rescaled), aim slowdown, vibration;
+  coaching tips on or off, and a button that shows every tip again.
 - **Bindings:** two keys or mouse buttons and one pad button per action. Press
   the new key; Esc (MENU on a pad) cancels, Backspace clears. A key that
   already belongs to another action swaps over: that action takes the old key,
@@ -567,8 +587,8 @@ packages/
     src/render/           Scene, map, pilots, mechs, first-person weapons, cockpit, effects
     src/render/fx/        Particle sprites and the effects' painted textures
     src/audio/            Sound: the recorded sound bank, effects, pilots' footsteps and movement, map ambience, music
-    src/ui/               HUD, start screen, settings screen, pad menu navigation
-    tests/                Settings, bindings, stick and sound tests
+    src/ui/               HUD, coaching lines, start screen, settings screen, pad menu navigation
+    tests/                Settings, bindings, stick, sound and coaching tests
   server/             Dedicated game server (Node, WebSocket)
     src/index.ts          Sockets, the tick loop, /health
     src/rooms/room.ts     One match: seats, command queues, snapshots, reconnects
@@ -741,5 +761,9 @@ packages/
       3. Menus, HUD and alerts (done)
       4. Ambience for Spire Nine (done)
       5. Music, with its own volume (done)
-   9. Closing pass: teaching, performance, error cards, balance
+   9. Closing pass
+      1. Teaching: coaching lines in play, death-card tips (done)
+      2. Error cards: lost connection, failed load, a crash, each with a way back
+      3. Performance: measured frame times, a lighter worst case
+      4. Balance: weapons, mech frames and bots on bot matches
 6. Deployment

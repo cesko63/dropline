@@ -204,6 +204,18 @@ export class Sfx {
     this.play(d, 'blast-low', 0.35, 0, 1.3);
   }
 
+  /** A coaching line comes up: a soft, high tick. */
+  coachIn(): void {
+    const d = this.ui(0.3);
+    if (d) this.play(d, 'ui-listen', 0.5, 0, 1.25);
+  }
+
+  /** The player did what the coaching line asked. */
+  coachDone(): void {
+    const d = this.ui(0.45);
+    if (d) this.play(d, 'ui-confirm', 0.6, 0, 1.2);
+  }
+
   /** A key bound; `swapped` when another action gave it up, which sounds lower. */
   uiBound(swapped: boolean): void {
     const d = this.ui(0.5);

@@ -24,6 +24,10 @@ export function cleanName(raw: string): string {
     .slice(0, NET.nameLength);
 }
 
+/** What the two mech buttons do, for every frame. */
+const MECH_ROW = (k: (a: Action) => string): string =>
+  `${k('jump')}: dash (Halberd), stomp (Bastion), leap (Lynx). ${k('ads')}: rocket salvo, shield, cloak`;
+
 export class Menu {
   onOnline: (name: string) => void = () => {};
   onOffline: () => void = () => {};
@@ -146,7 +150,7 @@ export class Menu {
           [`${k('nextWeapon')} · ${k('weapon4')}`, 'Next arm barrel · raise the shoulder launcher'],
           [k('call'), 'Call your mech where you look, once the meter is full'],
           [k('use'), 'Climb into your mech, or out of it'],
-          ['In the mech', `${k('jump')} dashes, ${k('ads')} fires the rocket salvo`],
+          ['In the mech', MECH_ROW(k)],
           [k('toggleView'), 'First / third person'],
           [k('swapShoulder'), 'Third person: look over the other shoulder'],
           [k('respawn'), 'Redeploy at a spawn point'],
@@ -166,7 +170,8 @@ export class Menu {
           [`${k('weapon1')} ${k('weapon2')} ${k('weapon3')} ${k('weapon4')} · ${k('nextWeapon')} · Wheel`, 'Arm barrels: carbine, scattergun, marksman. The fourth is the shoulder launcher'],
           [k('call'), 'Call your mech where you look, once the meter is full'],
           [k('use'), 'Climb into your mech, or out of it'],
-          ['In the mech', `${k('jump')} dashes, ${k('ads')} fires the rocket salvo`],
+          ['In the mech', MECH_ROW(k)],
+          [k('nextFrame'), 'Change the frame your next call brings'],
           [k('toggleView'), 'First / third person'],
           [k('swapShoulder'), 'Third person: look over the other shoulder'],
           [k('respawn'), 'Redeploy at a spawn point'],

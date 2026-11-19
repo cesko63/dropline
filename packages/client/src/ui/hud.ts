@@ -142,6 +142,11 @@ export class Hud {
   private readonly markerText = new Text(el('mech-marker-text'));
   private readonly prompt = el('prompt');
   private readonly promptText = new Text(el('prompt'));
+  private readonly coach = el('coach');
+  private readonly coachText = el('coach-text');
+  /** The coaching line as given, with `{action}` names still in it. */
+  private coachRaw = '';
+  private coachLeave = 0;
   private readonly warn = el('warn');
   private readonly net = el('net');
   private readonly netText = new Text(el('net-text'));
@@ -549,7 +554,8 @@ export class Hud {
     const dy = me.p.pos.y - k.pos.y;
     const canBoard = k.state === 'idle' && me.alive && !me.inMech && dist <= R.embark.range && dy > -2 && dy < F.body.height + 1.5;
     this.promptText.set(canBoard ? `${this.keyOf('use')} · EMBARK` : '');
-    this.prompt.classList.toggle('on', canBoard && !m.over);
+    this.prompting = canBoard && !m.over;
+    this.prompt.classList.toggle('on', this.prompting);
 
     // Standing where an enemy mech is about to land.
     let danger = false;
@@ -565,6 +571,40 @@ export class Hud {
 
   /** True while the player stands in an enemy mech's landing zone. */
   inDropZone = false;
+  /** True while the climb-in prompt is up. */
+  prompting = false;
+
+  /**
+   * The coaching line: `text` with `{action}` names drawn as keycaps, or '' to
+   * take it away. `done` marks it as done for a moment before it leaves.
+   */
+  setCoach(text: string, done = false): void {
+    if (text === this.coachRaw && !done) return;
+    clearTimeout(this.coachLeave);
+    if (text) {
+      this.coachRaw = text;
+      this.coach.classList.remove('done');
+      this.coachText.replaceChildren(...this.keycaps(text));
+      this.coach.classList.add('on');
+      return;
+    }
+    this.coachRaw = '';
+    if (!done) {
+      this.coach.classList.remove('on', 'done');
+      return;
+    }
+    this.coach.classList.add('done');
+    this.coachLeave = window.setTimeout(() => this.coach.classList.remove('on', 'done'), 600);
+  }
+
+  /** Text with each `{action}` turned into a keycap of its key. */
+  private keycaps(text: string): (Node | string)[] {
+    return text.split(/(\{\w+\})/).map((part) => {
+      const a = /^\{(\w+)\}$/.exec(part);
+      if (!a) return part;
+      return Object.assign(document.createElement('b'), { textContent: this.keyOf(a[1] as Action) || '?' });
+    });
+  }
 
   /** The player hurt this mech: show its hull for a while. */
   revealMech(id: number): void {
@@ -787,8 +827,12 @@ export class Hud {
     );
   }
 
-  showDeath(by: string): void {
+  /** The death card: who did it, and a tip that fits (or ''). */
+  showDeath(by: string, tip = ''): void {
     el('death-by').textContent = by;
+    const t = el('death-tip');
+    t.hidden = tip === '';
+    t.replaceChildren(...this.keycaps(tip));
     this.deathBar.style.transform = 'scaleX(0)';
     this.death.classList.add('on');
   }
@@ -816,6 +860,7 @@ export class Hud {
     this.warn.classList.remove('on');
     this.callout.classList.remove('on');
     this.prompt.classList.remove('on');
+    this.setCoach('');
     this.end.classList.toggle('lost', !won);
     this.end.classList.add('on');
   }
@@ -895,6 +940,7 @@ export class Hud {
     for (const node of document.querySelectorAll<HTMLElement>('[data-key]')) node.textContent = this.keyOf(node.dataset.key as Action);
     this.lastSlots = '';
     this.endHint.set(this.fill(this.endHintRaw));
+    if (this.coachRaw) this.coachText.replaceChildren(...this.keycaps(this.coachRaw));
   }
 
   /** The frame counter and the size of the HUD panels, from the settings. */

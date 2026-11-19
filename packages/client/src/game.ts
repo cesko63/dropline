@@ -46,6 +46,7 @@ import { createEnvironment, createRenderer, type Environment } from './render/sc
 import { Viewmodel } from './render/viewmodel';
 import type { LoadoutStore } from './settings/loadout';
 import { verticalFov, type Settings, type SettingsStore } from './settings/settings';
+import { Coach, DEATH_TIPS, deathTipKey } from './ui/coach';
 import { Hud } from './ui/hud';
 
 /** Longest frame the simulation will try to catch up on, seconds. */
@@ -127,6 +128,9 @@ export class Game {
   private readonly ragdolls: Ragdolls;
   private readonly viewmodel = new Viewmodel();
   private readonly hud = new Hud();
+  private readonly coach: Coach;
+  /** Meters the player has covered on foot this life, for the first lesson. */
+  private moved = 0;
   private avatars: Avatar[] = [];
   private foley: PilotFoley[] = [];
   private readonly ambience: Ambience;
@@ -210,6 +214,14 @@ export class Game {
 
     this.settings = options.settings;
     this.loadout = options.loadout;
+    this.coach = new Coach(this.settings.value.learned);
+    this.coach.onLearn = (id) => {
+      if (this.coach.current?.id === id) {
+        this.hud.setCoach('', true);
+        this.sfx.coachDone();
+      }
+      this.settings.set({ learned: [...this.settings.value.learned, id] });
+    };
     this.input = new Input(canvas, this.settings.value);
     this.input.onPlayingChange = (playing) => {
       this.hud.showOverlay(!playing);
@@ -279,6 +291,9 @@ export class Game {
 
   private keysChanged(): void {
     this.hud.refreshKeys();
+    // A coaching line for the keyboard reads differently on a pad.
+    const lesson = this.coach.current;
+    if (lesson) this.hud.setCoach(lesson.text[this.input.device === 'pad' ? 1 : 0]);
     this.onKeysChange();
   }
 
@@ -292,6 +307,9 @@ export class Game {
     this.sfx.music.setVolume(s.musicVolume);
     this.hud.setMuted(s.muted);
     this.hud.setDisplay(s.showFps, s.hudScale);
+    this.coach.enabled = s.tips;
+    // "Show every tip again" empties the list.
+    if (s.learned.length === 0) this.coach.forget();
     this.keysChanged();
   }
 
@@ -640,6 +658,7 @@ export class Game {
     // Fully aimed, a scoped weapon swaps its model for the scope view.
     const scoped = def.scope && me.ads > 0.9 && me.alive && !rig.outside;
     this.hud.update(dt, m, me, rig.outside, scoped, cam, s.yaw);
+    this.updateCoach(dt, m, me);
     if (conn) {
       this.hud.updateNet(dt, conn.net.stats, conn.status, conn.secondsLeft);
       const up = conn.status === 'online';
@@ -657,6 +676,31 @@ export class Game {
     if (!rig.outside && !scoped) {
       this.renderer.clearDepth();
       this.renderer.render(this.viewmodel.scene, this.viewmodel.camera);
+    }
+  }
+
+  /** A tip for the death card that fits how the player died, once per player. */
+  private deathTip(weapon: string, head: boolean): string {
+    const key = deathTipKey(weapon, head);
+    const id = `death-${key}`;
+    if (!key || !this.settings.value.tips || this.coach.has(id)) return '';
+    this.coach.learn(id);
+    return DEATH_TIPS[key];
+  }
+
+  /** The coaching line: what to teach now, and its sound when it comes up. */
+  private updateCoach(dt: number, m: MatchState, me: Actor): void {
+    const active = me.alive && !m.over && (this.input.playing || this.input.override !== null);
+    if (active && me.p.grounded && !me.inMech) this.moved += Math.hypot(me.p.vel.x, me.p.vel.z) * dt;
+    const before = this.coach.current;
+    this.coach.update(dt, { m, me, mech: m.mechs[me.id], moved: this.moved, prompting: this.hud.prompting }, active);
+    const now = this.coach.current;
+    if (now === before) return;
+    if (now) {
+      this.hud.setCoach(now.text[this.input.device === 'pad' ? 1 : 0]);
+      this.sfx.coachIn();
+    } else if (before && !this.coach.has(before.id)) {
+      this.hud.setCoach('');
     }
   }
 
@@ -791,6 +835,8 @@ export class Game {
       this.input.pitch = 0;
     }
     this.hud.hideDeath();
+    this.moved = 0;
+    this.coach.respawned();
     this.input.resetToggles();
     this.sfx.spawn();
   }
@@ -1018,7 +1064,7 @@ export class Game {
           this.sfx.kill();
         }
         if (victim === me) {
-          this.hud.showDeath(killer ? `${killer.name} · ${killLabel(e.weapon)}` : 'THE FALL');
+          this.hud.showDeath(killer ? `${killer.name} · ${killLabel(e.weapon)}` : 'THE FALL', this.deathTip(e.weapon, e.head));
           this.input.resetToggles();
           this.input.rumble(0.9, 0.7, 380);
           this.sfx.death();

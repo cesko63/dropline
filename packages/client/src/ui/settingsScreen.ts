@@ -200,6 +200,9 @@ export class SettingsScreen {
         this.slider('deadzone', 'Stick deadzone', 'Raise it if the view drifts with the stick let go.'),
         this.toggle('aimSlowdown', 'Aim slowdown', 'The view turns slower while the crosshair rests on an enemy pilot.'),
         this.toggle('vibration', 'Vibration'),
+        this.section('Help'),
+        this.toggle('tips', 'Coaching tips', 'One short line at a time in play that teaches a move with its key, and a tip when you are taken down.'),
+        this.replayTips(),
       );
     } else if (tab === 'bindings') {
       rows.push(...this.bindingRows());
@@ -417,6 +420,20 @@ export class SettingsScreen {
   }
 
   // ---------------------------------------------------------------- the rest
+
+  /** Forget which tips were seen, so every one shows again. */
+  private replayTips(): HTMLElement {
+    const b = h('button', 'set-switch', 'Show again');
+    b.type = 'button';
+    b.id = 'set-replay-tips';
+    b.addEventListener('click', () => {
+      this.store.set({ learned: [], tips: true });
+      this.say('Every coaching tip will show again.');
+      this.sfx.uiSelect();
+      this.show(this.tab, false);
+    });
+    return this.row('Show every tip again', '', b, b.id);
+  }
 
   private resetAll(button: HTMLButtonElement): void {
     if (!this.resetArmed) {

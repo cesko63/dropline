@@ -7,7 +7,7 @@ import { KEY_SLOTS, defaultKeys, defaultPad, mergeTable, type BindTable } from '
  * stored one is broken. Storage that fails is reported, never fatal.
  */
 
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 export const SETTINGS_KEY = 'dropline.settings';
 export const BACKUP_KEY = 'dropline.settings.backup';
 
@@ -49,6 +49,11 @@ export interface Settings {
   shake: number;
   /** No widening of the view at speed or on kills, no camera roll. */
   reduceMotion: boolean;
+  // Help
+  /** Coaching tips in play, and a tip on the death card. */
+  tips: boolean;
+  /** Ids of the tips the player has already acted on: each shows once per player. */
+  learned: string[];
   // Bindings
   keys: BindTable;
   pad: BindTable;
@@ -76,6 +81,8 @@ export function defaultSettings(): Settings {
     muted: false,
     shake: 1,
     reduceMotion: false,
+    tips: true,
+    learned: [],
     keys: defaultKeys(),
     pad: defaultPad(),
   };
@@ -107,12 +114,17 @@ export const RANGES = {
  */
 export const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, unknown>> = {
   0: (s) => ({ ...s, version: 1 }),
+  // Version 2 added the coaching tips; the defaults fill them in.
+  1: (s) => ({ ...s, version: 2 }),
 };
 
 const num = (v: unknown, r: { min: number; max: number }, d: number): number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(r.max, Math.max(r.min, v)) : d;
 const bool = (v: unknown, d: boolean): boolean => (typeof v === 'boolean' ? v : d);
 const hold = (v: unknown, d: Hold): Hold => (v === 'hold' || v === 'toggle' ? v : d);
+/** Short id strings, without repeats; anything else is dropped. */
+const ids = (v: unknown): string[] =>
+  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 40))].slice(0, 100) : [];
 
 /** Migrate and check one stored object. Throws when it is not a settings object at all. */
 export function parseSettings(raw: string): Settings {
@@ -146,6 +158,8 @@ export function parseSettings(raw: string): Settings {
     muted: bool(s.muted, d.muted),
     shake: num(s.shake, RANGES.shake, d.shake),
     reduceMotion: bool(s.reduceMotion, d.reduceMotion),
+    tips: bool(s.tips, d.tips),
+    learned: ids(s.learned),
     keys: mergeTable(s.keys, d.keys, KEY_SLOTS),
     pad: mergeTable(s.pad, d.pad, 1),
   };
