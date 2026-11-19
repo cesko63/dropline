@@ -883,7 +883,7 @@ packages/
       2. The three mech frames (done)
       3. The cockpit from inside (done)
       4. Effects: smoke, steam, sparks, blasts and wrecks (done)
-   8. Sound and music
+   8. Sound and music (done)
       1. Recorded sound and pilots: steps, movement, guns, impacts, hurt (done)
       2. Mechs: steps, jets, cannons, rockets, shields, call-in, wrecks (done)
       3. Menus, HUD and alerts (done)
