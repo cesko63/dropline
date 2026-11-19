@@ -75,6 +75,10 @@ export class Menu {
     el('settings-menu').addEventListener('click', () => this.onSettings());
     el('settings-resume').addEventListener('click', () => this.onSettings());
     el('hangar-menu').addEventListener('click', () => this.onHangar());
+    // The page shows these greyed out with "loading" until the game is ready.
+    this.busy(false);
+    el<HTMLButtonElement>('settings-menu').disabled = false;
+    this.say('');
   }
 
   /** True while a match can be resumed from this screen. */

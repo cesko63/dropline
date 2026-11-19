@@ -7,11 +7,12 @@ import { KEY_SLOTS, defaultKeys, defaultPad, mergeTable, type BindTable } from '
  * stored one is broken. Storage that fails is reported, never fatal.
  */
 
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
 export const SETTINGS_KEY = 'dropline.settings';
 export const BACKUP_KEY = 'dropline.settings.backup';
 
 export type Hold = 'hold' | 'toggle';
+export type Quality = 'high' | 'medium' | 'low';
 
 export interface Settings {
   version: number;
@@ -39,6 +40,10 @@ export interface Settings {
   hudScale: number;
   /** Go fullscreen when play starts. */
   fullscreen: boolean;
+  /** Shadows and the sharpest the picture gets (see render/quality.ts). */
+  graphics: Quality;
+  /** Draw at a lower resolution while the computer cannot keep up. */
+  autoResolution: boolean;
   // Sound
   volume: number;
   /** The music's own level, under the volume above. */
@@ -76,6 +81,8 @@ export function defaultSettings(): Settings {
     showFps: true,
     hudScale: 1,
     fullscreen: false,
+    graphics: 'high',
+    autoResolution: true,
     volume: 0.8,
     musicVolume: 0.7,
     muted: false,
@@ -116,12 +123,15 @@ export const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<s
   0: (s) => ({ ...s, version: 1 }),
   // Version 2 added the coaching tips; the defaults fill them in.
   1: (s) => ({ ...s, version: 2 }),
+  // Version 3 added the graphics quality and auto resolution; the defaults fill them in.
+  2: (s) => ({ ...s, version: 3 }),
 };
 
 const num = (v: unknown, r: { min: number; max: number }, d: number): number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(r.max, Math.max(r.min, v)) : d;
 const bool = (v: unknown, d: boolean): boolean => (typeof v === 'boolean' ? v : d);
 const hold = (v: unknown, d: Hold): Hold => (v === 'hold' || v === 'toggle' ? v : d);
+const quality = (v: unknown, d: Quality): Quality => (v === 'high' || v === 'medium' || v === 'low' ? v : d);
 /** Short id strings, without repeats; anything else is dropped. */
 const ids = (v: unknown): string[] =>
   Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 40))].slice(0, 100) : [];
@@ -153,6 +163,8 @@ export function parseSettings(raw: string): Settings {
     showFps: bool(s.showFps, d.showFps),
     hudScale: num(s.hudScale, RANGES.hudScale, d.hudScale),
     fullscreen: bool(s.fullscreen, d.fullscreen),
+    graphics: quality(s.graphics, d.graphics),
+    autoResolution: bool(s.autoResolution, d.autoResolution),
     volume: num(s.volume, RANGES.volume, d.volume),
     musicVolume: num(s.musicVolume, RANGES.musicVolume, d.musicVolume),
     muted: bool(s.muted, d.muted),

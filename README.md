@@ -86,7 +86,8 @@ with a full mech meter. Online: `?server=ws://host:port` picks the server (the
 default is port 8787 on the page's own host, or `VITE_SERVER_URL` at build
 time), `?name=Ada` sets the callsign, `?net=1` opens the connection details,
 `?online=1` joins without the start screen. `?hangar=1` opens the hangar.
-`?fail=boot`, `?fail=frame` or `?fail=async` throws an error on purpose (at
+`?perf=1` shows frame time, the worst frame, draw calls, triangles and the
+resolution in the top left. `?fail=boot`, `?fail=frame` or `?fail=async` throws an error on purpose (at
 start-up, three seconds into a match, or outside the game loop) to check the
 error cards.
 
@@ -197,6 +198,46 @@ None of them touch the settings or the hangar picks. A sound or music track
 that fails to download is tried once more; if it fails again the game plays
 on without it and the start screen says how many are missing.
 
+## Performance
+
+Measured on a 60 s offline match with the meter full (every pilot calling
+mechs, firing and dying), stepping the game by hand in headless Chromium,
+with the picture counted but not timed (the test machine has no graphics
+card):
+
+| | Before 5.9 | Now |
+|---|---|---|
+| Game work per frame, median | 1.2 ms | 1.3 ms |
+| 99th percentile | 9 ms | 8 ms |
+| Worst frame | 50 to 90 ms (the first body of the match) | 27 ms |
+| First frame of play | 40 ms | 11 ms |
+| With the processor slowed 4×, median and 99th percentile | | 7 ms and 26 ms |
+| Draw calls in a busy view (world, shadows, arms) | 260 to 670 | the same |
+
+What made the hitches, and what was done:
+
+- **First times, now done behind the start screen:** all eight bots plan their
+  first route on the same tick (the route finder was still cold), the first
+  body's physics (about 30 ms), each mech frame's model the first time it is
+  called, and the shaders of the mechs waiting out of sight.
+- **A scattergun blast stained the suit once per pellet:** at most two new
+  stains per pilot every tenth of a second now (the pellets land together).
+- **The start screen** shows at once with "Loading the game …" and its buttons
+  greyed out until the game is ready, so nothing looks clickable that is not.
+
+The picture is the cost on an ordinary computer, so it can be turned down:
+**Settings → Display → Graphics**. **Auto resolution** watches the time
+between frames: slower than 48 a second for a second, and the game draws 15%
+fewer pixels a step (down to half); smooth again for three seconds and it
+climbs back. A step that did not make frames faster (a browser held to 30
+frames a second, or a computer slow for another reason) is undone and not
+tried again for 30 s, so the picture never goes soft for nothing.
+
+Still to do: a mech is about 40 draw calls and the first-person arm about 90,
+because their parts move on their own. Drawing each as one skinned mesh
+would cut most of that. Memory stays level over long matches: script memory
+was the same after two minutes of play as after ten seconds.
+
 ## Settings
 
 Changes apply at once and are saved in the browser.
@@ -211,7 +252,9 @@ Changes apply at once and are saved in the browser.
   and the screen says so. One button puts every binding back.
 - **Display:** field of view (80° to 120°, measured across a 16:9 screen; the
   default 112° is the view the game always had), HUD size, frame counter,
-  fullscreen when play starts.
+  fullscreen when play starts; graphics quality (High: sharp shadows and up to
+  2× pixels on sharp screens; Medium: softer shadows, up to 1.25×; Low: no
+  shadows, 1×) and auto resolution (on by default: see Performance).
 - **Sound & comfort:** volume, music volume, sound off, screen shake strength, and reduce
   motion (no widening of the view at speed or on a kill, no lean into strafes,
   half the wallrun tilt).
@@ -791,6 +834,6 @@ packages/
    9. Closing pass
       1. Teaching: coaching lines in play, death-card tips (done)
       2. Error cards: lost connection, failed load, a crash, each with a way back (done)
-      3. Performance: measured frame times, a lighter worst case
+      3. Performance: measured frame times, a lighter worst case, a graphics setting (done)
       4. Balance: weapons, mech frames and bots on bot matches
 6. Deployment

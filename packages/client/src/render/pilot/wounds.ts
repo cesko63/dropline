@@ -6,6 +6,12 @@ import { stainAtlas } from '../fx/textures';
 
 /** Stains one pilot can wear at once; the oldest goes first. */
 const MAX_WOUNDS = 12;
+/**
+ * At most this many new stains per pilot in `BURST_MS`: a scattergun's pellets
+ * land together, and projecting a stain for each would hitch the frame.
+ */
+const BURST = 2;
+const BURST_MS = 100;
 /** Tiles of the stain atlas: a splat where the round went in, drops thrown round it. */
 const SPLAT = 0;
 const DROPS = 3;
@@ -49,6 +55,8 @@ const inverse = new THREE.Matrix4();
  */
 export class Wounds {
   private readonly worn: THREE.Mesh[] = [];
+  private burstStart = -Infinity;
+  private burstCount = 0;
 
   constructor(
     /** The suit's parts, one per bone, that a stain can land on. */
@@ -58,6 +66,13 @@ export class Wounds {
 
   /** A round struck at `at` flying along `dir` (unit); `damage` sets how big the stain is. Parts' world matrices must be current. */
   add(at: Vec3, dir: Vec3, damage: number): void {
+    const now = performance.now();
+    if (now - this.burstStart > BURST_MS) {
+      this.burstStart = now;
+      this.burstCount = 0;
+    }
+    if (this.burstCount >= BURST) return;
+    this.burstCount++;
     way.set(dir.x, dir.y, dir.z);
     origin.set(at.x, at.y, at.z).addScaledVector(way, -0.6);
     raycaster.set(origin, way);

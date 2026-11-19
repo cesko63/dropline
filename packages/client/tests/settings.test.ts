@@ -62,11 +62,14 @@ describe('settings', () => {
     expect(s.keys.fire).toEqual(d.keys.fire);
   });
 
-  it('migrates version 1 (before coaching tips) to tips on with nothing learned, and cleans a stored list', () => {
+  it('migrates version 1 to tips on with nothing learned and the graphics defaults, and cleans what is stored', () => {
     const s = parseSettings(JSON.stringify({ version: 1, fov: 100 }));
     expect(s.fov).toBe(100);
     expect(s.tips).toBe(true);
     expect(s.learned).toEqual([]);
+    expect(s.graphics).toBe('high');
+    expect(s.autoResolution).toBe(true);
+    expect(parseSettings(JSON.stringify({ version: 3, graphics: 'ultra' })).graphics).toBe('high');
     const t = parseSettings(JSON.stringify({ version: 2, tips: false, learned: ['move', 'move', 7, '', 'jump'] }));
     expect(t.tips).toBe(false);
     expect(t.learned).toEqual(['move', 'jump']);

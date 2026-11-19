@@ -73,7 +73,7 @@ async function boot(): Promise<void> {
   // `?map=gym` picks the map (online, the server's map wins); `?seed=123`
   // replays a given offline match; `?qa=1` shows what every bot is thinking;
   // `?meter=1` starts everyone with a full mech meter (offline).
-  // `?server=ws://host:port` picks the server; `?online=1` joins it straight
+  // `?server=ws://host:port` picks the server; `?perf=1` shows frame time and draw calls; `?online=1` joins it straight
   // away without the start screen (automated checks); `?name=` sets the
   // callsign; `?net=1` opens the connection details; `?hangar=1` opens the hangar.
   // `?fail=boot`, `frame` or `async` throws on purpose, to check the error cards.
@@ -93,6 +93,7 @@ async function boot(): Promise<void> {
     settings,
     loadout,
     failFrame: fail === 'frame',
+    perf: params.has('perf'),
   });
   where.map = map.name;
   where.seed = seed;
@@ -298,6 +299,8 @@ async function boot(): Promise<void> {
   window.addEventListener('pointerdown', unlock, { once: true });
   window.addEventListener('keydown', unlock, { once: true });
   game.start();
+  // After the start screen is up: one-time costs paid now rather than in the first fight.
+  setTimeout(() => game.warmUp(), 0);
   if (fail === 'async') setTimeout(() => Promise.reject(new Error('an error escaped on purpose (?fail=async)')), 4000);
   if (auto) join(menu.callsign());
   else if (params.has('hangar')) menu.onHangar();

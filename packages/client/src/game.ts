@@ -3,6 +3,10 @@ import {
   BOTS,
   COMBAT,
   FRAME_LIST,
+  buildNav,
+  findPath,
+  nodeX,
+  nodeZ,
   NET,
   PROJECTILES,
   TICK_DT,
@@ -40,8 +44,10 @@ import type { Connection } from './net/connection';
 import { Avatar, TEAM_LOOK } from './render/avatar';
 import { Effects } from './render/effects';
 import { buildMapMeshes } from './render/mapMesh';
+import { mechKit } from './render/mech/kit';
 import { ALLY_ZONE, ENEMY_ZONE, MechAvatar } from './render/mechAvatar';
 import { Ragdolls } from './render/pilot/ragdoll';
+import { AutoResolution, QUALITY } from './render/quality';
 import { createEnvironment, createRenderer, type Environment } from './render/scene';
 import { Viewmodel } from './render/viewmodel';
 import type { LoadoutStore } from './settings/loadout';
@@ -98,6 +104,8 @@ export interface GameOptions {
   loadout: LoadoutStore;
   /** Throw from a frame three seconds into the match, once, to test the error card (`?fail=frame`). */
   failFrame?: boolean;
+  /** Show frame time, draw calls and triangles in a corner (`?perf=1`). */
+  perf?: boolean;
 }
 
 /** How far the aim slowdown reaches around an enemy's chest, meters, and how far away it still works. */
@@ -125,6 +133,9 @@ export class Game {
   onContextLost: () => void = () => {};
   private crashed = false;
   private failFrame: boolean;
+  private readonly autoRes = new AutoResolution();
+  /** What the `?perf=1` readout adds up over half a second; null when it is off. */
+  private perf: { time: number; frames: number; work: number; worst: number } | null;
   private readonly settings: SettingsStore;
   private readonly loadout: LoadoutStore;
   /** Screen shake is scaled by this (the comfort setting). */
@@ -207,6 +218,9 @@ export class Game {
       this.onContextLost();
     });
     this.failFrame = options.failFrame ?? false;
+    this.perf = options.perf ? { time: 0, frames: 0, work: 0, worst: 0 } : null;
+    // Draw calls are counted over the whole frame (the world, its shadows and the arms), not per render.
+    this.renderer.info.autoReset = false;
     this.env = createEnvironment(this.scene, map.env);
     this.scene.add(buildMapMeshes(map, this.renderer));
     this.fx = new Effects(this.scene, this.env, world);
@@ -320,10 +334,33 @@ export class Game {
     this.sfx.music.setVolume(s.musicVolume);
     this.hud.setMuted(s.muted);
     this.hud.setDisplay(s.showFps, s.hudScale);
+    this.applyQuality(s);
     this.coach.enabled = s.tips;
     // "Show every tip again" empties the list.
     if (s.learned.length === 0) this.coach.forget();
     this.keysChanged();
+  }
+
+  /** The graphics setting: shadows and how sharp the picture may get. */
+  private applyQuality(s: Settings): void {
+    const q = QUALITY[s.graphics];
+    const sun = this.env.sun;
+    const shadows = q.shadowSize > 0;
+    if (shadows !== this.renderer.shadowMap.enabled) {
+      this.renderer.shadowMap.enabled = shadows;
+      // Every lit material has to be built again with or without shadows.
+      this.scene.traverse((o) => {
+        const m = (o as THREE.Mesh).material;
+        if (m) for (const x of Array.isArray(m) ? m : [m]) x.needsUpdate = true;
+      });
+    }
+    if (shadows && sun.shadow.mapSize.x !== q.shadowSize) {
+      sun.shadow.mapSize.set(q.shadowSize, q.shadowSize);
+      sun.shadow.map?.dispose();
+      sun.shadow.map = null;
+    }
+    if (!s.autoResolution) this.autoRes.reset();
+    this.resize();
   }
 
   /** Shake the view by the comfort setting, and the pad by the same amount. */
@@ -425,6 +462,8 @@ export class Game {
   private resize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
+    const cap = QUALITY[this.settings.value.graphics].maxPixelRatio;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap) * this.autoRes.scale);
     this.renderer.setSize(w, h, false);
     this.rig.resize(w / h);
     this.viewmodel.resize(w / h);
@@ -435,8 +474,11 @@ export class Game {
     const loop = (now: number): void => {
       // A frame that throws stops the loop instead of failing every frame after it.
       if (!this.manual && !this.crashed) {
+        const real = (now - this.lastTime) / 1000;
         try {
-          this.frame(Math.min(MAX_FRAME, (now - this.lastTime) / 1000));
+          const t = performance.now();
+          this.frame(Math.min(MAX_FRAME, real));
+          this.measure(real, performance.now() - t);
         } catch (err) {
           this.crashed = true;
           this.pause();
@@ -518,6 +560,63 @@ export class Game {
   }
 
   /** Advance the simulation in fixed ticks, then draw one interpolated frame. */
+  /**
+   * After each real frame: the automatic resolution follows the time since the
+   * last one (`dt`, not capped like the simulation's), and the `?perf=1`
+   * readout adds up `work`, the milliseconds the frame took.
+   */
+  private measure(dt: number, work: number): void {
+    // A gap of a second or more is the tab coming back from the background, not a slow frame.
+    if (this.settings.value.autoResolution && !document.hidden && dt < 1 && this.autoRes.update(dt)) this.resize();
+    const p = this.perf;
+    if (!p) return;
+    p.time += dt;
+    p.frames++;
+    p.work += work;
+    p.worst = Math.max(p.worst, dt);
+    if (p.time < 0.5) return;
+    const r = this.renderer.info.render;
+    this.hud.setPerf(
+      [
+        `frame  ${((p.time / p.frames) * 1000).toFixed(1)} ms  worst ${(p.worst * 1000).toFixed(0)}`,
+        `work   ${(p.work / p.frames).toFixed(1)} ms`,
+        `draws  ${r.calls}  tris ${(r.triangles / 1000).toFixed(0)}k`,
+        `pixels ${this.renderer.getPixelRatio().toFixed(2)}x  ${this.settings.value.graphics}`,
+      ].join('\n'),
+    );
+    p.time = p.frames = p.work = p.worst = 0;
+  }
+
+  /**
+   * One-time work done behind the start screen, so the first time play meets
+   * it does not hitch: the bots' route finder (all of them plan their first
+   * route on the first tick), the physics of a body (the first one costs
+   * about 30 ms), every mech frame's model in both finishes, and the shaders
+   * of everything drawn, the mechs waiting out of sight included.
+   */
+  warmUp(): void {
+    const nav = buildNav(this.map, this.world);
+    const path: number[] = [];
+    const n = nav.open.length;
+    for (let i = 0; i < 40 && n > 1; i++) {
+      const a = nav.open[(i * 7919) % n];
+      const b = nav.open[(i * 104729 + n / 2) % n | 0];
+      findPath(nav, nodeX(nav, a), nav.nodeY[a], nodeZ(nav, a), nodeX(nav, b), nav.nodeY[b], nodeZ(nav, b), path);
+    }
+    // One body, dropped under the floor where no camera sees it, falls for half a second.
+    const dummy = new Avatar(0, false);
+    dummy.root.position.set(0, -10, 0);
+    this.ragdolls.spawn(-1, dummy.corpse(0, { x: 0, y: 0, z: 0 }), null, true);
+    for (let i = 0; i < 30; i++) this.ragdolls.update(1 / 60);
+    this.ragdolls.clear();
+    dummy.dispose();
+    for (const F of FRAME_LIST) for (const team of [0, 1]) mechKit(F, team);
+    const hidden = this.mechAvatars.filter((a) => !a.root.visible);
+    for (const a of hidden) a.root.visible = true;
+    this.renderer.compile(this.scene, this.rig.camera);
+    for (const a of hidden) a.root.visible = false;
+  }
+
   /** Run the loop again after a crash. */
   recover(): void {
     this.crashed = false;
@@ -702,6 +801,7 @@ export class Game {
     if (this.hud.inDropZone && !paused) this.sfx.zoneWarn();
     this.scoreNews(m, me);
 
+    this.renderer.info.reset();
     this.renderer.clear();
     this.renderer.render(this.scene, cam);
     if (!rig.outside && !scoped) {

@@ -1,7 +1,7 @@
 import type { Sfx } from '../audio/sfx';
 import { ACTIONS, ACTION_NAMES, KEY_SLOTS, bind, codeLabel, defaultKeys, defaultPad, unbind, type Action, type BindTable } from '../input/bindings';
 import { PAD_START } from '../input/input';
-import { NOTICE_TEXT, RANGES, defaultSettings, type Hold, type Settings, type SettingsStore } from '../settings/settings';
+import { NOTICE_TEXT, RANGES, defaultSettings, type Hold, type Quality, type Settings, type SettingsStore } from '../settings/settings';
 
 /**
  * The settings screen inside the start panel. Every change applies and saves at
@@ -212,6 +212,9 @@ export class SettingsScreen {
         this.slider('hudScale', 'HUD size'),
         this.toggle('showFps', 'Frame counter'),
         this.toggle('fullscreen', 'Fullscreen while playing', 'Goes fullscreen when you click to play. Esc twice leaves it.'),
+        this.section('Graphics'),
+        this.quality(),
+        this.toggle('autoResolution', 'Auto resolution', 'Draws fewer pixels while the computer cannot keep up, so play stays smooth, and goes back to sharp when it can.'),
       );
     } else {
       rows.push(
@@ -298,6 +301,26 @@ export class SettingsScreen {
       wrap.append(b);
     }
     return this.row(label, help, wrap, `set-${key}`);
+  }
+
+  /** High, medium or low: shadows and the sharpest the picture gets. */
+  private quality(): HTMLElement {
+    const wrap = h('div', 'set-choice three');
+    const buttons: HTMLButtonElement[] = [];
+    for (const [q, label] of [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']] as [Quality, string][]) {
+      const b = h('button', '', label);
+      b.type = 'button';
+      if (q === 'high') b.id = 'set-graphics';
+      b.addEventListener('click', () => {
+        this.store.set({ graphics: q });
+        for (const x of buttons) x.classList.toggle('on', x === b);
+        this.sfx.uiSelect();
+      });
+      b.classList.toggle('on', this.store.value.graphics === q);
+      buttons.push(b);
+      wrap.append(b);
+    }
+    return this.row('Quality', 'High: sharp shadows, full sharpness. Medium: softer shadows, a little less sharp. Low: no shadows; for older computers.', wrap, 'set-graphics');
   }
 
   // ---------------------------------------------------------------- bindings

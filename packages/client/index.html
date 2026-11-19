@@ -58,6 +58,7 @@
         </div>
 
         <pre id="net-debug" hidden></pre>
+        <pre id="perf" hidden></pre>
       </div>
 
       <div id="feed"></div>
@@ -141,10 +142,10 @@
           <label for="callsign">Callsign</label>
           <input id="callsign" type="text" maxlength="16" autocomplete="off" spellcheck="false" />
           <div class="choices">
-            <button id="play-online" type="button"><span>Deploy online</span><small>Up to 8 pilots on a server</small></button>
-            <button id="play-offline" type="button" class="quiet"><span>Practice offline</span><small>4 v 4 against bots</small></button>
-            <button id="hangar-menu" type="button" class="quiet"><span>Hangar</span><small id="hangar-summary"></small></button>
-            <button id="settings-menu" type="button" class="quiet"><span>Settings</span><small>Controls, sound, display</small></button>
+            <button id="play-online" type="button" disabled><span>Deploy online</span><small>Up to 8 pilots on a server</small></button>
+            <button id="play-offline" type="button" class="quiet" disabled><span>Practice offline</span><small>4 v 4 against bots</small></button>
+            <button id="hangar-menu" type="button" class="quiet" disabled><span>Hangar</span><small id="hangar-summary"></small></button>
+            <button id="settings-menu" type="button" class="quiet" disabled><span>Settings</span><small>Controls, sound, display</small></button>
           </div>
         </div>
         <div id="resume" hidden>
@@ -156,7 +157,7 @@
         </div>
         <div id="settings" hidden></div>
         <div id="hangar" hidden></div>
-        <p id="menu-status" role="status" hidden></p>
+        <p id="menu-status" role="status">Loading the game …</p>
         <p id="menu-note" role="status" hidden></p>
         <p id="lock-error" hidden>
           This window does not allow mouse capture. Open this address in Chrome, Edge or Firefox to play.

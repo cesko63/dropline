@@ -923,6 +923,13 @@ export class Hud {
     ].join('\n');
   }
 
+  /** The `?perf=1` readout: frame time, draw calls, resolution. */
+  setPerf(text: string): void {
+    const p = el('perf');
+    p.hidden = false;
+    p.textContent = text;
+  }
+
   setMuted(muted: boolean): void {
     el('muted').hidden = !muted;
   }
