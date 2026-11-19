@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "lag": "tsx src/lagProxy.ts",
+    "balance": "tsx tools/balance.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },

@@ -76,6 +76,7 @@ seats with bots.
 | `pnpm test` | Run the headless movement, combat, bot, mech, netcode, settings and sound tests |
 | `pnpm typecheck` | Type-check all packages |
 | `pnpm build` | Production build of the client |
+| `pnpm balance` | Play the rules headless and print the balance report: time to kill per weapon and range, time to down each mech, and 24 bot matches on Spire Nine (`pnpm balance -- 60` for 60) |
 | `pnpm map:spire-nine` | Rebuild `data/maps/spire-nine.json` from its generator |
 | `pnpm audio` | Rebuild `assets/audio`, `assets/music` and `AUDIO.md` from the CC0 recordings and music listed in `tools/audio/sounds.json` (needs ffmpeg) |
 
@@ -198,6 +199,45 @@ None of them touch the settings or the hangar picks. A sound or music track
 that fails to download is tried once more; if it fails again the game plays
 on without it and the start screen says how many are missing.
 
+## Balance
+
+`pnpm balance` plays the real rules headless: the weapon table (see Weapons), each
+pilot weapon against each mech, and then whole matches with bots in all eight
+seats on Spire Nine. Bots hit softer than players, by role, so the matches
+show the balance a player meets offline. Results of 48 matches:
+
+| | Result |
+|---|---|
+| Sides | Corps 44%, Z.E.R.O 56% (over the three runs of 24, 48 and 48 matches, Corps 47%: within chance) |
+| Match length | 4.9 min median, 4.1 to 5.5 |
+| Pilots killed by | Carbine 27%, Scattergun 23%, Halberd 20%, Marksman 10%, Lynx 9%, Bastion 9% |
+| Bot roles on foot, kills per death | Scattergun 0.79, Carbine 0.55, Marksman 0.53 |
+| Points a mech earns before it is destroyed | Halberd 2.9, Bastion 2.3, Lynx 3.4 (a mech destroyed gives the other side 3) |
+| Points | 60% from pilots killed, 40% from mechs destroyed |
+
+What 5.9 changed, and why:
+
+- **The marksman rifle did not win at range.** Its spread from firing only
+  shrank once the gun could fire again, so a marksman clicking at its full
+  rate fired every shot after the first with three times the spread, and with
+  perfect aim the carbine killed faster at every distance (60 m: 1.8 s against
+  2.7 s). A semi-automatic now steadies between shots. Bots already paused
+  long between shots, so this changes nothing for them.
+- **The carbine reached too far:** its damage now falls off from 20 m to 50 m
+  (it was 30 to 60), so past about 30 m the marksman is the better choice.
+- **Scattergun bots killed twice as much as the others** (kills per death 0.93
+  against about 0.5): they hit for 45% of a player's damage instead of 55%.
+  A pilot standing in the open against four bots still lasts 2.8 s, and one
+  who keeps moving 4.9 s, as before.
+- **The Bastion earned the fewest points** (1.9 a call, under two-thirds of
+  the others): its flak shell does 92 to pilots instead of 75, so a bot's
+  Bastion downs a pilot with two shells instead of three. Its damage to mechs
+  is the same, and so are the mech duels.
+
+Still to watch: the Bastion is the weakest frame in full matches, and the
+scattergun the strongest bot role; both are within about a fifth of the
+others now. How any of this plays between people is untested.
+
 ## Performance
 
 Measured on a 60 s offline match with the meter full (every pilot calling
@@ -313,7 +353,24 @@ three barrels, and a launcher pod rides on the right shoulder.
 | Pike Anti-Armor Launcher | Shoulder pod | Two rockets, then a long reload. The answer to a mech; the rocket takes time to arrive, so a pilot can step out of its way |
 
 Shooting works while sprinting, sliding, wallrunning and in the air, at a small
-cost in spread. Recoil kicks the view and settles back on its own.
+cost in spread. Recoil kicks the view and settles back on its own. A
+semi-automatic (the marksman, the scattergun, the launcher) steadies between
+shots, so it is as accurate at its full rate of fire as when paced; an
+automatic's spread grows while the trigger is held and shrinks once it rests.
+
+Time to kill a standing pilot with perfect aim, every shot at the chest and
+the recoil pulled back down (from `pnpm balance`). Each weapon owns a range:
+
+| Aimed | 5 m | 10 m | 20 m | 35 m | 60 m |
+|---|---|---|---|---|---|
+| Carbine | 0.47 s | 0.47 s | 0.47 s | 0.68 s | 1.87 s |
+| Scattergun | 0.02 s | 1.2 s | never | never | never |
+| Marksman | 0.60 s | 0.60 s | 0.60 s | 0.60 s | 0.60 s |
+| Launcher | 0.92 s | 0.98 s | 1.13 s | 1.35 s | 1.70 s |
+
+The arm's barrels barely scratch a mech: only the launcher brings one down,
+in about 11 s on its own (four rockets and a reload), which is why a mech is
+a team's problem.
 
 Hip fire is tight enough to fight without aiming, and aiming still wins at
 range. Share of shots that strike a standing pilot from the hip, after a pause
@@ -404,7 +461,7 @@ test map):
 | | Result |
 |---|---|
 | Duels, 40 per pairing | Halberd 17 to Bastion 23, Halberd 21 to Lynx 19, Bastion 25 to Lynx 15 |
-| One bot mech against four pilots on foot | Halberd 13 s and 1.8 kills, Bastion 12 s and 1.4, Lynx 19 s and 2.3 |
+| One bot mech against four pilots on foot | Halberd 15 s and 2.0 kills, Bastion 15 s and 2.3, Lynx 21 s and 2.4 |
 
 Each frame's numbers are in `data/mechs/*.json`, their bot roles in `data/bots.json`.
 
@@ -788,8 +845,9 @@ packages/
   tumble, splat where they strike and lie 10 s. Open `/effects.html` to play each one on its own,
   against a floor and a wall, by day or night, with what is alive and what it
   costs in the corner.
-- **Mech frames are tuned on bot duels.** The numbers above come from bots on
-  the test map; how the shield, cloak and leap play between people is untested.
+- **Balance is tuned on bots.** The numbers come from scripted duels on the
+  test map and bot matches on Spire Nine (`pnpm balance`); how the weapons,
+  shield, cloak and leap play between people is untested.
 - **Bots do not wallrun.** They climb, drop and leap, but never run along a
   wall or chain jumps off one, and they do not cross the 8 m break in the rail
   deck (they take the fallen carriage instead).
@@ -813,7 +871,7 @@ packages/
 2. Gunplay and offline bots (done)
 3. Mech: call-in, embark, mech combat (done)
 4. Multiplayer: dedicated server, prediction, lag compensation (done)
-5. Content and polish (now)
+5. Content and polish (done)
    1. Suit weapons: the arm and the shoulder pod, tighter hip fire (done)
    2. Solid bodies: pilots collide with each other and with mechs (done)
    3. Settings and gamepad (done)
@@ -831,9 +889,9 @@ packages/
       3. Menus, HUD and alerts (done)
       4. Ambience for Spire Nine (done)
       5. Music, with its own volume (done)
-   9. Closing pass
+   9. Closing pass (done)
       1. Teaching: coaching lines in play, death-card tips (done)
       2. Error cards: lost connection, failed load, a crash, each with a way back (done)
       3. Performance: measured frame times, a lighter worst case, a graphics setting (done)
-      4. Balance: weapons, mech frames and bots on bot matches
+      4. Balance: weapons, mech frames and bots on bot matches (done)
 6. Deployment

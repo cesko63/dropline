@@ -383,12 +383,11 @@ export function stepWeapon(m: MatchState, a: Actor, cmd: InputCmd, world: Collis
       return;
     }
   }
-  // Reached only on ticks without a shot. Bloom holds during sustained fire and
-  // shrinks once the weapon rests, so short bursts stay accurate.
-  if (a.cooldown <= 0) {
-    a.cooldown = 0;
-    a.bloom = Math.max(0, a.bloom - def.spread.bloomRecover * dt);
-  }
+  // Reached only on ticks without a shot. An automatic's bloom holds during
+  // sustained fire and shrinks once it rests, so short bursts stay accurate; a
+  // semi-automatic rests between shots, so a paced marksman stays on target.
+  if (a.cooldown <= 0) a.cooldown = 0;
+  if (a.cooldown <= 0 || def.fireMode === 'semi') a.bloom = Math.max(0, a.bloom - def.spread.bloomRecover * dt);
 }
 
 /**

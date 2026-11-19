@@ -4,5 +4,5 @@
     "lib": ["ES2022"],
     "types": ["node"]
   },
-  "include": ["src", "tests", "../../data/**/*.json"]
+  "include": ["src", "tests", "tools", "../../data/**/*.json"]
 }

@@ -157,6 +157,21 @@ describe('weapons', () => {
     expect(shot && shot.type === 'shot' && shot.traces.length).toBe(WEAPONS.scattergun.pellets);
   });
 
+  it('lets a semi-automatic settle between shots, so a marksman firing at its full rate stays on target', () => {
+    const { m, me } = duel();
+    const slot = me.loadout.indexOf('longshot');
+    run(m, 1, () => ({ weapon: slot, ads: true }));
+    // Click as fast as the rifle allows, and note the bloom each shot leaves with.
+    const bloomAtShot: number[] = [];
+    for (let i = 0; i < 2.5 / TICK_DT; i++) {
+      const before = me.bloom;
+      stepMatch(m, world, [{ ...emptyInput(), yaw: me.p.yaw, pitch: me.p.pitch, weapon: slot, ads: true, fire: i % 2 === 0 }], TICK_DT);
+      if (m.events.some((e) => e.type === 'shot' && e.actor === me.id)) bloomAtShot.push(before);
+    }
+    expect(bloomAtShot.length).toBeGreaterThanOrEqual(3);
+    for (const b of bloomAtShot) expect(b).toBeLessThan(0.05);
+  });
+
   it('spreads more when firing, moving and in the air, and less when aimed', () => {
     const { m, me } = duel();
     run(m, 0.2);

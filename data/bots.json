@@ -73,7 +73,7 @@
         0.5
       ],
       "chargeTime": 0,
-      "damageScale": 0.55,
+      "damageScale": 0.45,
       "rush": true,
       "perchChance": 0,
       "frame": "bastion"

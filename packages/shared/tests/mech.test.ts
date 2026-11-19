@@ -800,12 +800,12 @@ describe('mech balance, played by scripts over several seeds', () => {
     const moving = play(true);
     console.log(`mech vs four pilots: standing ${standing.life.toFixed(0)} s, ${standing.kills.toFixed(1)} kills; moving ${moving.life.toFixed(0)} s, ${moving.kills.toFixed(1)} kills`);
     // Standing in the open against four launchers, the hull lasts about half a
-    // minute and takes a handful of pilots with it. (Measured: 32 s, 6.2 kills.)
+    // minute and takes a handful of pilots with it. (Measured: 41 s, 7.2 kills.)
     expect(standing.life).toBeGreaterThan(15);
     expect(standing.life).toBeLessThan(60);
     expect(standing.kills).toBeGreaterThan(3);
     // Strafing and dashing makes rockets miss: clearly longer, and more kills,
-    // but never safe. (Measured: 41 s, 6.3 kills.)
+    // but never safe. (Measured: 58 s, 8.7 kills.)
     expect(moving.life).toBeGreaterThan(standing.life * 1.2);
     expect(moving.life).toBeLessThan(110);
     expect(moving.kills).toBeGreaterThan(standing.kills);
@@ -952,7 +952,7 @@ describe('mech balance, played by scripts over several seeds', () => {
         kills.push(me.kills);
       }
       console.log(`bot ${FRAME_LIST[f].name} against four pilots: ${mean(life).toFixed(0)} s, ${mean(kills).toFixed(1)} kills`);
-      // (Measured: Halberd 13 s and 1.8 kills, Bastion 12 s and 1.4, Lynx 19 s and 2.3.)
+      // (Measured: Halberd 15 s and 2.0 kills, Bastion 15 s and 2.3, Lynx 21 s and 2.4.)
       expect(mean(life)).toBeGreaterThan(8);
       expect(mean(life)).toBeLessThan(30);
       expect(mean(kills)).toBeGreaterThan(0.8);
