@@ -96,6 +96,8 @@ export interface GameOptions {
   settings: SettingsStore;
   /** The hangar's picks: the side, and the mech frame the next call brings down. */
   loadout: LoadoutStore;
+  /** Throw from a frame three seconds into the match, once, to test the error card (`?fail=frame`). */
+  failFrame?: boolean;
 }
 
 /** How far the aim slowdown reaches around an enemy's chest, meters, and how far away it still works. */
@@ -117,6 +119,12 @@ export class Game {
   onMenuFrame: (dt: number) => void = () => {};
   /** The player switched between keyboard and pad, or rebound something: printed keys must follow. */
   onKeysChange: () => void = () => {};
+  /** A frame threw: the loop has stopped until `recover` is called. */
+  onCrash: (err: unknown) => void = () => {};
+  /** The graphics card dropped the picture; it does not come back without a reload. */
+  onContextLost: () => void = () => {};
+  private crashed = false;
+  private failFrame: boolean;
   private readonly settings: SettingsStore;
   private readonly loadout: LoadoutStore;
   /** Screen shake is scaled by this (the comfort setting). */
@@ -194,6 +202,11 @@ export class Game {
     options: GameOptions,
   ) {
     this.renderer = createRenderer(canvas);
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this.onContextLost();
+    });
+    this.failFrame = options.failFrame ?? false;
     this.env = createEnvironment(this.scene, map.env);
     this.scene.add(buildMapMeshes(map, this.renderer));
     this.fx = new Effects(this.scene, this.env, world);
@@ -420,7 +433,16 @@ export class Game {
   start(): void {
     this.lastTime = performance.now();
     const loop = (now: number): void => {
-      if (!this.manual) this.frame(Math.min(MAX_FRAME, (now - this.lastTime) / 1000));
+      // A frame that throws stops the loop instead of failing every frame after it.
+      if (!this.manual && !this.crashed) {
+        try {
+          this.frame(Math.min(MAX_FRAME, (now - this.lastTime) / 1000));
+        } catch (err) {
+          this.crashed = true;
+          this.pause();
+          this.onCrash(err);
+        }
+      }
       this.lastTime = now;
       requestAnimationFrame(loop);
     };
@@ -496,7 +518,16 @@ export class Game {
   }
 
   /** Advance the simulation in fixed ticks, then draw one interpolated frame. */
+  /** Run the loop again after a crash. */
+  recover(): void {
+    this.crashed = false;
+  }
+
   frame(dt: number): void {
+    if (this.failFrame && this.match.time > 3) {
+      this.failFrame = false;
+      throw new Error('a frame failed on purpose (?fail=frame)');
+    }
     this.input.update(dt);
     // MENU on the pad pauses; the start screen's own navigation resumes.
     if (this.input.playing && this.input.pad.pressed[PAD_START]) this.pause();

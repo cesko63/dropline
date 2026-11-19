@@ -65,7 +65,7 @@ export class Sfx {
   /** The map's ambience, into the match; its filter closes under a roof. */
   private ambience: BiquadFilterNode | null = null;
   private noise: AudioBuffer | null = null;
-  private readonly bank = new SoundBank();
+  readonly bank = new SoundBank();
   private readonly loops = new Map<string, Loop>();
   private readonly spotOut = { level: 0, muffle: 20000, pan: 0 };
   private voices = 0;
@@ -202,6 +202,12 @@ export class Sfx {
     if (!d) return;
     this.play(d, 'land-heavy', 0.8, 0, 0.7);
     this.play(d, 'blast-low', 0.35, 0, 1.3);
+  }
+
+  /** An error card comes up. */
+  uiError(): void {
+    const d = this.ui(0.5);
+    if (d) this.play(d, 'ui-error', 0.7);
   }
 
   /** A coaching line comes up: a soft, high tick. */

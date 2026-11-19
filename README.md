@@ -86,6 +86,9 @@ with a full mech meter. Online: `?server=ws://host:port` picks the server (the
 default is port 8787 on the page's own host, or `VITE_SERVER_URL` at build
 time), `?name=Ada` sets the callsign, `?net=1` opens the connection details,
 `?online=1` joins without the start screen. `?hangar=1` opens the hangar.
+`?fail=boot`, `?fail=frame` or `?fail=async` throws an error on purpose (at
+start-up, three seconds into a match, or outside the game loop) to check the
+error cards.
 
 ## Controls
 
@@ -169,6 +172,30 @@ per kind.
 What a player has learned is kept with the settings, so a returning player
 sees none of it. **Settings → Controls → Help** turns the tips off or shows
 every one again; the full controls list stays on the start and pause screens.
+
+## When something goes wrong
+
+The game never freezes on a broken frame or shows a raw error. Each failure
+gets a card in the game's own style that says what happened in plain words,
+with a way out and a **Copy details** button for a bug report (what failed,
+the map, seed and page, the browser, the error with its stack, and the last
+few things that went wrong before it). Where the browser will not hand over
+the clipboard, the details come up selected for copying by hand. The card
+works with the mouse, the arrow keys and Esc, or a pad (A, B and the D-pad).
+
+| What happened | The card offers |
+|---|---|
+| The game failed to load | Try again |
+| The browser cannot draw WebGL | What to change, and Try again |
+| An error in play (the match stops where it was) | Continue, Back to menu |
+| The graphics card dropped the picture | Reload |
+| No server answered, the server is full or said no | Try again, Practice offline, Back |
+| The connection was lost and did not come back in 20 s | Try again, Practice offline, Back |
+| The server runs a newer version | Reload, Practice offline, Back |
+
+None of them touch the settings or the hangar picks. A sound or music track
+that fails to download is tried once more; if it fails again the game plays
+on without it and the start screen says how many are missing.
 
 ## Settings
 
@@ -587,8 +614,8 @@ packages/
     src/render/           Scene, map, pilots, mechs, first-person weapons, cockpit, effects
     src/render/fx/        Particle sprites and the effects' painted textures
     src/audio/            Sound: the recorded sound bank, effects, pilots' footsteps and movement, map ambience, music
-    src/ui/               HUD, coaching lines, start screen, settings screen, pad menu navigation
-    tests/                Settings, bindings, stick, sound and coaching tests
+    src/ui/               HUD, coaching lines, error cards, start screen, settings screen, pad menu navigation
+    tests/                Settings, bindings, stick, sound, coaching and bug report tests
   server/             Dedicated game server (Node, WebSocket)
     src/index.ts          Sockets, the tick loop, /health
     src/rooms/room.ts     One match: seats, command queues, snapshots, reconnects
@@ -763,7 +790,7 @@ packages/
       5. Music, with its own volume (done)
    9. Closing pass
       1. Teaching: coaching lines in play, death-card tips (done)
-      2. Error cards: lost connection, failed load, a crash, each with a way back
+      2. Error cards: lost connection, failed load, a crash, each with a way back (done)
       3. Performance: measured frame times, a lighter worst case
       4. Balance: weapons, mech frames and bots on bot matches
 6. Deployment

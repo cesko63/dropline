@@ -43,6 +43,7 @@ export class Menu {
   private readonly online = el<HTMLButtonElement>('play-online');
   private readonly offline = el<HTMLButtonElement>('play-offline');
   private readonly status = el('menu-status');
+  private readonly note = el('menu-note');
   private readonly controls = el('controls');
   /** The controls list and its heading, beside the choices. */
   private readonly manual = el('manual');
@@ -218,20 +219,20 @@ export class Menu {
     return name;
   }
 
-  /** Back to the first screen, optionally saying what went wrong. */
-  showChoices(error = ''): void {
+  /** Back to the first screen. */
+  showChoices(): void {
     this.before = 'menu';
     this.choose.hidden = this.settingsOpen;
     this.resume.hidden = true;
     this.busy(false);
-    this.say(error, 'error');
+    this.say('');
     this.overlay.classList.remove('hidden');
   }
 
   /** Waiting for the server to answer. */
   showConnecting(where: string): void {
     this.busy(true);
-    this.say(`Connecting to ${where} …`, 'info');
+    this.say(`Connecting to ${where} …`);
   }
 
   /** A match is running: the screen now only resumes or leaves it. */
@@ -240,7 +241,7 @@ export class Menu {
     this.choose.hidden = true;
     this.resume.hidden = this.settingsOpen;
     this.busy(false);
-    this.say('', 'info');
+    this.say('');
   }
 
   private get settingsOpen(): boolean {
@@ -259,9 +260,14 @@ export class Menu {
     this.name.disabled = on;
   }
 
-  private say(text: string, kind: 'info' | 'error'): void {
+  private say(text: string): void {
     this.status.hidden = text === '';
     this.status.textContent = text;
-    this.status.dataset.kind = kind;
+  }
+
+  /** A lasting notice under the choices, such as sounds that failed to download. */
+  setNote(text: string): void {
+    this.note.hidden = text === '';
+    this.note.textContent = text;
   }
 }

@@ -8,16 +8,59 @@ import { Hangar, SIDES } from './ui/hangar';
 import { Menu } from './ui/menu';
 import { PadNav } from './ui/padNav';
 import { SettingsScreen } from './ui/settingsScreen';
+import { cardOpen, cardSounds, showCard } from './ui/errorCard';
+import { messageOf, note, report, where } from './util/report';
 
-/** What to tell the player when the server could not be joined or was lost. */
-const WHY: Record<CloseReason, string> = {
-  unreachable: 'No server answered. Try again in a moment, or practice offline.',
-  lost: 'The connection to the server was lost.',
-  version: 'This page is out of date. Reload it to get the current version.',
-  full: 'The server is full: all 8 seats are taken by pilots.',
-  bad: 'The server turned the connection down.',
-  left: '',
+/** The card for a server that could not be joined or was lost; `retry` true when trying again may help. */
+const WHY: Record<Exclude<CloseReason, 'left'>, { title: string; text: string; retry: boolean }> = {
+  unreachable: { title: 'No server answered', text: 'The game server did not answer. It may be down or restarting: try again in a moment, or practice offline against bots.', retry: true },
+  lost: { title: 'Connection lost', text: 'The line to the server dropped and did not come back. Try again to rejoin the match, or practice offline.', retry: true },
+  version: { title: 'A new version is out', text: 'The server runs a newer version of the game than this page. Reload to get it; your settings are kept.', retry: false },
+  full: { title: 'The server is full', text: 'All 8 seats are taken by pilots. Try again in a moment, or practice offline.', retry: true },
+  bad: { title: 'The server said no', text: 'The server turned the connection down. Try again, and if it keeps happening, copy the details into a bug report.', retry: true },
 };
+
+/** True where the browser can draw WebGL 2, which the game needs. */
+function webglWorks(): boolean {
+  try {
+    return document.createElement('canvas').getContext('webgl2') !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** The game could not start: say why in plain words, with a way to try again. */
+function failedToStart(err: unknown): void {
+  console.error(err);
+  note(messageOf(err));
+  const gl = webglWorks();
+  showCard({
+    tag: 'Could not start',
+    title: gl ? 'The game failed to load' : '3D graphics are off',
+    text: gl
+      ? 'Part of the game did not load. Check your connection and try again; your settings are kept.'
+      : 'This browser could not start WebGL, which the game draws with. Turn on hardware acceleration in the browser settings, update the graphics driver, or try Chrome, Edge or Firefox.',
+    actions: [{ label: 'Try again', run: () => location.reload() }],
+    details: report('failed to start', err),
+  });
+}
+
+/** Errors that escape everything: before the game exists they mean it failed to start. */
+let escaped: (err: unknown) => void = failedToStart;
+
+/** Refusals the browser gives for permissions (pointer lock, fullscreen, sound): not the game failing. */
+function browserRefusal(err: unknown): boolean {
+  return err instanceof DOMException && ['NotAllowedError', 'AbortError', 'SecurityError', 'NotSupportedError'].includes(err.name);
+}
+
+window.addEventListener('error', (e) => {
+  // Scripts from elsewhere (browser extensions) are not the game's.
+  if (e.filename && !e.filename.startsWith(location.origin)) return;
+  escaped(e.error ?? e.message);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  if (!browserRefusal(e.reason)) escaped(e.reason);
+});
 
 /** `?server=` wins, then the build's `VITE_SERVER_URL`, then the page's own host on the default port. */
 function serverUrl(params: URLSearchParams): string {
@@ -33,7 +76,10 @@ async function boot(): Promise<void> {
   // `?server=ws://host:port` picks the server; `?online=1` joins it straight
   // away without the start screen (automated checks); `?name=` sets the
   // callsign; `?net=1` opens the connection details; `?hangar=1` opens the hangar.
+  // `?fail=boot`, `frame` or `async` throws on purpose, to check the error cards.
   const params = new URLSearchParams(location.search);
+  const fail = params.get('fail');
+  if (fail === 'boot') throw new Error('the game failed to start on purpose (?fail=boot)');
   const map = mapById(params.get('map'));
   const world = await CollisionWorld.create(map);
   const seed = Number(params.get('seed')) || (Date.now() & 0x7fffffff);
@@ -46,7 +92,10 @@ async function boot(): Promise<void> {
     netDebug: params.has('net'),
     settings,
     loadout,
+    failFrame: fail === 'frame',
   });
+  where.map = map.name;
+  where.seed = seed;
   // Offline you play the side picked in the hangar; the match behind the start screen follows it.
   game.side = loadout.value.side;
   if (game.side !== 0) game.newMatch();
@@ -92,6 +141,8 @@ async function boot(): Promise<void> {
   };
   hangar.onClose = () => menu.hideHangar();
   game.onMenuFrame = (dt) => {
+    // An error card reads the pad itself.
+    if (cardOpen()) return;
     nav.update(game.input.pad, dt);
     hangar.setDevice(game.input.device);
     hangar.update(game.input.pad, dt);
@@ -106,6 +157,74 @@ async function boot(): Promise<void> {
   const url = serverUrl(params);
   const auto = params.has('online');
   let conn: Connection | null = null;
+
+  cardSounds.open = () => game.sfx.uiError();
+  cardSounds.move = () => game.sfx.uiMove();
+  cardSounds.select = () => game.sfx.uiSelect();
+  // Leave the match for the start screen; if even that fails, start the page over.
+  const toMenu = (): void => {
+    try {
+      game.recover();
+      if (conn) {
+        conn.close();
+      } else {
+        game.newMatch();
+        menu.showChoices();
+      }
+    } catch {
+      location.reload();
+    }
+  };
+  // Something threw while playing: stop, say so, and offer to carry on or start over.
+  const crashed = (err: unknown): void => {
+    console.error(err);
+    note(messageOf(err));
+    if (cardOpen()) return;
+    game.pause();
+    where.online = game.online;
+    where.matchTime = game.match.time.toFixed(1);
+    showCard({
+      tag: 'Something went wrong',
+      title: 'The game hit an error',
+      text: 'It stopped where it was. Continue to carry on, or go back to the menu for a fresh match. Your settings and hangar picks are kept.',
+      actions: [
+        {
+          label: 'Continue',
+          run: () => {
+            game.recover();
+            if (menu.canResume) game.resume();
+          },
+        },
+        { label: 'Back to menu', quiet: true, back: true, run: toMenu },
+      ],
+      details: report('error in play', err),
+    });
+  };
+  game.onCrash = crashed;
+  escaped = crashed;
+  game.onContextLost = () =>
+    showCard({
+      tag: 'Graphics',
+      title: 'The picture was lost',
+      text: 'The graphics card dropped the game\u2019s picture: a driver update, the computer waking from sleep, or too much else running at once. Reload to get it back; your settings are kept.',
+      actions: [{ label: 'Reload', run: () => location.reload() }],
+      details: report('WebGL context lost'),
+    });
+  // Sound and music that failed to download: the game plays on, and says so.
+  let sounds = 0;
+  let tracks = 0;
+  const silent = (): void => {
+    const what = [sounds && `${sounds} sound${sounds === 1 ? '' : 's'}`, tracks && `${tracks} music track${tracks === 1 ? '' : 's'}`].filter(Boolean).join(' and ');
+    menu.setNote(`${what} could not be downloaded, so the game is quieter than it should be. Reload to try again.`);
+  };
+  game.sfx.bank.onFail = () => {
+    sounds++;
+    silent();
+  };
+  game.sfx.music.onFail = () => {
+    tracks++;
+    silent();
+  };
 
   const join = (name: string): void => {
     if (conn) return;
@@ -139,7 +258,21 @@ async function boot(): Promise<void> {
       conn = null;
       if (document.pointerLockElement) document.exitPointerLock();
       game.newMatch();
-      menu.showChoices(reason ? WHY[reason] : '');
+      menu.showChoices();
+      if (!reason || reason === 'left') return;
+      const why = WHY[reason];
+      note(`connection closed: ${reason}`);
+      showCard({
+        tag: 'Connection',
+        title: why.title,
+        text: why.text,
+        actions: [
+          why.retry ? { label: 'Try again', run: () => join(name) } : { label: 'Reload', run: () => location.reload() },
+          { label: 'Practice offline', quiet: true, run: () => menu.onOffline() },
+          { label: 'Back', quiet: true, back: true, run: () => {} },
+        ],
+        details: report(`connection closed (${reason}) · ${url}`),
+      });
     };
   };
 
@@ -165,13 +298,11 @@ async function boot(): Promise<void> {
   window.addEventListener('pointerdown', unlock, { once: true });
   window.addEventListener('keydown', unlock, { once: true });
   game.start();
+  if (fail === 'async') setTimeout(() => Promise.reject(new Error('an error escaped on purpose (?fail=async)')), 4000);
   if (auto) join(menu.callsign());
   else if (params.has('hangar')) menu.onHangar();
   // Handle for the browser console and automated checks during development.
   if (import.meta.env.DEV) (window as unknown as { dropline: Game }).dropline = game;
 }
 
-boot().catch((err) => {
-  console.error(err);
-  document.body.insertAdjacentHTML('beforeend', `<pre style="position:fixed;inset:0;margin:0;padding:24px;background:#200;color:#fbb">${String(err)}</pre>`);
-});
+boot().catch(failedToStart);

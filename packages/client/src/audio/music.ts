@@ -29,6 +29,8 @@ interface Playing {
 }
 
 export class Music {
+  /** A track failed to download: the game plays on without it. */
+  onFail: (track: string) => void = () => {};
   private ctx: AudioContext | null = null;
   private out: GainNode | null = null;
   private duck: GainNode | null = null;
@@ -127,6 +129,7 @@ export class Music {
         this.buffers.set(track, await ctx.decodeAudioData(await res.arrayBuffer()));
       } catch (err) {
         console.warn(`music ${track} failed to load:`, err);
+        this.onFail(track);
         continue;
       }
       if (this.wanted === track && this.playing?.track !== track) this.start(track);

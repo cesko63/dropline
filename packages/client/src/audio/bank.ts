@@ -4,7 +4,8 @@ import manifest from '../../../../assets/audio/sounds.json';
  * The recorded sounds (assets/audio, built by `pnpm audio`). Each sound has one
  * or more takes; `pick` returns one at random, never the same take twice in a
  * row. Files load and decode in the background once audio is unlocked; until a
- * sound has decoded, `pick` returns null and the sound is skipped.
+ * sound has decoded, `pick` returns null and the sound is skipped. A take that
+ * fails to download is tried once more; if it fails again, `onFail` says so.
  */
 
 export type SoundName = keyof typeof manifest;
@@ -20,10 +21,15 @@ interface Entry {
 const urls = import.meta.glob('../../../../assets/audio/*.mp3', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 const urlOf = (file: string): string | undefined => urls[`../../../../assets/audio/${file}`];
 
+/** Wait before the one retry of a take that failed to download. */
+const RETRY_MS = 3000;
+
 export class SoundBank {
   private readonly takes = new Map<SoundName, AudioBuffer[]>();
   private readonly lastTake = new Map<SoundName, number>();
   private loading = false;
+  /** A take failed twice: the game plays on without it. */
+  onFail: (name: string) => void = () => {};
 
   /** Fetches and decodes every take. Safe to call more than once. */
   load(ctx: AudioContext): void {
@@ -38,14 +44,21 @@ export class SoundBank {
           console.warn(`sound ${name}-${i}.mp3 is listed but missing; run pnpm audio`);
           continue;
         }
-        fetch(url)
-          .then((res) => {
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.arrayBuffer();
-          })
-          .then((data) => ctx.decodeAudioData(data))
-          .then((buffer) => list.push(buffer))
-          .catch((err: unknown) => console.warn(`sound ${name}-${i} failed to load:`, err));
+        const take = `${name}-${i}`;
+        const get = (): Promise<void> =>
+          fetch(url)
+            .then((res) => {
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              return res.arrayBuffer();
+            })
+            .then((data) => ctx.decodeAudioData(data))
+            .then((buffer) => void list.push(buffer));
+        get()
+          .catch(() => new Promise((wait) => setTimeout(wait, RETRY_MS)).then(get))
+          .catch((err: unknown) => {
+            console.warn(`sound ${take} failed to load:`, err);
+            this.onFail(take);
+          });
       }
     }
   }
